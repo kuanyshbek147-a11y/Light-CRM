@@ -81,3 +81,32 @@
 - входящие текстовые сообщения из WhatsApp через ChatApp попадают в CRM;
 - для новых номеров создаются контакт и диалог канала `whatsapp`;
 - ответ менеджера из CRM отправляется клиенту в WhatsApp через ChatApp API.
+
+## Публикация онлайн (любой девайс)
+### 1) Backend + PostgreSQL на Render
+1. Откройте Render Dashboard и создайте сервис из `render.yaml` (Blueprint).
+2. Дождитесь статуса `Live`.
+3. Проверьте health backend:
+   - `https://<render-backend-domain>/health`
+4. После первого запуска заполните в Render переменные ChatApp/Telegram при необходимости:
+   - `CHATAPP_API_BASE_URL`
+   - `CHATAPP_API_TOKEN`
+   - `CHATAPP_SEND_MESSAGE_PATH`
+   - `CHATAPP_CHANNEL_ID` (опционально)
+   - `CHATAPP_WEBHOOK_SECRET`
+   - `CHATAPP_WEBHOOK_SECRET_HEADER`
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_WEBHOOK_SECRET`
+   - `TELEGRAM_DELIVERY_MODE=webhook`
+
+### 2) Frontend на Netlify
+1. Откройте [Netlify](https://app.netlify.com/) и импортируйте GitHub-репозиторий.
+2. Build settings уже готовы из `netlify.toml`:
+   - Base directory: `frontend`
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+3. Добавьте env переменную:
+   - `VITE_API_URL=https://<render-backend-domain>/api`
+4. Запустите Deploy.
+
+В проект уже добавлен SPA redirect (`frontend/public/_redirects`) для корректного открытия страниц по прямым ссылкам без белого экрана.
