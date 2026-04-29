@@ -11,7 +11,7 @@ services:
     plan: free
     rootDir: .
     buildCommand: npm install && npm run -w backend build
-    startCommand: npm run -w backend seed && npm run -w backend start
+    startCommand: node backend/dist/seed.js && npm run -w backend start
     autoDeploy: true
     envVars:
       - key: NODE_ENV
