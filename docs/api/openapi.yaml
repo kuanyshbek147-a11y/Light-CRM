@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: WhatsApp CRM MVP API
+  version: 1.0.0
+servers:
+  - url: http://localhost:4000/api
+paths:
+  /auth/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: JWT token
+  /conversations:
+    get:
+      summary: List conversations
+      responses:
+        '200': { description: OK }
+  /conversations/{id}/messages:
+    get:
+      summary: List conversation messages
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Send manager message
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: Created }
+  /deals:
+    get:
+      summary: List deals
+      responses:
+        '200': { description: OK }
+  /deals/{id}/stage:
+    patch:
+      summary: Update deal stage
+      responses:
+        '200': { description: Updated }
+  /metrics/overview:
+    get:
+      summary: Team KPI overview
+      responses:
+        '200': { description: OK }
