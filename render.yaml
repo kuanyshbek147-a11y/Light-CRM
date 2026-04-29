@@ -9,9 +9,9 @@ services:
     name: light-crm-backend
     runtime: node
     plan: free
-    rootDir: .
-    buildCommand: npm install && npm run -w backend build
-    startCommand: node backend/dist/seed.js && npm run -w backend start
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: node dist/seed.js && npm run start
     autoDeploy: true
     envVars:
       - key: NODE_ENV
