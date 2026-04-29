@@ -100,7 +100,7 @@ type SessionUser = {
   login: string | null;
 };
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+const API = import.meta.env.VITE_API_URL || "https://light-crm-backend.onrender.com/api";
 const SESSION_TOKEN_KEY = "lightcrm.token";
 const SESSION_USER_KEY = "lightcrm.user";
 const EMOJI_BUTTON_ICON = "\uD83D\uDE42";
