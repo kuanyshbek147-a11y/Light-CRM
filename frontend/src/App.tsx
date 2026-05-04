@@ -73,6 +73,7 @@ type Metrics = {
   avgMessagesPerConversation: number;
   whatsappConversations: number;
   telegramConversations: number;
+  periodDays?: number;
   dailySeries: Array<{
     day: string;
     messages: number;
@@ -233,6 +234,9 @@ const UI = {
   analyticsTitle: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u043e\u0442\u0434\u0435\u043b\u0430",
   analyticsHint:
     "\u041e\u0441\u043d\u043e\u0432\u043d\u044b\u0435 KPI \u043f\u043e \u0434\u0438\u0430\u043b\u043e\u0433\u0430\u043c, \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u0438 \u043e\u0442\u0432\u0435\u0442\u0430 \u0438 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u044f\u043c.",
+  customRange: "\u041f\u0435\u0440\u0438\u043e\u0434",
+  fromDate: "\u0421",
+  toDate: "\u041f\u043e",
   totalDialogs: "\u0412\u0441\u0435\u0433\u043e \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
   openDialogs: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
   closedDialogs7d: "\u0417\u0430\u043a\u0440\u044b\u0442\u043e \u0437\u0430 7 \u0434\u043d\u0435\u0439",
@@ -327,6 +331,9 @@ export function App(): JSX.Element {
   const [dragOverStageKey, setDragOverStageKey] = useState<string>("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<7 | 14 | 30>(14);
+  const [analyticsMode, setAnalyticsMode] = useState<"preset" | "custom">("preset");
+  const [analyticsFrom, setAnalyticsFrom] = useState<string>(dateOffsetISO(13));
+  const [analyticsTo, setAnalyticsTo] = useState<string>(dateOffsetISO(0));
   const [search, setSearch] = useState<string>("");
   const [filters, setFilters] = useState({
     city: "",
@@ -336,6 +343,16 @@ export function App(): JSX.Element {
   });
   const [customerCardOpen, setCustomerCardOpen] = useState<boolean>(false);
   const [contactCard, setContactCard] = useState<ContactCard | null>(null);
+  const isCustomRangeValid = Boolean(analyticsFrom && analyticsTo && analyticsFrom <= analyticsTo);
+  const customRangeDays = isCustomRangeValid ? diffDaysInclusive(analyticsFrom, analyticsTo) : 14;
+  const metricsQuery =
+    analyticsMode === "custom" && isCustomRangeValid
+      ? { days: customRangeDays, from: analyticsFrom, to: analyticsTo }
+      : { days: analyticsPeriod };
+  const metricsPeriodLabel =
+    analyticsMode === "custom" && isCustomRangeValid
+      ? `${formatDateRangeLabel(analyticsFrom)} - ${formatDateRangeLabel(analyticsTo)}`
+      : `${analyticsPeriod} \u0434\u043d\u0435\u0439`;
 
   useEffect(() => {
     const socket = io(API.replace("/api", ""));
@@ -354,8 +371,11 @@ export function App(): JSX.Element {
     if (!token) {
       return;
     }
-    void loadMetrics(token, setMetrics, analyticsPeriod);
-  }, [token, analyticsPeriod]);
+    if (analyticsMode === "custom" && !isCustomRangeValid) {
+      return;
+    }
+    void loadMetrics(token, setMetrics, metricsQuery);
+  }, [token, analyticsPeriod, analyticsMode, analyticsFrom, analyticsTo, isCustomRangeValid]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -498,7 +518,7 @@ export function App(): JSX.Element {
     await loadKnowledgeArticles(authToken, setKnowledgeArticles);
     await loadDeals(authToken, setDeals);
     await loadDealStages(authToken, setDealStages);
-    await loadMetrics(authToken, setMetrics, analyticsPeriod);
+    await loadMetrics(authToken, setMetrics, metricsQuery);
 
     if (nextConversations[0]) {
       setSelectedConversation(nextConversations[0].id);
@@ -615,7 +635,7 @@ export function App(): JSX.Element {
       setEmojiPickerOpen(false);
       await loadMessages(token, selectedConversation, setMessages);
       await loadConversations(token, search, filters, setConversations);
-      await loadMetrics(token, setMetrics, analyticsPeriod);
+      await loadMetrics(token, setMetrics, metricsQuery);
     } catch {
       setMediaUploadError(UI.messageSendFailed);
     }
@@ -655,7 +675,7 @@ export function App(): JSX.Element {
       setEmojiPickerOpen(false);
       await loadMessages(token, selectedConversation, setMessages);
       await loadConversations(token, search, filters, setConversations);
-      await loadMetrics(token, setMetrics, analyticsPeriod);
+      await loadMetrics(token, setMetrics, metricsQuery);
     } catch {
       setMediaUploadError(UI.mediaUploadFailed);
     } finally {
@@ -723,7 +743,7 @@ export function App(): JSX.Element {
     setMessageBody("");
     await loadMessages(token, selectedConversation, setMessages);
     await loadConversations(token, search, filters, setConversations);
-    await loadMetrics(token, setMetrics, analyticsPeriod);
+    await loadMetrics(token, setMetrics, metricsQuery);
   }
 
   async function deleteScript(scriptId: string): Promise<void> {
@@ -797,7 +817,7 @@ export function App(): JSX.Element {
     setScriptLibraryOpen(false);
     await loadMessages(token, selectedConversation, setMessages);
     await loadConversations(token, search, filters, setConversations);
-    await loadMetrics(token, setMetrics, analyticsPeriod);
+    await loadMetrics(token, setMetrics, metricsQuery);
   }
 
   function startEditingScript(script: MessageScript): void {
@@ -1752,13 +1772,44 @@ export function App(): JSX.Element {
                     key={`analytics-period-${period}`}
                     type="button"
                     className={`leftMenuButton ${analyticsPeriod === period ? "active" : ""}`}
-                    onClick={() => setAnalyticsPeriod(period as 7 | 14 | 30)}
+                    onClick={() => {
+                      setAnalyticsMode("preset");
+                      setAnalyticsPeriod(period as 7 | 14 | 30);
+                    }}
                   >
                     {`${period} \u0434\u043d.`}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className={`leftMenuButton ${analyticsMode === "custom" ? "active" : ""}`}
+                  onClick={() => setAnalyticsMode("custom")}
+                >
+                  {UI.customRange}
+                </button>
               </div>
             </div>
+            {analyticsMode === "custom" ? (
+              <div className="analyticsDateFilters">
+                <label className="analyticsDateField">
+                  <span>{UI.fromDate}</span>
+                  <input
+                    type="date"
+                    value={analyticsFrom}
+                    onChange={(event) => setAnalyticsFrom(event.target.value)}
+                  />
+                </label>
+                <label className="analyticsDateField">
+                  <span>{UI.toDate}</span>
+                  <input
+                    type="date"
+                    value={analyticsTo}
+                    onChange={(event) => setAnalyticsTo(event.target.value)}
+                  />
+                </label>
+                {!isCustomRangeValid ? <div className="analyticsDateError">˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜ ˜˜˜.</div> : null}
+              </div>
+            ) : null}
             <div className="analyticsGrid">
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.totalConversations ?? 0}</div>
@@ -1770,7 +1821,7 @@ export function App(): JSX.Element {
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.closedConversations7d ?? 0}</div>
-                <div className="analyticsLabel">{UI.closedDialogs7d}</div>
+                <div className="analyticsLabel">{`˜˜˜˜˜˜˜ ˜˜ ${metrics?.periodDays ?? analyticsPeriod} ˜˜.`}</div>
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.firstResponseMinutes ?? 0} {UI.min}</div>
@@ -1782,7 +1833,7 @@ export function App(): JSX.Element {
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.messages7d ?? 0}</div>
-                <div className="analyticsLabel">{UI.totalMessages7d}</div>
+                <div className="analyticsLabel">{`˜˜˜˜ ˜˜˜˜˜˜˜˜˜ ˜˜ ${metrics?.periodDays ?? analyticsPeriod} ˜˜.`}</div>
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.avgMessagesPerConversation ?? 0}</div>
@@ -1802,7 +1853,7 @@ export function App(): JSX.Element {
                 </div>
               </div>
               <div className="analyticsCard analyticsCardChart">
-                <div className="analyticsLabel">{`\u0414\u0438\u043d\u0430\u043c\u0438\u043a\u0430 \u0437\u0430 ${analyticsPeriod} \u0434\u043d\u0435\u0439`}</div>
+                <div className="analyticsLabel">{`\u0414\u0438\u043d\u0430\u043c\u0438\u043a\u0430: ${metricsPeriodLabel}`}</div>
                 <div className="analyticsMiniCharts">
                   <MiniBars
                     title={UI.dynamicsMessages}
@@ -2403,11 +2454,44 @@ async function loadKnowledgeArticles(
   setKnowledgeArticles(await response.json());
 }
 
-async function loadMetrics(token: string, setMetrics: (data: Metrics) => void, days = 14): Promise<void> {
-  const response = await fetch(`${API}/metrics/overview?days=${days}`, {
+async function loadMetrics(
+  token: string,
+  setMetrics: (data: Metrics) => void,
+  query: number | { days: number; from?: string; to?: string } = 14
+): Promise<void> {
+  const days = typeof query === "number" ? query : query.days;
+  const params = new URLSearchParams({ days: String(days) });
+  if (typeof query !== "number" && query.from && query.to) {
+    params.set("from", query.from);
+    params.set("to", query.to);
+  }
+
+  const response = await fetch(`${API}/metrics/overview?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   setMetrics(await response.json());
+}
+
+function dateOffsetISO(daysBeforeToday: number): string {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysBeforeToday);
+  return date.toISOString().slice(0, 10);
+}
+
+function diffDaysInclusive(from: string, to: string): number {
+  const fromDate = new Date(`${from}T00:00:00`);
+  const toDate = new Date(`${to}T00:00:00`);
+  const diffMs = Math.max(0, toDate.getTime() - fromDate.getTime());
+  return Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function formatDateRangeLabel(value: string): string {
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) {
+    return value;
+  }
+  return `${day}.${month}`;
 }
 
 function applyScriptVariables(

@@ -7,20 +7,36 @@ export const metricsRouter = Router();
 metricsRouter.get("/overview", async (req: AuthRequest, res) => {
   const workspaceId = req.user?.workspaceId;
   const rawDays = Number((req.query.days as string) || 14);
-  const rangeDays = [7, 14, 30].includes(rawDays) ? rawDays : 14;
+  const rawFrom = typeof req.query.from === "string" ? req.query.from : "";
+  const rawTo = typeof req.query.to === "string" ? req.query.to : "";
+
+  const fromDate = parseIsoDate(rawFrom);
+  const toDate = parseIsoDate(rawTo);
+  const hasCustomRange = Boolean(fromDate && toDate && fromDate.getTime() <= toDate.getTime());
+  const presetDays = [7, 14, 30].includes(rawDays) ? rawDays : 14;
+  const rangeDays = hasCustomRange
+    ? Math.max(1, Math.min(90, getDiffDaysInclusive(fromDate as Date, toDate as Date)))
+    : presetDays;
+  const rangeParams: unknown[] = hasCustomRange ? [workspaceId, rawFrom, rawTo] : [workspaceId, rangeDays];
+  const messageRangeCondition = hasCustomRange
+    ? "created_at >= $2::date AND created_at < ($3::date + interval '1 day')"
+    : "created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')";
+  const conversationUpdatedRangeCondition = hasCustomRange
+    ? "updated_at >= $2::date AND updated_at < ($3::date + interval '1 day')"
+    : "updated_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')";
 
   const [sent] = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM messages
-     WHERE workspace_id = $1 AND direction = 'outgoing' AND created_at >= now() - interval '7 days'`,
-    [workspaceId]
+     WHERE workspace_id = $1 AND direction = 'outgoing' AND ${messageRangeCondition}`,
+    rangeParams
   );
 
   const [handled] = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM conversations
-     WHERE workspace_id = $1 AND updated_at >= now() - interval '7 days'`,
-    [workspaceId]
+     WHERE workspace_id = $1 AND ${conversationUpdatedRangeCondition}`,
+    rangeParams
   );
 
   const [totalDialogs] = await query<{ count: string }>(
@@ -40,15 +56,15 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
   const [closedDialogs7d] = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM conversations
-     WHERE workspace_id = $1 AND status = 'closed' AND updated_at >= now() - interval '7 days'`,
-    [workspaceId]
+     WHERE workspace_id = $1 AND status = 'closed' AND ${conversationUpdatedRangeCondition}`,
+    rangeParams
   );
 
   const [messages7d] = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM messages
-     WHERE workspace_id = $1 AND created_at >= now() - interval '7 days'`,
-    [workspaceId]
+     WHERE workspace_id = $1 AND ${messageRangeCondition}`,
+    rangeParams
   );
 
   const [frt] = await query<{ avg_minutes: string }>(
@@ -104,43 +120,77 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     [workspaceId]
   );
 
-  const dailyRows = await query<{ day: string; messages: string; dialogs: string; closed: string }>(
-    `WITH days AS (
-       SELECT generate_series(
-         date_trunc('day', now()) - (($2::int - 1) * interval '1 day'),
-         date_trunc('day', now()),
-         interval '1 day'
-       ) AS day
-     ),
-     msg AS (
-       SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS cnt
-       FROM messages
-       WHERE workspace_id = $1 AND created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
-       GROUP BY 1
-     ),
-     conv AS (
-       SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS cnt
-       FROM conversations
-       WHERE workspace_id = $1 AND created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
-       GROUP BY 1
-     ),
-     cls AS (
-       SELECT date_trunc('day', updated_at) AS day, COUNT(*)::int AS cnt
-       FROM conversations
-       WHERE workspace_id = $1 AND status = 'closed' AND updated_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
-       GROUP BY 1
-     )
-     SELECT to_char(days.day, 'DD.MM') AS day,
-            COALESCE(msg.cnt, 0)::text AS messages,
-            COALESCE(conv.cnt, 0)::text AS dialogs,
-            COALESCE(cls.cnt, 0)::text AS closed
-     FROM days
-     LEFT JOIN msg ON msg.day = days.day
-     LEFT JOIN conv ON conv.day = days.day
-     LEFT JOIN cls ON cls.day = days.day
-     ORDER BY days.day ASC`,
-    [workspaceId, rangeDays]
-  );
+  const dailyRows = hasCustomRange
+    ? await query<{ day: string; messages: string; dialogs: string; closed: string }>(
+        `WITH days AS (
+           SELECT generate_series($2::date, $3::date, interval '1 day') AS day
+         ),
+         msg AS (
+           SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS cnt
+           FROM messages
+           WHERE workspace_id = $1 AND created_at >= $2::date AND created_at < ($3::date + interval '1 day')
+           GROUP BY 1
+         ),
+         conv AS (
+           SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS cnt
+           FROM conversations
+           WHERE workspace_id = $1 AND created_at >= $2::date AND created_at < ($3::date + interval '1 day')
+           GROUP BY 1
+         ),
+         cls AS (
+           SELECT date_trunc('day', updated_at) AS day, COUNT(*)::int AS cnt
+           FROM conversations
+           WHERE workspace_id = $1 AND status = 'closed' AND updated_at >= $2::date AND updated_at < ($3::date + interval '1 day')
+           GROUP BY 1
+         )
+         SELECT to_char(days.day, 'DD.MM') AS day,
+                COALESCE(msg.cnt, 0)::text AS messages,
+                COALESCE(conv.cnt, 0)::text AS dialogs,
+                COALESCE(cls.cnt, 0)::text AS closed
+         FROM days
+         LEFT JOIN msg ON msg.day = days.day
+         LEFT JOIN conv ON conv.day = days.day
+         LEFT JOIN cls ON cls.day = days.day
+         ORDER BY days.day ASC`,
+        [workspaceId, rawFrom, rawTo]
+      )
+    : await query<{ day: string; messages: string; dialogs: string; closed: string }>(
+        `WITH days AS (
+           SELECT generate_series(
+             date_trunc('day', now()) - (($2::int - 1) * interval '1 day'),
+             date_trunc('day', now()),
+             interval '1 day'
+           ) AS day
+         ),
+         msg AS (
+           SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS cnt
+           FROM messages
+           WHERE workspace_id = $1 AND created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
+           GROUP BY 1
+         ),
+         conv AS (
+           SELECT date_trunc('day', created_at) AS day, COUNT(*)::int AS cnt
+           FROM conversations
+           WHERE workspace_id = $1 AND created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
+           GROUP BY 1
+         ),
+         cls AS (
+           SELECT date_trunc('day', updated_at) AS day, COUNT(*)::int AS cnt
+           FROM conversations
+           WHERE workspace_id = $1 AND status = 'closed' AND updated_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
+           GROUP BY 1
+         )
+         SELECT to_char(days.day, 'DD.MM') AS day,
+                COALESCE(msg.cnt, 0)::text AS messages,
+                COALESCE(conv.cnt, 0)::text AS dialogs,
+                COALESCE(cls.cnt, 0)::text AS closed
+         FROM days
+         LEFT JOIN msg ON msg.day = days.day
+         LEFT JOIN conv ON conv.day = days.day
+         LEFT JOIN cls ON cls.day = days.day
+         ORDER BY days.day ASC`,
+        [workspaceId, rangeDays]
+      );
 
   res.json({
     sentMessages7d: Number(sent?.count || 0),
@@ -154,6 +204,7 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     avgMessagesPerConversation: Number(avgMessagesPerDialog?.avg_messages || 0),
     whatsappConversations: Number(whatsappDialogs?.count || 0),
     telegramConversations: Number(telegramDialogs?.count || 0),
+    periodDays: rangeDays,
     dailySeries: dailyRows.map((row) => ({
       day: row.day,
       messages: Number(row.messages || 0),
@@ -162,3 +213,17 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     }))
   });
 });
+
+function parseIsoDate(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDiffDaysInclusive(from: Date, to: Date): number {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((to.getTime() - from.getTime()) / dayMs) + 1;
+}

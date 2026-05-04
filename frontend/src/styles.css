@@ -894,6 +894,36 @@ button {
   gap: 8px;
 }
 
+.analyticsDateFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  padding: 0 14px 10px;
+}
+
+.analyticsDateField {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.analyticsDateField input {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #111827;
+  background: #fff;
+}
+
+.analyticsDateError {
+  font-size: 12px;
+  color: #b91c1c;
+  margin-left: 4px;
+}
+
 .pipelineBoardGrid {
   display: grid;
   grid-auto-flow: column;
