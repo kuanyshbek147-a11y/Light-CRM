@@ -15,6 +15,8 @@ export type WhatsAppConnectSetup = {
   flow?: string;
   featureType?: string;
   sessionInfoVersion: string;
+  ready?: boolean;
+  missing?: string[];
 };
 
 export type WhatsAppConnectStatus = {

@@ -144,13 +144,19 @@ export function createWhatsAppRouter(io: Server): Router {
     const platform = getPlatformMetaSecrets();
     const appId = platform.appId || process.env.META_APP_ID || "2788233571542840";
     const configId = process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || "859655197221237";
+    const missing: string[] = [];
+    if (!platform.appSecret) {
+      missing.push("WHATSAPP_APP_SECRET");
+    }
     res.json({
       provider: "meta",
       appId,
       configId,
       apiVersion: platform.apiVersion,
       flow: "cloud_api_migration",
-      sessionInfoVersion: "3"
+      sessionInfoVersion: "3",
+      ready: missing.length === 0,
+      missing
     });
   });
 

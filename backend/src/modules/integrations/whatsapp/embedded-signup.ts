@@ -25,11 +25,22 @@ export type EmbeddedSignupResult = {
 };
 
 function platformAppId(): string {
-  return process.env.WHATSAPP_APP_ID || process.env.META_APP_ID || "";
+  return process.env.WHATSAPP_APP_ID || process.env.META_APP_ID || "2788233571542840";
 }
 
 function platformAppSecret(): string {
   return process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || "";
+}
+
+function missingPlatformAppCredentials(): string[] {
+  const missing: string[] = [];
+  if (!platformAppId()) {
+    missing.push("WHATSAPP_APP_ID");
+  }
+  if (!platformAppSecret()) {
+    missing.push("WHATSAPP_APP_SECRET");
+  }
+  return missing;
 }
 
 function apiVersion(): string {
@@ -37,11 +48,15 @@ function apiVersion(): string {
 }
 
 export async function exchangeEmbeddedSignupCode(code: string): Promise<string> {
+  const missing = missingPlatformAppCredentials();
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.join(" and ")} required. Добавьте App Secret в Render → light-crm-backend → Environment.`
+    );
+  }
+
   const appId = platformAppId();
   const appSecret = platformAppSecret();
-  if (!appId || !appSecret) {
-    throw new Error("WHATSAPP_APP_ID and WHATSAPP_APP_SECRET are required");
-  }
 
   const params = new URLSearchParams({
     client_id: appId,

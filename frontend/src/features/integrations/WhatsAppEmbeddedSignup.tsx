@@ -61,7 +61,8 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
   const [appId, setAppId] = useState<string | null>(null);
   const [configId, setConfigId] = useState<string | null>(null);
   const [apiVersion, setApiVersion] = useState("v21.0");
-  const [fbReady, setFbReady] = useState(false);
+  const [setupReady, setSetupReady] = useState(true);
+  const [setupMissing, setSetupMissing] = useState<string[]>([]);
   const signupDataRef = useRef<{ wabaId: string; phoneNumberId: string }>({ wabaId: "", phoneNumberId: "" });
   const signupErrorRef = useRef<string | null>(null);
   const connectTimeoutRef = useRef<number | null>(null);
@@ -100,6 +101,8 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
         setAppId(setup.appId);
         setConfigId(setup.configId);
         setApiVersion(setup.apiVersion || "v21.0");
+        setSetupReady(setup.ready !== false);
+        setSetupMissing(setup.missing || []);
       } catch (bootstrapError) {
         if (!cancelled) {
           setError(bootstrapError instanceof Error ? bootstrapError.message : "Ошибка загрузки");
@@ -359,6 +362,13 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
       {connectStep ? <div className="integrationsHint">{connectStep}</div> : null}
       {error ? <div className="integrationsError">{error}</div> : null}
 
+      {!setupReady ? (
+        <div className="integrationsError">
+          На backend не заданы Meta-переменные: {setupMissing.join(", ") || "WHATSAPP_APP_SECRET"}.
+          Для Render откройте light-crm-backend → Environment и добавьте App Secret из Meta Developer Console.
+        </div>
+      ) : null}
+
       {!configId || !appId ? (
         <div className="integrationsError">
           На backend не заданы Meta-переменные (appId/configId). Для Render добавьте `WHATSAPP_APP_ID` и
@@ -381,7 +391,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
         <button
           type="button"
           className="primaryButton"
-          disabled={connecting || registering || !configId}
+          disabled={connecting || registering || !configId || !setupReady}
           onClick={() => void handleConnect()}
         >
           {connecting ? "Подключение..." : status?.connected ? "Переподключить WhatsApp" : "Подключить WhatsApp"}
