@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   completeWhatsAppConnect,
+  disconnectWhatsApp,
   loadWhatsAppConnectSetup,
   loadWhatsAppConnectStatus,
+  registerWhatsAppCloudApi,
   type WhatsAppConnectStatus
 } from "./api";
 
@@ -52,6 +54,7 @@ function isFacebookOrigin(origin: string): boolean {
 export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
   const [setupLoading, setSetupLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [registering, setRegistering] = useState(false);
   const [connectStep, setConnectStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<WhatsAppConnectStatus | null>(null);
@@ -194,6 +197,32 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     return signupDataRef.current;
   }
 
+  async function handleDisconnect() {
+    setError(null);
+    setRegistering(true);
+    try {
+      await disconnectWhatsApp(authToken);
+      await refreshStatus();
+    } catch (disconnectError) {
+      setError(disconnectError instanceof Error ? disconnectError.message : "Ошибка сброса");
+    } finally {
+      setRegistering(false);
+    }
+  }
+
+  async function handleRegister() {
+    setError(null);
+    setRegistering(true);
+    try {
+      await registerWhatsAppCloudApi(authToken);
+      await refreshStatus();
+    } catch (registerError) {
+      setError(registerError instanceof Error ? registerError.message : "Ошибка регистрации");
+    } finally {
+      setRegistering(false);
+    }
+  }
+
   async function handleConnect() {
     setError(null);
     setConnectStep(null);
@@ -256,7 +285,6 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
         override_default_response_type: true,
         extras: {
           setup: {},
-          featureType: "whatsapp_business_app_onboarding",
           sessionInfoVersion: "3"
         }
       }
@@ -271,9 +299,9 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     <div className="integrationsCard">
       <div className="integrationsCardHeader">
         <div>
-          <div className="integrationsTitle">WhatsApp Business (Coexistence)</div>
+          <div className="integrationsTitle">WhatsApp Cloud API</div>
           <div className="integrationsHint">
-            Подключите существующий номер WhatsApp Business без удаления приложения на телефоне.
+            Полная миграция: номер работает только через CRM. WhatsApp Business на телефоне отключается.
           </div>
         </div>
         <span className={`integrationsBadge ${status?.connected ? "connected" : "pending"}`}>
@@ -306,18 +334,25 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
         </div>
       ) : (
         <ul className="integrationsSteps">
-          <li>Обновите WhatsApp Business до версии 2.24.17+</li>
-          <li>Номер должен быть активен в приложении минимум 7 дней</li>
-          <li>Нажмите кнопку и выберите «Подключить существующий номер»</li>
-          <li>Дождитесь QR-кода и отсканируйте его в WhatsApp Business на телефоне</li>
-          <li>Не закрывайте окно Meta, пока мастер полностью не завершится</li>
+          <li>Экспортируйте важные чаты из WhatsApp Business (история не переносится)</li>
+          <li>На телефоне: Настройки → Аккаунт → Удалить мой аккаунт (+7 700 313 1055)</li>
+          <li>Подождите 5–10 минут, пока Meta освободит номер</li>
+          <li>Нажмите «Подключить WhatsApp» и пройдите мастер Meta (SMS-код на номер)</li>
+          <li>После подключения нажмите «Зарегистрировать в Cloud API», если статус не CONNECTED</li>
         </ul>
       )}
 
-      {status?.connected && status.needsCoexistence ? (
+      {status?.connected && status.needsReconnect ? (
         <div className="integrationsWarning">
-          Токены сохранены, но Cloud API ещё не активен. Нажмите «Переподключить WhatsApp» и завершите Coexistence
-          (QR-код в WhatsApp Business).
+          Сохранённые данные устарели после удаления аккаунта на телефоне. Нажмите «Сбросить подключение», затем
+          «Подключить WhatsApp» и пройдите мастер Meta заново (SMS-код на номер).
+        </div>
+      ) : null}
+
+      {status?.connected && status.needsRegistration && !status.needsReconnect ? (
+        <div className="integrationsWarning">
+          Токены сохранены, но Cloud API ещё не активен ({status.platformType || "?"} / {status.phoneStatus || "?"}).
+          Убедитесь, что аккаунт WhatsApp Business на телефоне удалён, затем нажмите «Зарегистрировать в Cloud API».
         </div>
       ) : null}
 
@@ -338,19 +373,39 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
       ) : null}
 
       <div className="integrationsWarning">
-        Ошибка Meta «не может подключать клиентов» — блокировка на стороне Facebook, не CRM. Токены уже сохранены.
-        Нужно: режим Live, верификация бизнеса, способ оплаты в WhatsApp Manager и поддержка Meta (Session ID внизу окна Meta).
+        Перед подключением удалите аккаунт WhatsApp Business на телефоне. После миграции переписка в приложении
+        недоступна — только через CRM.
       </div>
 
       <div className="integrationsActions">
         <button
           type="button"
           className="primaryButton"
-          disabled={connecting || !configId}
+          disabled={connecting || registering || !configId}
           onClick={() => void handleConnect()}
         >
           {connecting ? "Подключение..." : status?.connected ? "Переподключить WhatsApp" : "Подключить WhatsApp"}
         </button>
+        {status?.connected && status.needsRegistration && !status.needsReconnect ? (
+          <button
+            type="button"
+            className="secondaryButton"
+            disabled={connecting || registering}
+            onClick={() => void handleRegister()}
+          >
+            {registering ? "Регистрация..." : "Зарегистрировать в Cloud API"}
+          </button>
+        ) : null}
+        {status?.connected && status.needsReconnect ? (
+          <button
+            type="button"
+            className="secondaryButton"
+            disabled={connecting || registering}
+            onClick={() => void handleDisconnect()}
+          >
+            {registering ? "Сброс..." : "Сбросить подключение"}
+          </button>
+        ) : null}
         {connecting ? (
           <button
             type="button"
@@ -362,7 +417,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
             Отмена
           </button>
         ) : null}
-        <button type="button" className="secondaryButton" disabled={connecting} onClick={() => void refreshStatus()}>
+        <button type="button" className="secondaryButton" disabled={connecting || registering} onClick={() => void refreshStatus()}>
           Обновить статус
         </button>
       </div>

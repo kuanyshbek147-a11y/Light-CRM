@@ -144,6 +144,52 @@ export async function validateMetaPhoneNumber(config: MetaCloudConfig): Promise<
   return payload;
 }
 
+export function isMetaPhoneMessagingReady(phone: JsonRecord | null | undefined): boolean {
+  const platformType = typeof phone?.platform_type === "string" ? phone.platform_type : null;
+  const phoneStatus = typeof phone?.status === "string" ? phone.status : null;
+  return platformType === "CLOUD_API" && phoneStatus === "CONNECTED";
+}
+
+export async function registerMetaPhoneNumber(
+  config: MetaCloudConfig,
+  pin?: string
+): Promise<JsonRecord> {
+  const body: JsonRecord = { messaging_product: "whatsapp" };
+  const resolvedPin = pin?.trim() || process.env.WHATSAPP_REGISTRATION_PIN?.trim() || "";
+  if (resolvedPin) {
+    body.pin = resolvedPin;
+  }
+
+  const response = await fetch(`${metaGraphBase(config)}/${config.phoneNumberId}/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.accessToken}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  const payload = (await response.json()) as JsonRecord;
+  if (!response.ok) {
+    throw new Error(`Meta phone register failed: ${response.status} ${JSON.stringify(payload)}`);
+  }
+  return payload;
+}
+
+export async function ensureMetaPhoneRegistered(
+  config: MetaCloudConfig,
+  pin?: string
+): Promise<{ phone: JsonRecord; registered: boolean }> {
+  let phone = await validateMetaPhoneNumber(config);
+  if (isMetaPhoneMessagingReady(phone)) {
+    return { phone, registered: false };
+  }
+
+  await registerMetaPhoneNumber(config, pin);
+  phone = await validateMetaPhoneNumber(config);
+  return { phone, registered: true };
+}
+
 export async function validateMetaCloudConnection(): Promise<JsonRecord> {
   const config = getMetaCloudConfig();
   if (!config) {

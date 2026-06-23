@@ -1,6 +1,6 @@
 import "../load-env";
 import { query } from "../db";
-import { subscribeMetaAppWebhook } from "../modules/integrations/whatsapp/meta-cloud";
+import { ensureMetaPhoneRegistered, subscribeMetaAppWebhook } from "../modules/integrations/whatsapp/meta-cloud";
 import { subscribeWabaToApp } from "../modules/integrations/whatsapp/embedded-signup";
 import { saveWorkspaceMetaCredentials } from "../modules/integrations/whatsapp/workspace-meta";
 
@@ -34,12 +34,32 @@ async function main(): Promise<void> {
     webhookSubscribed = true;
   }
 
-  const token = accessToken;
-  const phoneResponse = await fetch(
-    `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || "v21.0"}/${phoneNumberId}?fields=id,display_phone_number,status,platform_type,is_on_biz_app`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const phone = await phoneResponse.json();
+  const config = {
+    accessToken,
+    phoneNumberId,
+    appId: process.env.WHATSAPP_APP_ID || process.env.META_APP_ID || "",
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || "",
+    appSecret: process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || "",
+    apiVersion: process.env.WHATSAPP_API_VERSION || "v21.0"
+  };
+
+  let registered = false;
+  let phone: Record<string, unknown> = {};
+  try {
+    const result = await ensureMetaPhoneRegistered(config);
+    phone = result.phone;
+    registered = result.registered;
+  } catch (registerError) {
+    const phoneResponse = await fetch(
+      `https://graph.facebook.com/${config.apiVersion}/${phoneNumberId}?fields=id,display_phone_number,status,platform_type,is_on_biz_app`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    phone = (await phoneResponse.json()) as Record<string, unknown>;
+    console.warn(
+      registerError instanceof Error ? registerError.message : "register skipped",
+      phone
+    );
+  }
 
   console.log(
     JSON.stringify(
@@ -49,6 +69,7 @@ async function main(): Promise<void> {
         wabaId,
         phoneNumberId,
         webhookSubscribed,
+        registered,
         publicBase: publicBase || null,
         phone
       },

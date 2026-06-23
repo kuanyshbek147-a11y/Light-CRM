@@ -12,7 +12,8 @@ export type WhatsAppConnectSetup = {
   appId: string | null;
   configId: string | null;
   apiVersion: string;
-  featureType: string;
+  flow?: string;
+  featureType?: string;
   sessionInfoVersion: string;
 };
 
@@ -29,7 +30,11 @@ export type WhatsAppConnectStatus = {
     is_on_biz_app?: boolean;
   } | null;
   messagingReady?: boolean;
+  needsRegistration?: boolean;
+  needsReconnect?: boolean;
   needsCoexistence?: boolean;
+  platformType?: string | null;
+  phoneStatus?: string | null;
 };
 
 export type WhatsAppConnectCompleteResult = {
@@ -44,6 +49,7 @@ export type WhatsAppConnectCompleteResult = {
     platform_type?: string;
   };
   webhookSubscribed?: boolean;
+  registered?: boolean;
   error?: string;
 };
 
@@ -65,6 +71,39 @@ export async function loadWhatsAppConnectStatus(token: string): Promise<WhatsApp
   return (await response.json()) as WhatsAppConnectStatus;
 }
 
+export async function registerWhatsAppCloudApi(
+  token: string,
+  payload?: { registrationPin?: string }
+): Promise<{ ok: boolean; registered?: boolean; messagingReady?: boolean; error?: string }> {
+  const response = await fetch(`${API_BASE_URL}/integrations/whatsapp/connect/register`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload || {})
+  });
+  const data = (await response.json()) as {
+    ok: boolean;
+    registered?: boolean;
+    messagingReady?: boolean;
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось зарегистрировать номер в Cloud API");
+  }
+  return data;
+}
+
+export async function disconnectWhatsApp(token: string): Promise<{ ok: boolean; connected: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/integrations/whatsapp/connect/disconnect`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  const data = (await response.json()) as { ok: boolean; connected: boolean; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось сбросить подключение WhatsApp");
+  }
+  return data;
+}
+
 export async function completeWhatsAppConnect(
   token: string,
   payload: {
@@ -72,6 +111,7 @@ export async function completeWhatsAppConnect(
     wabaId?: string;
     phoneNumberId?: string;
     webhookPublicBaseUrl?: string;
+    registrationPin?: string;
   }
 ): Promise<WhatsAppConnectCompleteResult> {
   const response = await fetch(`${API_BASE_URL}/integrations/whatsapp/connect/complete`, {

@@ -11,7 +11,7 @@ export function IntegrationsPanel({ authToken }: Props) {
         <div>
           <h2 className="integrationsPanelTitle">Интеграции</h2>
           <p className="integrationsHint">
-            Подключите официальный WhatsApp Cloud API через Embedded Signup (режим Coexistence).
+            Подключите официальный WhatsApp Cloud API (полная миграция, без приложения на телефоне).
           </p>
         </div>
       </div>

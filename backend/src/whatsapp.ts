@@ -6,6 +6,7 @@ import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./modules/auth";
 import { finalizeEmbeddedSignupConnection } from "./modules/integrations/whatsapp/embedded-signup";
 import {
+  ensureMetaPhoneRegistered,
   extractMetaContactNames,
   extractMetaMediaIds,
   extractWabaIdFromPayload,
@@ -13,6 +14,7 @@ import {
   getMetaCloudConfigForWorkspace,
   getMetaCloudMissing,
   getPlatformMetaSecrets,
+  isMetaPhoneMessagingReady,
   isValidMetaWebhookSignature,
   resolveMetaMediaUrl,
   sendMetaFileMessage,
@@ -21,6 +23,7 @@ import {
   verifyMetaWebhookChallenge
 } from "./modules/integrations/whatsapp/meta-cloud";
 import {
+  clearWorkspaceMetaCredentials,
   findWorkspaceIdByWabaId,
   getWorkspaceMetaCredentials,
   saveWorkspaceMetaCredentials
@@ -146,7 +149,7 @@ export function createWhatsAppRouter(io: Server): Router {
       appId,
       configId,
       apiVersion: platform.apiVersion,
-      featureType: "whatsapp_business_app_onboarding",
+      flow: "cloud_api_migration",
       sessionInfoVersion: "3"
     });
   });
@@ -160,17 +163,23 @@ export function createWhatsAppRouter(io: Server): Router {
     const credentials = await getWorkspaceMetaCredentials(req.user.workspaceId);
     const config = await getMetaCloudConfigForWorkspace(req.user.workspaceId);
     let phone: Record<string, unknown> | null = null;
+    let credentialsStale = false;
     if (config?.accessToken && config.phoneNumberId) {
       try {
         phone = (await validateMetaPhoneNumber(config)) as Record<string, unknown>;
-      } catch {
+      } catch (error) {
         phone = null;
+        const message = error instanceof Error ? error.message : "";
+        credentialsStale =
+          message.includes("does not exist") ||
+          message.includes("missing permissions") ||
+          message.includes("GraphMethodException");
       }
     }
 
     const platformType = typeof phone?.platform_type === "string" ? phone.platform_type : null;
     const phoneStatus = typeof phone?.status === "string" ? phone.status : null;
-    const messagingReady = platformType === "CLOUD_API" && phoneStatus === "CONNECTED";
+    const messagingReady = isMetaPhoneMessagingReady(phone);
 
     res.json({
       connected: Boolean(credentials),
@@ -180,7 +189,11 @@ export function createWhatsAppRouter(io: Server): Router {
       enabled: getMetaCloudMissing(config).length === 0,
       phone,
       messagingReady,
-      needsCoexistence: Boolean(credentials) && !messagingReady
+      needsRegistration: Boolean(credentials) && !messagingReady && !credentialsStale,
+      needsReconnect: credentialsStale,
+      needsCoexistence: false,
+      platformType,
+      phoneStatus
     });
   });
 
@@ -199,6 +212,7 @@ export function createWhatsAppRouter(io: Server): Router {
     const phoneNumberId = typeof req.body?.phoneNumberId === "string" ? req.body.phoneNumberId.trim() : "";
     const webhookPublicBaseUrl =
       typeof req.body?.webhookPublicBaseUrl === "string" ? req.body.webhookPublicBaseUrl.trim() : "";
+    const registrationPin = typeof req.body?.registrationPin === "string" ? req.body.registrationPin.trim() : "";
 
     if (!code) {
       res.status(400).json({ error: "code is required" });
@@ -210,7 +224,8 @@ export function createWhatsAppRouter(io: Server): Router {
         code,
         wabaId: wabaId || undefined,
         phoneNumberId: phoneNumberId || undefined,
-        webhookPublicBaseUrl: webhookPublicBaseUrl || undefined
+        webhookPublicBaseUrl: webhookPublicBaseUrl || undefined,
+        registrationPin: registrationPin || undefined
       });
 
       await saveWorkspaceMetaCredentials(req.user.workspaceId, {
@@ -225,12 +240,59 @@ export function createWhatsAppRouter(io: Server): Router {
         wabaId: result.wabaId,
         phoneNumberId: result.phoneNumberId,
         phone: result.phone,
-        webhookSubscribed: result.webhookSubscribed
+        webhookSubscribed: result.webhookSubscribed,
+        registered: result.registered
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "connect failed";
       res.status(400).json({ ok: false, error: message });
     }
+  });
+
+  router.post("/connect/register", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+
+    const registrationPin = typeof req.body?.registrationPin === "string" ? req.body.registrationPin.trim() : "";
+
+    try {
+      const config = await getMetaCloudConfigForWorkspace(req.user.workspaceId);
+      if (!config?.accessToken || !config.phoneNumberId) {
+        res.status(400).json({ ok: false, error: "WhatsApp не подключён. Сначала пройдите Embedded Signup." });
+        return;
+      }
+
+      const { phone, registered } = await ensureMetaPhoneRegistered(config, registrationPin || undefined);
+      res.json({
+        ok: true,
+        registered,
+        phone,
+        messagingReady: isMetaPhoneMessagingReady(phone)
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "register failed";
+      res.status(400).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/connect/disconnect", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+
+    await clearWorkspaceMetaCredentials(req.user.workspaceId);
+    res.json({ ok: true, connected: false });
   });
 
   return router;

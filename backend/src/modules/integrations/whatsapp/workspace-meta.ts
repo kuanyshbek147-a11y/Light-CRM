@@ -67,6 +67,15 @@ export async function saveWorkspaceMetaCredentials(
   ]);
 }
 
+export async function clearWorkspaceMetaCredentials(workspaceId: string): Promise<void> {
+  await query(
+    `DELETE FROM workspace_settings
+     WHERE workspace_id = $1
+       AND key = ANY($2::text[])`,
+    [workspaceId, [KEYS.accessToken, KEYS.phoneNumberId, KEYS.wabaId, KEYS.connectedAt]]
+  );
+}
+
 export async function findWorkspaceIdByWabaId(wabaId: string): Promise<string | null> {
   const rows = await query<{ workspace_id: string }>(
     `SELECT workspace_id

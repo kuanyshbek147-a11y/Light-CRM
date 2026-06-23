@@ -1,5 +1,5 @@
 import type { MetaCloudConfig } from "./meta-cloud";
-import { subscribeMetaAppWebhook, validateMetaPhoneNumber } from "./meta-cloud";
+import { ensureMetaPhoneRegistered, subscribeMetaAppWebhook } from "./meta-cloud";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -21,6 +21,7 @@ export type EmbeddedSignupResult = {
   phoneNumberId: string;
   phone: JsonRecord;
   webhookSubscribed: boolean;
+  registered: boolean;
 };
 
 function platformAppId(): string {
@@ -176,7 +177,7 @@ export async function resolveEmbeddedSignupAssets(
   }
 
   if (!phoneNumberId) {
-    throw new Error("Meta token does not include Phone Number ID. Finish Coexistence QR scan in WhatsApp Business.");
+    throw new Error("Meta token does not include Phone Number ID. Завершите мастер Embedded Signup до конца.");
   }
 
   return { wabaId, phoneNumberId };
@@ -197,7 +198,7 @@ export async function subscribeWabaToApp(wabaId: string, accessToken: string): P
 }
 
 export async function finalizeEmbeddedSignupConnection(
-  input: EmbeddedSignupInput
+  input: EmbeddedSignupInput & { registrationPin?: string }
 ): Promise<EmbeddedSignupResult> {
   const accessToken = await exchangeEmbeddedSignupCode(input.code);
   const assets = await resolveEmbeddedSignupAssets(accessToken, {
@@ -215,7 +216,7 @@ export async function finalizeEmbeddedSignupConnection(
     apiVersion: apiVersion()
   };
 
-  const phone = await validateMetaPhoneNumber(config);
+  const { phone, registered } = await ensureMetaPhoneRegistered(config, input.registrationPin);
 
   let webhookSubscribed = false;
   const publicBase = (input.webhookPublicBaseUrl || process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
@@ -230,6 +231,7 @@ export async function finalizeEmbeddedSignupConnection(
     wabaId: assets.wabaId,
     phoneNumberId: assets.phoneNumberId,
     phone,
-    webhookSubscribed
+    webhookSubscribed,
+    registered
   };
 }
