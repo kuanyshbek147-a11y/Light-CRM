@@ -47,7 +47,12 @@ function apiVersion(): string {
   return process.env.WHATSAPP_API_VERSION || "v21.0";
 }
 
-export async function exchangeEmbeddedSignupCode(code: string): Promise<string> {
+const JS_SDK_REDIRECT_URI = "https://www.facebook.com/connect/login_success.html";
+
+export async function exchangeEmbeddedSignupCode(
+  code: string,
+  redirectUri = JS_SDK_REDIRECT_URI
+): Promise<string> {
   const missing = missingPlatformAppCredentials();
   if (missing.length > 0) {
     throw new Error(
@@ -61,7 +66,8 @@ export async function exchangeEmbeddedSignupCode(code: string): Promise<string> 
   const params = new URLSearchParams({
     client_id: appId,
     client_secret: appSecret,
-    code
+    code,
+    redirect_uri: redirectUri
   });
 
   const response = await fetch(`https://graph.facebook.com/${apiVersion()}/oauth/access_token`, {
