@@ -33,7 +33,13 @@ export function startSimulator(io: Server): void {
       [conversation.id, conversation.workspace_id, body]
     );
 
-    await query("UPDATE conversations SET updated_at = now() WHERE id = $1", [conversation.id]);
+    await query(
+      `UPDATE conversations
+       SET updated_at = now(),
+           first_response_due_at = now() + interval '15 minutes'
+       WHERE id = $1`,
+      [conversation.id]
+    );
 
     io.emit("message:new", {
       conversationId: conversation.id,

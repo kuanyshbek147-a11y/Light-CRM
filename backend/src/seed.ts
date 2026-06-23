@@ -88,6 +88,51 @@ async function run(): Promise<void> {
       created_at TIMESTAMP NOT NULL DEFAULT now()
     );
 
+    CREATE TABLE IF NOT EXISTS activities (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      user_id UUID REFERENCES users(id),
+      conversation_id UUID REFERENCES conversations(id),
+      action TEXT NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS managers (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      first_response_target_minutes INTEGER NOT NULL DEFAULT 15,
+      close_rate_target NUMERIC(5,2),
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS tasks (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      conversation_id UUID REFERENCES conversations(id),
+      deal_id UUID REFERENCES deals(id),
+      owner_user_id UUID REFERENCES users(id),
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done', 'cancelled')),
+      due_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS metric_snapshots (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      manager_user_id UUID REFERENCES users(id),
+      metric_key TEXT NOT NULL,
+      metric_value NUMERIC(14,2) NOT NULL DEFAULT 0,
+      period_start DATE NOT NULL,
+      period_end DATE NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS message_scripts (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       workspace_id UUID NOT NULL REFERENCES workspaces(id),
@@ -116,10 +161,15 @@ async function run(): Promise<void> {
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS client_type TEXT;
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS category TEXT;
     ALTER TABLE conversations ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'whatsapp';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS first_response_due_at TIMESTAMP;
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS external_message_id TEXT;
+    ALTER TABLE deals ADD COLUMN IF NOT EXISTS expected_close_at TIMESTAMP;
     ALTER TABLE message_scripts ADD COLUMN IF NOT EXISTS category TEXT;
     ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS category TEXT;
     ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS summary TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
   `);
 
   // После CREATE TABLE users — отдельно (надёжнее, чем один многострочный скрипт).
@@ -132,6 +182,18 @@ async function run(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_stages_workspace_name_lower
       ON pipeline_stages (workspace_id, lower(name))
   `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages (conversation_id, created_at)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_conversations_status_assigned_updated
+      ON conversations (status, assigned_manager_id, updated_at DESC)`
+  );
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_deals_stage_amount ON deals (stage, amount)`);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_metric_snapshots_unique_period
+      ON metric_snapshots (workspace_id, COALESCE(manager_user_id, '00000000-0000-0000-0000-000000000000'::uuid), metric_key, period_start, period_end)`
+  );
 
   const existingWorkspace = await pool.query<{ id: string }>(
     "SELECT id FROM workspaces WHERE name = 'Demo Workspace' LIMIT 1"
@@ -177,6 +239,16 @@ async function run(): Promise<void> {
 
   const manager = await pool.query<{ id: string }>(
     "SELECT id FROM users WHERE email = 'manager@demo.local' LIMIT 1"
+  );
+
+  await pool.query(
+    `INSERT INTO managers (workspace_id, user_id, display_name, first_response_target_minutes, close_rate_target)
+     VALUES ($1, $2, 'Оператор линии', 15, 35)
+     ON CONFLICT (user_id) DO UPDATE
+     SET display_name = EXCLUDED.display_name,
+         first_response_target_minutes = EXCLUDED.first_response_target_minutes,
+         close_rate_target = EXCLUDED.close_rate_target`,
+    [workspaceId, manager.rows[0].id]
   );
 
   const existingContact = await pool.query<{ id: string }>(
@@ -250,6 +322,24 @@ async function run(): Promise<void> {
     [workspaceId, conversationId, manager.rows[0].id]
   );
 
+  const existingDeal = await pool.query<{ id: string }>(
+    `SELECT id FROM deals WHERE workspace_id = $1 AND conversation_id = $2 LIMIT 1`,
+    [workspaceId, conversationId]
+  );
+  const dealId = existingDeal.rows[0]?.id;
+
+  if (dealId) {
+    await pool.query(
+      `INSERT INTO tasks (workspace_id, conversation_id, deal_id, owner_user_id, title, status, due_at)
+       SELECT $1, $2, $3, $4, $5, 'open', now() + interval '1 day'
+       WHERE NOT EXISTS (
+         SELECT 1 FROM tasks
+         WHERE workspace_id = $1 AND deal_id = $3 AND title = $5
+       )`,
+      [workspaceId, conversationId, dealId, manager.rows[0].id, "Подготовить коммерческое предложение"]
+    );
+  }
+
   const defaultStages = [
     { name: "new", position: 10 },
     { name: "qualified", position: 20 },
@@ -302,6 +392,21 @@ async function run(): Promise<void> {
       "Здравствуйте! Спасибо за ваше сообщение. Я изучу ваш запрос и скоро вернусь с дальнейшими шагами.",
       manager.rows[0].id
     ]
+  );
+
+  await pool.query(
+    `INSERT INTO activities (workspace_id, user_id, conversation_id, action, metadata)
+     VALUES ($1, $2, $3, 'seed_initialized', $4::jsonb)
+     ON CONFLICT DO NOTHING`,
+    [workspaceId, manager.rows[0].id, conversationId, JSON.stringify({ source: "seed" })]
+  );
+
+  await pool.query(
+    `INSERT INTO metric_snapshots (workspace_id, manager_user_id, metric_key, metric_value, period_start, period_end)
+     VALUES ($1, $2, 'first_response_minutes', 12, current_date - 6, current_date)
+     ON CONFLICT (workspace_id, COALESCE(manager_user_id, '00000000-0000-0000-0000-000000000000'::uuid), metric_key, period_start, period_end)
+     DO UPDATE SET metric_value = EXCLUDED.metric_value`,
+    [workspaceId, manager.rows[0].id]
   );
 
   await pool.query(

@@ -1,50 +1,45 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
-
-type Conversation = {
-  id: string;
-  contact_name: string;
-  phone: string;
-  city?: string | null;
-  inquiry_reason?: string | null;
-  client_type?: string | null;
-  category?: string | null;
-  channel: "whatsapp" | "telegram";
-  status: "open" | "closed";
-  updated_at: string;
-  assigned_manager_id: string;
-  stage: string | null;
-  amount: string | null;
-  last_message_body: string | null;
-  last_message_direction: "incoming" | "outgoing" | null;
-};
-
-type Message = {
-  id: string;
-  direction: "incoming" | "outgoing";
-  body: string;
-  attachment_url?: string | null;
-  attachment_type?: "image" | "video" | null;
-  attachment_name?: string | null;
-  created_at: string;
-};
-
-type MessageScript = {
-  id: string;
-  title: string;
-  category: string | null;
-  body: string;
-  created_at: string;
-};
-
-type KnowledgeArticle = {
-  id: string;
-  title: string;
-  url: string;
-  category: string | null;
-  summary: string | null;
-  created_at: string;
-};
+import { API_BASE_URL } from "./shared/config/api";
+import { InboxSidebar } from "./features/inbox/InboxSidebar";
+import { InboxThread } from "./features/inbox/InboxThread";
+import {
+  assignConversationManager as apiAssignConversationManager,
+  acknowledgeSlaEscalation as apiAcknowledgeSlaEscalation,
+  createConversationTask,
+  deferSlaEscalation as apiDeferSlaEscalation,
+  loadContactCard,
+  loadConversations,
+  loadMessages,
+  markSlaFollowUpDone as apiMarkSlaFollowUpDone,
+  moveConversationStage as apiMoveConversationStage,
+  setConversationStatus as apiSetConversationStatus,
+  updateConversationPriority as apiUpdateConversationPriority
+} from "./features/inbox/api/inboxApi";
+import {
+  createKnowledgeArticleApi,
+  deleteKnowledgeArticleApi,
+  removeScript,
+  sendConversationTextMessage,
+  upsertScript
+} from "./features/inbox/api/contentApi";
+import type {
+  ContactCard,
+  Conversation,
+  InboxFilters,
+  KnowledgeArticle,
+  Message,
+  MessageScript,
+  QuickActionManager,
+  SavedInboxFilterPreset
+} from "./features/inbox/model/types";
+import {
+  refreshAfterMessage,
+  refreshConversationList,
+  refreshKnowledge,
+  refreshScripts
+} from "./features/inbox/model/actions";
+import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 
 type Deal = {
   id: string;
@@ -73,6 +68,25 @@ type Metrics = {
   avgMessagesPerConversation: number;
   whatsappConversations: number;
   telegramConversations: number;
+  managersKpi?: Array<{
+    managerId: string;
+    managerName: string;
+    dialogsHandled: number;
+    outgoingMessages: number;
+  }>;
+  stageKpi?: Array<{
+    stageName: string;
+    dealsCount: number;
+    dealsAmount: number;
+  }>;
+  slaEscalations?: number;
+  slaAverageDelayMinutes?: number;
+  slaManagers?: Array<{
+    managerId: string;
+    managerName: string;
+    escalatedCount: number;
+    avgDelayMinutes: number;
+  }>;
   periodDays?: number;
   dailySeries: Array<{
     day: string;
@@ -82,16 +96,14 @@ type Metrics = {
   }>;
 };
 
-type ContactCard = {
-  id: string;
-  name: string;
-  phone: string;
-  city: string | null;
-  inquiry_reason: string | null;
-  client_type: string | null;
-  category: string | null;
-  channel: "whatsapp" | "telegram";
-  external_id: string | null;
+type MetricSnapshot = {
+  periodStart: string;
+  periodEnd: string;
+  totalConversations: number;
+  openConversations: number;
+  closedConversations: number;
+  messages: number;
+  createdAt: string;
 };
 
 type SessionUser = {
@@ -101,9 +113,27 @@ type SessionUser = {
   login: string | null;
 };
 
-const API = import.meta.env.VITE_API_URL || "https://light-crm-backend.onrender.com/api";
+type AutoAssignmentStrategy = "round_robin" | "least_open_load";
+type AutoAssignmentLoadItem = {
+  managerId: string;
+  managerName: string;
+  openConversations: number;
+};
+
+type ToastKind = "success" | "error";
+
+const API = API_BASE_URL;
 const SESSION_TOKEN_KEY = "lightcrm.token";
 const SESSION_USER_KEY = "lightcrm.user";
+const INBOX_FILTER_PRESETS_KEY = "lightcrm.inboxFilterPresets";
+const DEFAULT_INBOX_FILTERS: InboxFilters = {
+  city: "",
+  inquiryReason: "",
+  clientType: "",
+  category: "",
+  priority: "",
+  attention: ""
+};
 const EMOJI_BUTTON_ICON = "\uD83D\uDE42";
 const EMOJI_OPTIONS = [
   "\uD83D\uDE00",
@@ -152,6 +182,7 @@ const UI = {
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
   menuAnalytics: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
+  menuIntegrations: "\u0418\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
   chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
@@ -165,6 +196,7 @@ const UI = {
   customerCard: "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0430",
   editShort: "\u0418\u0437\u043c.",
   openStatusSuffix: "\u043e\u0442\u043a\u0440\u044b\u0442",
+  closedStatusSuffix: "\u0437\u0430\u043a\u0440\u044b\u0442",
   replyScripts: "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b",
   quickScriptHint: "\u0411\u044b\u0441\u0442\u0440\u0430\u044f \u0432\u0441\u0442\u0430\u0432\u043a\u0430 \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0438\u0437 \u0432\u0430\u0448\u0435\u0439 \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0438.",
   chooseInstruction: "\u0418\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438",
@@ -215,15 +247,15 @@ const UI = {
   customerCardHint: "\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0438 \u043a\u0440\u0438\u0442\u0435\u0440\u0438\u0438 \u043a\u043b\u0438\u0435\u043d\u0442\u0430",
   funnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
   notSelected: "\u041d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d\u043e",
-  addStep: "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0448\u0430\u0433",
-  deleteStep: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0448\u0430\u0433",
+  addStep: "\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u044d\u0442\u0430\u043f",
+  deleteStep: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u044d\u0442\u0430\u043f",
   manageFunnel: "\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0432\u043e\u0440\u043e\u043d\u043a\u043e\u0439",
-  newStepPlaceholder: "\u041d\u043e\u0432\u044b\u0439 \u0448\u0430\u0433 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
-  stageInUseError: "\u0428\u0430\u0433 \u0443\u0436\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f \u0432 \u0441\u0434\u0435\u043b\u043a\u0430\u0445, \u0441\u043d\u0430\u0447\u0430\u043b\u0430 \u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u043d\u0430 \u0434\u0440\u0443\u0433\u043e\u0439 \u0448\u0430\u0433.",
-  stageExistsError: "\u0422\u0430\u043a\u043e\u0439 \u0448\u0430\u0433 \u0443\u0436\u0435 \u0435\u0441\u0442\u044c.",
-  stageActionFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0448\u0430\u0433\u0438 \u0432\u043e\u0440\u043e\u043d\u043a\u0438.",
-  stageReorderHint: "\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0448\u0430\u0433 \u043c\u044b\u0448\u043a\u043e\u0439, \u0447\u0442\u043e\u0431\u044b \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u043f\u043e\u0440\u044f\u0434\u043e\u043a.",
-  stageReorderFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043d\u043e\u0432\u044b\u0439 \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u0448\u0430\u0433\u043e\u0432.",
+  newStepPlaceholder: "\u041d\u043e\u0432\u044b\u0439 \u044d\u0442\u0430\u043f \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
+  stageInUseError: "\u042d\u0442\u0430\u043f \u0443\u0436\u0435 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f \u0432 \u0441\u0434\u0435\u043b\u043a\u0430\u0445, \u0441\u043d\u0430\u0447\u0430\u043b\u0430 \u043f\u0435\u0440\u0435\u0432\u0435\u0434\u0438\u0442\u0435 \u0438\u0445 \u043d\u0430 \u0434\u0440\u0443\u0433\u043e\u0439 \u044d\u0442\u0430\u043f.",
+  stageExistsError: "\u0422\u0430\u043a\u043e\u0439 \u044d\u0442\u0430\u043f \u0443\u0436\u0435 \u0435\u0441\u0442\u044c.",
+  stageActionFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u044d\u0442\u0430\u043f\u044b \u0432\u043e\u0440\u043e\u043d\u043a\u0438.",
+  stageReorderHint: "\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u0442\u0430\u043f \u043c\u044b\u0448\u043a\u043e\u0439, \u0447\u0442\u043e\u0431\u044b \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u043f\u043e\u0440\u044f\u0434\u043e\u043a.",
+  stageReorderFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043d\u043e\u0432\u044b\u0439 \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u044d\u0442\u0430\u043f\u043e\u0432.",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   pipelineBoardHint: "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0441\u0433\u0440\u0443\u043f\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u044b \u043f\u043e \u0448\u0430\u0433\u0430\u043c \u0438\u0437 \u043f\u0440\u043e\u0444\u0438\u043b\u044f \u043a\u043b\u0438\u0435\u043d\u0442\u0430.",
   noCardsInStage: "\u0412 \u044d\u0442\u043e\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a.",
@@ -244,13 +276,42 @@ const UI = {
   closeSpeed: "\u041e\u0442 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u0434\u043e \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u044f",
   avgMessagesPerDialog: "\u0421\u0440\u0435\u0434\u043d\u0435\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043d\u0430 \u0434\u0438\u0430\u043b\u043e\u0433",
   channelSplit: "\u0420\u0430\u0437\u0440\u0435\u0437 \u043f\u043e \u043a\u0430\u043d\u0430\u043b\u0430\u043c",
+  managersKpiTitle: "KPI \u043f\u043e \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u0430\u043c",
+  managerLabel: "\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440",
+  dialogsHandledLabel: "\u0414\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
+  outgoingMessagesLabel: "\u0418\u0441\u0445\u043e\u0434\u044f\u0449\u0438\u0445",
+  stageKpiTitle: "KPI \u043f\u043e \u044d\u0442\u0430\u043f\u0430\u043c \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
+  stageLabel: "\u042d\u0442\u0430\u043f",
+  stageDealsLabel: "\u0421\u0434\u0435\u043b\u043e\u043a",
+  stageAmountLabel: "\u0421\u0443\u043c\u043c\u0430",
+  slaKpiTitle: "SLA \u044d\u0441\u043a\u0430\u043b\u0430\u0446\u0438\u0438",
+  slaEscalationsLabel: "\u042d\u0441\u043a\u0430\u043b\u0430\u0446\u0438\u0439 \u0441\u0435\u0439\u0447\u0430\u0441",
+  slaDelayLabel: "\u0421\u0440\u0435\u0434\u043d\u044f\u044f \u043f\u0440\u043e\u0441\u0440\u043e\u0447\u043a\u0430 (\u043c\u0438\u043d)",
+  slaManagerEscalationsLabel: "\u042d\u0441\u043a\u0430\u043b\u0430\u0446\u0438\u0439",
+  slaManagerDelayLabel: "\u0421\u0440. \u043f\u0440\u043e\u0441\u0440\u043e\u0447\u043a\u0430 (\u043c\u0438\u043d)",
+  snapshotsTitle: "\u0421\u043d\u0438\u043c\u043a\u0438 KPI",
+  createSnapshot: "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043d\u0438\u043c\u043e\u043a",
+  exportCsv: "CSV \u044d\u043a\u0441\u043f\u043e\u0440\u0442",
+  exportXlsx: "Excel \u044d\u043a\u0441\u043f\u043e\u0440\u0442",
+  autoAssignmentTitle: "\u0410\u0432\u0442\u043e\u0440\u0430\u0441\u043f\u0440\u0435\u0434\u0435\u043b\u0435\u043d\u0438\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
+  autoAssignmentHint: "\u041d\u043e\u0432\u044b\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u0438 \u0431\u0443\u0434\u0443\u0442 \u043d\u0430\u0437\u043d\u0430\u0447\u0430\u0442\u044c\u0441\u044f \u043f\u043e \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0439 \u0441\u0442\u0440\u0430\u0442\u0435\u0433\u0438\u0438.",
+  strategyRoundRobin: "\u041f\u043e \u043e\u0447\u0435\u0440\u0435\u0434\u0438 (round-robin)",
+  strategyLeastLoad: "\u041f\u043e \u043c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0439 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435",
+  saveStrategy: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0440\u0430\u0442\u0435\u0433\u0438\u044e",
+  loadTitle: "\u0422\u0435\u043a\u0443\u0449\u0430\u044f \u043d\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u043e\u0432",
+  loadDialogs: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
+  refreshNow: "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0441\u0435\u0439\u0447\u0430\u0441",
+  updatedAgo: "\u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e",
+  snapshotPeriod: "\u041f\u0435\u0440\u0438\u043e\u0434",
+  snapshotTotals: "\u0412\u0441\u0435\u0433\u043e/\u041e\u0442\u043a\u0440./\u0417\u0430\u043a\u0440.",
+  snapshotMessages: "\u0421\u043e\u043e\u0431\u0449.",
   whatsappChannel: "WhatsApp",
   telegramChannel: "Telegram",
   dynamics14d: "\u0414\u0438\u043d\u0430\u043c\u0438\u043a\u0430 \u0437\u0430 14 \u0434\u043d\u0435\u0439",
   dynamicsMessages: "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f",
   dynamicsDialogs: "\u041d\u043e\u0432\u044b\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u0438",
   dynamicsClosed: "\u0417\u0430\u043a\u0440\u044b\u0442\u044b\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438",
-  saveStep: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0448\u0430\u0433",
+  saveStep: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f",
   cancel: "\u041e\u0442\u043c\u0435\u043d\u0430",
   close: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   name: "\u0418\u043c\u044f",
@@ -279,12 +340,10 @@ const UI = {
 export function App(): JSX.Element {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const loginInputRef = useRef<HTMLInputElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const [token, setToken] = useState<string>("");
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
   const [loginInput, setLoginInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -299,7 +358,9 @@ export function App(): JSX.Element {
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
-  const [currentSection, setCurrentSection] = useState<"dialogs" | "pipeline" | "analytics" | "knowledge">("dialogs");
+  const [currentSection, setCurrentSection] = useState<
+    "dialogs" | "pipeline" | "analytics" | "knowledge" | "integrations"
+  >("dialogs");
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
   const [selectedScriptId, setSelectedScriptId] = useState<string>("");
@@ -335,14 +396,25 @@ export function App(): JSX.Element {
   const [analyticsFrom, setAnalyticsFrom] = useState<string>(dateOffsetISO(13));
   const [analyticsTo, setAnalyticsTo] = useState<string>(dateOffsetISO(0));
   const [search, setSearch] = useState<string>("");
-  const [filters, setFilters] = useState({
-    city: "",
-    inquiryReason: "",
-    clientType: "",
-    category: ""
-  });
+  const [filters, setFilters] = useState<InboxFilters>(DEFAULT_INBOX_FILTERS);
+  const [savedFilterPresets, setSavedFilterPresets] = useState<SavedInboxFilterPreset[]>([]);
+  const [quickManagers, setQuickManagers] = useState<QuickActionManager[]>([]);
+  const [quickStageByConversation, setQuickStageByConversation] = useState<Record<string, string>>({});
+  const [quickManagerByConversation, setQuickManagerByConversation] = useState<Record<string, string>>({});
+  const [quickTaskByConversation, setQuickTaskByConversation] = useState<Record<string, string>>({});
+  const [quickDeferMinutesByConversation, setQuickDeferMinutesByConversation] = useState<Record<string, number>>({});
   const [customerCardOpen, setCustomerCardOpen] = useState<boolean>(false);
   const [contactCard, setContactCard] = useState<ContactCard | null>(null);
+  const [metricSnapshots, setMetricSnapshots] = useState<MetricSnapshot[]>([]);
+  const [autoAssignmentStrategy, setAutoAssignmentStrategy] = useState<AutoAssignmentStrategy>("round_robin");
+  const [autoAssignmentSaving, setAutoAssignmentSaving] = useState<boolean>(false);
+  const [autoAssignmentLoad, setAutoAssignmentLoad] = useState<AutoAssignmentLoadItem[]>([]);
+  const [autoAssignmentRefreshing, setAutoAssignmentRefreshing] = useState<boolean>(false);
+  const [autoAssignmentLoadUpdatedAt, setAutoAssignmentLoadUpdatedAt] = useState<number>(0);
+  const [toastMessage, setToastMessage] = useState<string>("");
+  const [toastVisible, setToastVisible] = useState<boolean>(false);
+  const [toastKind, setToastKind] = useState<ToastKind>("success");
+  const toastTimerRef = useRef<number | null>(null);
   const isCustomRangeValid = Boolean(analyticsFrom && analyticsTo && analyticsFrom <= analyticsTo);
   const customRangeDays = isCustomRangeValid ? diffDaysInclusive(analyticsFrom, analyticsTo) : 14;
   const metricsQuery =
@@ -375,7 +447,52 @@ export function App(): JSX.Element {
       return;
     }
     void loadMetrics(token, setMetrics, metricsQuery);
+    void loadMetricSnapshots(token, setMetricSnapshots);
   }, [token, analyticsPeriod, analyticsMode, analyticsFrom, analyticsTo, isCustomRangeValid]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    void loadAutoAssignmentStrategy(token, setAutoAssignmentStrategy);
+    void refreshAutoAssignmentLoad();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || sessionUser?.role !== "admin") {
+      return;
+    }
+    if (currentSection !== "analytics") {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshAutoAssignmentLoad();
+    }, 15000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [token, sessionUser?.role, currentSection]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(INBOX_FILTER_PRESETS_KEY);
+    if (!raw) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as SavedInboxFilterPreset[];
+      if (Array.isArray(parsed)) {
+        setSavedFilterPresets(parsed.slice(0, 8));
+      }
+    } catch {
+      localStorage.removeItem(INBOX_FILTER_PRESETS_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(INBOX_FILTER_PRESETS_KEY, JSON.stringify(savedFilterPresets));
+  }, [savedFilterPresets]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -390,12 +507,19 @@ export function App(): JSX.Element {
     }
 
     if (!savedToken) {
-      setSessionReady(true);
       return;
     }
 
     setToken(savedToken);
     setSessionUser(savedUser);
+
+    const bootstrapTimeout = window.setTimeout(() => {
+      localStorage.removeItem(SESSION_TOKEN_KEY);
+      localStorage.removeItem(SESSION_USER_KEY);
+      setToken("");
+      setSessionUser(null);
+    }, 15000);
+
     void hydrateWorkspace(savedToken)
       .catch(() => {
         localStorage.removeItem(SESSION_TOKEN_KEY);
@@ -403,7 +527,9 @@ export function App(): JSX.Element {
         setToken("");
         setSessionUser(null);
       })
-      .finally(() => setSessionReady(true));
+      .finally(() => {
+        window.clearTimeout(bootstrapTimeout);
+      });
   }, []);
 
   useEffect(() => {
@@ -514,11 +640,12 @@ export function App(): JSX.Element {
 
   async function hydrateWorkspace(authToken: string): Promise<void> {
     const nextConversations = await loadConversations(authToken, "", filters, setConversations);
-    await loadScripts(authToken, setScripts);
-    await loadKnowledgeArticles(authToken, setKnowledgeArticles);
+    await loadQuickActionsMeta(authToken, setQuickManagers, setDealStages);
+    await refreshScripts({ token: authToken, setScripts });
+    await refreshKnowledge({ token: authToken, setKnowledgeArticles });
     await loadDeals(authToken, setDeals);
-    await loadDealStages(authToken, setDealStages);
     await loadMetrics(authToken, setMetrics, metricsQuery);
+    await loadMetricSnapshots(authToken, setMetricSnapshots);
 
     if (nextConversations[0]) {
       setSelectedConversation(nextConversations[0].id);
@@ -537,23 +664,52 @@ export function App(): JSX.Element {
       return;
     }
 
-    const response = await fetch(`${API}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ login: loginValue, password: passwordValue })
-    });
+    try {
+      const response = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ login: loginValue, password: passwordValue })
+      });
 
-    const data = (await response.json()) as { token?: string; user?: SessionUser; error?: string };
-    if (!response.ok || !data.token) {
-      setLoginError(data.error || UI.loginFailed);
+      const data = (await response.json()) as { token?: string; user?: SessionUser; error?: string };
+      if (!response.ok || !data.token) {
+        setLoginError(data.error || UI.loginFailed);
+        return;
+      }
+
+      setSessionUser(data.user ?? null);
+      setToken(data.token);
+      localStorage.setItem(SESSION_TOKEN_KEY, data.token);
+      localStorage.setItem(SESSION_USER_KEY, JSON.stringify(data.user ?? null));
+      await hydrateWorkspace(data.token);
+    } catch {
+      setLoginError("Сервер API недоступен. Проверьте backend или используйте http://localhost:5173");
+    }
+  }
+
+  function saveCurrentFilterPreset(): void {
+    const hasAnyFilter = Object.values(filters).some((value) => value !== "");
+    if (!hasAnyFilter) {
       return;
     }
+    const presetName = `Фильтр ${savedFilterPresets.length + 1}`;
+    setSavedFilterPresets((prev) => [
+      {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+        name: presetName,
+        filters: { ...filters }
+      },
+      ...prev
+    ].slice(0, 8));
+  }
 
-    setSessionUser(data.user ?? null);
-    setToken(data.token);
-    localStorage.setItem(SESSION_TOKEN_KEY, data.token);
-    localStorage.setItem(SESSION_USER_KEY, JSON.stringify(data.user ?? null));
-    await hydrateWorkspace(data.token);
+  async function applyFilterPreset(preset: SavedInboxFilterPreset): Promise<void> {
+    setFilters(preset.filters);
+    await loadConversations(token, search, preset.filters, setConversations);
+  }
+
+  function removeFilterPreset(presetId: string): void {
+    setSavedFilterPresets((prev) => prev.filter((preset) => preset.id !== presetId));
   }
 
   function logout(): void {
@@ -598,7 +754,7 @@ export function App(): JSX.Element {
     setEditingStageName("");
     setMetrics(null);
     setSearch("");
-    setFilters({ city: "", inquiryReason: "", clientType: "", category: "" });
+    setFilters(DEFAULT_INBOX_FILTERS);
     setCustomerCardOpen(false);
     setContactCard(null);
   }
@@ -609,6 +765,112 @@ export function App(): JSX.Element {
     setSelectedConversationData(nextConversation);
     await loadMessages(token, id, setMessages);
     await loadContactCard(token, id, setContactCard);
+  }
+
+  async function updateConversationPriority(conversationId: string, priority: InboxFilters["priority"]): Promise<void> {
+    if (!token || !priority) {
+      return;
+    }
+    await apiUpdateConversationPriority(token, conversationId, priority);
+    await refreshConversationList({ token, search, filters, setConversations });
+  }
+
+  async function assignConversationManager(conversationId: string, managerId: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+    await apiAssignConversationManager(token, conversationId, managerId);
+    await refreshConversationList({ token, search, filters, setConversations });
+  }
+
+  async function moveConversationStage(conversationId: string, stage: string): Promise<void> {
+    if (!token || !stage) {
+      return;
+    }
+    await apiMoveConversationStage(token, conversationId, stage);
+    await refreshConversationList({ token, search, filters, setConversations });
+    await loadDeals(token, setDeals);
+  }
+
+  async function createQuickTask(conversationId: string): Promise<void> {
+    const title = (quickTaskByConversation[conversationId] || "").trim();
+    if (!token || !title) {
+      return;
+    }
+    await createConversationTask(token, conversationId, title);
+    setQuickTaskByConversation((prev) => ({ ...prev, [conversationId]: "" }));
+    await refreshConversationList({ token, search, filters, setConversations });
+  }
+
+  async function markSlaFollowUpDone(conversationId: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+    await apiMarkSlaFollowUpDone(token, conversationId);
+    await refreshConversationList({ token, search, filters, setConversations });
+  }
+
+  async function acknowledgeSlaEscalation(conversationId: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiAcknowledgeSlaEscalation(token, conversationId);
+      await refreshConversationList({ token, search, filters, setConversations });
+      showToast("Диалог взят в работу", "success");
+    } catch {
+      showToast("Не удалось взять диалог в работу", "error");
+    }
+  }
+
+  async function deferSlaEscalation(conversationId: string, minutes: number): Promise<void> {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiDeferSlaEscalation(token, conversationId, minutes);
+      await refreshConversationList({ token, search, filters, setConversations });
+      showToast(`SLA отложен на ${minutes} мин`, "success");
+    } catch {
+      showToast("Не удалось отложить SLA", "error");
+    }
+  }
+
+  function showToast(message: string, kind: ToastKind): void {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setToastMessage(message);
+    setToastKind(kind);
+    setToastVisible(true);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+    }, 2200);
+  }
+
+  function closeToast(): void {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToastVisible(false);
+  }
+
+  function pauseToastAutoHide(): void {
+    if (!toastTimerRef.current) {
+      return;
+    }
+    window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = null;
+  }
+
+  function resumeToastAutoHide(): void {
+    if (!toastVisible || toastTimerRef.current) {
+      return;
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+    }, 1400);
   }
 
   async function sendMessage(): Promise<void> {
@@ -633,9 +895,17 @@ export function App(): JSX.Element {
 
       setMessageBody("");
       setEmojiPickerOpen(false);
-      await loadMessages(token, selectedConversation, setMessages);
-      await loadConversations(token, search, filters, setConversations);
-      await loadMetrics(token, setMetrics, metricsQuery);
+      await refreshAfterMessage({
+        token,
+        conversationId: selectedConversation,
+        search,
+        filters,
+        metricsQuery,
+        setMessages,
+        setConversations,
+        setMetrics,
+        loadMetrics
+      });
     } catch {
       setMediaUploadError(UI.messageSendFailed);
     }
@@ -673,16 +943,21 @@ export function App(): JSX.Element {
 
       setMessageBody("");
       setEmojiPickerOpen(false);
-      await loadMessages(token, selectedConversation, setMessages);
-      await loadConversations(token, search, filters, setConversations);
-      await loadMetrics(token, setMetrics, metricsQuery);
+      await refreshAfterMessage({
+        token,
+        conversationId: selectedConversation,
+        search,
+        filters,
+        metricsQuery,
+        setMessages,
+        setConversations,
+        setMetrics,
+        loadMetrics
+      });
     } catch {
       setMediaUploadError(UI.mediaUploadFailed);
     } finally {
       setUploadingMedia(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
     }
   }
 
@@ -698,29 +973,21 @@ export function App(): JSX.Element {
       return;
     }
 
-    const endpoint = editingScriptId
-      ? `${API}/conversations/scripts/${editingScriptId}`
-      : `${API}/conversations/scripts`;
-    const method = editingScriptId ? "PATCH" : "POST";
-
-    const created = await fetch(endpoint, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
+    const created = await upsertScript(
+      token,
+      {
         title: scriptTitle,
         category: scriptCategory,
         body: scriptDraftBody
-      })
-    });
+      },
+      editingScriptId || undefined
+    );
 
-    if (!created.ok) {
+    if (!created) {
       return;
     }
 
-    await loadScripts(token, setScripts);
+    await refreshScripts({ token, setScripts });
     setScriptTitle("");
     setScriptCategory("");
     setScriptDraftBody("");
@@ -731,28 +998,26 @@ export function App(): JSX.Element {
   async function sendScript(script: MessageScript): Promise<void> {
     const renderedBody = applyScriptVariables(script.body, contactCard, selectedConversationData);
     setMessageBody(renderedBody);
-    await fetch(`${API}/conversations/${selectedConversation}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ body: renderedBody })
-    });
+    await sendConversationTextMessage(token, selectedConversation, renderedBody);
 
     setMessageBody("");
-    await loadMessages(token, selectedConversation, setMessages);
-    await loadConversations(token, search, filters, setConversations);
-    await loadMetrics(token, setMetrics, metricsQuery);
+    await refreshAfterMessage({
+      token,
+      conversationId: selectedConversation,
+      search,
+      filters,
+      metricsQuery,
+      setMessages,
+      setConversations,
+      setMetrics,
+      loadMetrics
+    });
   }
 
   async function deleteScript(scriptId: string): Promise<void> {
-    await fetch(`${API}/conversations/scripts/${scriptId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    await removeScript(token, scriptId);
 
-    await loadScripts(token, setScripts);
+    await refreshScripts({ token, setScripts });
     if (editingScriptId === scriptId) {
       resetScriptForm();
     }
@@ -763,25 +1028,18 @@ export function App(): JSX.Element {
       return;
     }
 
-    const created = await fetch(`${API}/conversations/knowledge-base`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
+    const created = await createKnowledgeArticleApi(token, {
         title: articleTitle,
         url: articleUrl,
         category: articleCategory,
         summary: articleSummary
-      })
     });
 
-    if (!created.ok) {
+    if (!created) {
       return;
     }
 
-    await loadKnowledgeArticles(token, setKnowledgeArticles);
+    await refreshKnowledge({ token, setKnowledgeArticles });
     setArticleTitle("");
     setArticleUrl("");
     setArticleCategory("");
@@ -789,12 +1047,9 @@ export function App(): JSX.Element {
   }
 
   async function deleteKnowledgeArticle(articleId: string): Promise<void> {
-    await fetch(`${API}/conversations/knowledge-base/${articleId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    await deleteKnowledgeArticleApi(token, articleId);
 
-    await loadKnowledgeArticles(token, setKnowledgeArticles);
+    await refreshKnowledge({ token, setKnowledgeArticles });
   }
 
   async function sendKnowledgeArticleLink(article: KnowledgeArticle): Promise<void> {
@@ -805,19 +1060,133 @@ export function App(): JSX.Element {
     }
 
     const body = `${article.title}\n${article.url}`;
-    await fetch(`${API}/conversations/${selectedConversation}/messages`, {
+    await sendConversationTextMessage(token, selectedConversation, body);
+
+    setScriptLibraryOpen(false);
+    await refreshAfterMessage({
+      token,
+      conversationId: selectedConversation,
+      search,
+      filters,
+      metricsQuery,
+      setMessages,
+      setConversations,
+      setMetrics,
+      loadMetrics
+    });
+  }
+
+  async function createMetricSnapshot(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const payload =
+      analyticsMode === "custom" && isCustomRangeValid
+        ? { from: analyticsFrom, to: analyticsTo }
+        : {};
+    await fetch(`${API}/metrics/snapshots/rebuild`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ body })
+      body: JSON.stringify(payload)
     });
+    await loadMetricSnapshots(token, setMetricSnapshots);
+  }
 
-    setScriptLibraryOpen(false);
-    await loadMessages(token, selectedConversation, setMessages);
-    await loadConversations(token, search, filters, setConversations);
-    await loadMetrics(token, setMetrics, metricsQuery);
+  async function saveAutoAssignmentStrategy(): Promise<void> {
+    if (!token || sessionUser?.role !== "admin") {
+      return;
+    }
+    setAutoAssignmentSaving(true);
+    try {
+      await updateAutoAssignmentStrategy(token, autoAssignmentStrategy);
+      await refreshAutoAssignmentLoad();
+    } finally {
+      setAutoAssignmentSaving(false);
+    }
+  }
+
+  async function refreshAutoAssignmentLoad(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    setAutoAssignmentRefreshing(true);
+    try {
+      await loadAutoAssignmentLoad(token, setAutoAssignmentLoad);
+      setAutoAssignmentLoadUpdatedAt(Date.now());
+    } finally {
+      setAutoAssignmentRefreshing(false);
+    }
+  }
+
+  async function exportMetricsCsv(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("days", String(metricsQuery.days));
+    if ("from" in metricsQuery && metricsQuery.from && "to" in metricsQuery && metricsQuery.to) {
+      params.set("from", metricsQuery.from);
+      params.set("to", metricsQuery.to);
+    }
+
+    const response = await fetch(`${API}/metrics/export.csv?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download =
+      analyticsMode === "custom" && isCustomRangeValid
+        ? `analytics-${analyticsFrom}-${analyticsTo}.csv`
+        : `analytics-${analyticsPeriod}d.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  }
+
+  async function exportMetricsXlsx(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("days", String(metricsQuery.days));
+    if ("from" in metricsQuery && metricsQuery.from && "to" in metricsQuery && metricsQuery.to) {
+      params.set("from", metricsQuery.from);
+      params.set("to", metricsQuery.to);
+    }
+
+    const response = await fetch(`${API}/metrics/export.xlsx?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download =
+      analyticsMode === "custom" && isCustomRangeValid
+        ? `analytics-${analyticsFrom}-${analyticsTo}.xlsx`
+        : `analytics-${analyticsPeriod}d.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
   }
 
   function startEditingScript(script: MessageScript): void {
@@ -865,15 +1234,16 @@ export function App(): JSX.Element {
   }
 
   async function setConversationStatus(conversationId: string, status: "open" | "closed"): Promise<void> {
-    await fetch(`${API}/conversations/${conversationId}/status`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ status })
-    });
-    await loadConversations(token, search, filters, setConversations);
+    if (!token) {
+      return;
+    }
+    await apiSetConversationStatus(token, conversationId, status);
+    await refreshConversationList({ token, search, filters, setConversations });
+  }
+
+  async function toggleConversationStatus(conversationId: string, currentStatus: "open" | "closed"): Promise<void> {
+    const nextStatus = currentStatus === "open" ? "closed" : "open";
+    await setConversationStatus(conversationId, nextStatus);
   }
 
   async function moveConversationToStage(conversationId: string, nextStage: string): Promise<void> {
@@ -1065,10 +1435,6 @@ export function App(): JSX.Element {
     setCustomerDealStage("");
   }, [selectedConversation, deals, dealStages]);
 
-  if (!sessionReady) {
-    return <main className="centered" />;
-  }
-
   if (!token) {
     return (
       <main className="landingPage">
@@ -1168,7 +1534,32 @@ export function App(): JSX.Element {
           </div>
         </div>
 
+        <div className="topbarSearch">
+          <input
+            className="topbarSearchInput"
+            placeholder="Search across deals and dialogues..."
+            aria-label="Search across deals and dialogues"
+          />
+        </div>
+
         <div className="topbarRight">
+          <div className="topbarIconGroup" aria-label="notifications and settings">
+            <button type="button" className="topbarIconButton" title="Notifications">
+              {"\uD83D\uDD14"}
+            </button>
+            <button
+              type="button"
+              className="topbarIconButton"
+              title="Settings"
+              onClick={() => {
+                if (sessionUser?.role === "admin") {
+                  setCurrentSection("integrations");
+                }
+              }}
+            >
+              {"\u2699"}
+            </button>
+          </div>
           <div className="userChip">
             <span className="userAvatar" aria-hidden="true">
               {(sessionUser?.fullName || sessionUser?.email || "?").trim().slice(0, 1).toUpperCase()}
@@ -1191,432 +1582,229 @@ export function App(): JSX.Element {
             className={`leftMenuButton ${currentSection === "dialogs" ? "active" : ""}`}
             onClick={() => setCurrentSection("dialogs")}
           >
-            {UI.menuDialogs}
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25AD"}
+            </span>
+            <span>{UI.menuDialogs}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "pipeline" ? "active" : ""}`}
             onClick={() => setCurrentSection("pipeline")}
           >
-            {UI.menuPipeline}
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u29D2"}
+            </span>
+            <span>{UI.menuPipeline}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "analytics" ? "active" : ""}`}
             onClick={() => setCurrentSection("analytics")}
           >
-            {UI.menuAnalytics}
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25F4"}
+            </span>
+            <span>{UI.menuAnalytics}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "knowledge" ? "active" : ""}`}
             onClick={() => setCurrentSection("knowledge")}
           >
-            {UI.menuKnowledgeBase}
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25A6"}
+            </span>
+            <span>{UI.menuKnowledgeBase}</span>
           </button>
+          {sessionUser?.role === "admin" ? (
+            <button
+              type="button"
+              className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
+              onClick={() => setCurrentSection("integrations")}
+            >
+              <span className="leftMenuButtonIcon" aria-hidden="true">
+                {"\u2699"}
+              </span>
+              <span>{UI.menuIntegrations}</span>
+            </button>
+          ) : null}
         </aside>
 
         {currentSection === "dialogs" ? (
         <div className="appGrid">
-          <aside className="sidebar card">
-          <div className="sidebarHeader">
-            <div>
-              <div className="sidebarTitle">{UI.inboxTitle}</div>
-              <div className="sidebarHint">{conversations.length} {UI.chatsSuffix}</div>
-            </div>
-            <button
-              type="button"
-              className="sidebarSearchButton"
-              title={UI.openSearchFilters}
-              aria-label={UI.openSearchFilters}
-              aria-expanded={searchPanelOpen}
-              onClick={() => setSearchPanelOpen((prev) => !prev)}
-            >
-              {"\uD83D\uDD0D"}
-            </button>
-          </div>
+          <InboxSidebar
+            ui={{
+              inboxTitle: UI.inboxTitle,
+              chatsSuffix: UI.chatsSuffix,
+              openSearchFilters: UI.openSearchFilters,
+              searchByNameOrPhone: UI.searchByNameOrPhone,
+              city: UI.city,
+              reason: UI.reason,
+              clientType: UI.clientType,
+              category: UI.category,
+              noMessages: UI.noMessages,
+              closeCard: UI.closeCard,
+              reopenCard: UI.reopenCard
+            }}
+            conversations={conversations}
+            selectedConversation={selectedConversation}
+            searchPanelOpen={searchPanelOpen}
+            search={search}
+            filters={filters}
+            savedFilterPresets={savedFilterPresets}
+            quickManagers={quickManagers}
+            quickManagerByConversation={quickManagerByConversation}
+            quickStageByConversation={quickStageByConversation}
+            quickTaskByConversation={quickTaskByConversation}
+            quickDeferMinutesByConversation={quickDeferMinutesByConversation}
+            availableStageNames={availableStageNames}
+            getStageLabel={(stageName) => formatStageLabel(stageName, UI)}
+            onToggleSearchPanel={() => setSearchPanelOpen((prev) => !prev)}
+            onSearchChange={(next) => {
+              setSearch(next);
+              void loadConversations(token, next, filters, setConversations);
+            }}
+            onFiltersChange={(next) => setFilters(next)}
+            onApplyFilters={() => void loadConversations(token, search, filters, setConversations)}
+            onSaveFilterPreset={saveCurrentFilterPreset}
+            onResetFilters={() => {
+              setFilters(DEFAULT_INBOX_FILTERS);
+              void loadConversations(token, search, DEFAULT_INBOX_FILTERS, setConversations);
+            }}
+            onApplyFilterPreset={(preset) => void applyFilterPreset(preset)}
+            onRemoveFilterPreset={removeFilterPreset}
+            onSelectConversation={(id) => void onSelectConversation(id)}
+            onQuickManagerChange={(conversationId, value) => {
+              setQuickManagerByConversation((prev) => ({ ...prev, [conversationId]: value }));
+              void assignConversationManager(conversationId, value);
+            }}
+            onQuickStageChange={(conversationId, value) => {
+              setQuickStageByConversation((prev) => ({ ...prev, [conversationId]: value }));
+              if (value) {
+                void moveConversationStage(conversationId, value);
+              }
+            }}
+            onQuickTaskChange={(conversationId, value) =>
+              setQuickTaskByConversation((prev) => ({ ...prev, [conversationId]: value }))
+            }
+            onQuickDeferMinutesChange={(conversationId, minutes) =>
+              setQuickDeferMinutesByConversation((prev) => ({ ...prev, [conversationId]: minutes }))
+            }
+            onCreateQuickTask={(conversationId) => void createQuickTask(conversationId)}
+            onToggleConversationStatus={(conversationId, status) =>
+              void toggleConversationStatus(conversationId, status)
+            }
+            onMarkSlaFollowUpDone={(conversationId) => void markSlaFollowUpDone(conversationId)}
+            onAcknowledgeSlaEscalation={(conversationId) => void acknowledgeSlaEscalation(conversationId)}
+            onDeferSlaEscalation={(conversationId, minutes) => void deferSlaEscalation(conversationId, minutes)}
+          />
 
-          {searchPanelOpen ? (
-            <>
-              <div className="searchWrap">
-                <input
-                  className="searchInput"
-                  placeholder={UI.searchByNameOrPhone}
-                  value={search}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    setSearch(next);
-                    void loadConversations(token, next, filters, setConversations);
-                  }}
-                />
-              </div>
-
-              <div className="filterGrid">
-                <input
-                  className="filterInput"
-                  placeholder={UI.city}
-                  value={filters.city}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, city: event.target.value }))}
-                />
-                <input
-                  className="filterInput"
-                  placeholder={UI.reason}
-                  value={filters.inquiryReason}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, inquiryReason: event.target.value }))}
-                />
-                <input
-                  className="filterInput"
-                  placeholder={UI.clientType}
-                  value={filters.clientType}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, clientType: event.target.value }))}
-                />
-                <input
-                  className="filterInput"
-                  placeholder={UI.category}
-                  value={filters.category}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, category: event.target.value }))}
-                />
-              </div>
-            </>
-          ) : null}
-
-          <ul className="chatList">
-            {conversations.map((conversation) => {
-              const isActive = conversation.id === selectedConversation;
-              const initial = (conversation.contact_name || "?").trim().slice(0, 1).toUpperCase();
-
-              return (
-                <li
-                  key={conversation.id}
-                  onPointerDown={() => void onSelectConversation(conversation.id)}
-                  onClick={() => void onSelectConversation(conversation.id)}
-                >
-                  <button
-                    type="button"
-                    className={`chatItem ${isActive ? "active" : ""}`}
-                  >
-                    <span className="chatAvatar" aria-hidden="true">
-                      {initial}
-                    </span>
-                    <span className="chatBody">
-                      <span className="chatTopLine">
-                        <span className="chatName">{conversation.contact_name}</span>
-                        <span className="chatPhone">{conversation.channel}</span>
-                      </span>
-                      <span className="chatSnippet">
-                        {conversation.last_message_body || UI.noMessages}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          </aside>
-
-          <section className="thread card">
-          {selectedConversationData ? (
-            <>
-              <div className="threadHeader">
-                <div className="threadTitle">
-                  <div className="threadLabel">{UI.replyBox}</div>
-                  <div className="threadName">{selectedConversationData.contact_name}</div>
-                  <div className="threadMeta">{selectedConversationData.phone}</div>
-                </div>
-                <div className="threadStatus">
-                  <button
-                    type="button"
-                    className="gearButton"
-                    onClick={() => setCustomerCardOpen(true)}
-                    title={UI.customerCard}
-                  >
-                    <svg className="customerCardIcon" viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-                      <path
-                        d="M4.5 19.5C5.6 16.8 8.3 15 12 15s6.4 1.8 7.5 4.5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </button>
-                  <span className="statusDot" aria-hidden="true" />
-                  <span>{selectedConversationData.channel} {UI.openStatusSuffix}</span>
-                </div>
-              </div>
-
-              <div
-                className={`messages ${isDragOverMessages ? "dragOver" : ""}`}
-                role="log"
-                aria-label="Conversation messages"
-                ref={messagesContainerRef}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragOverMessages(true);
-                }}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                    setIsDragOverMessages(false);
-                  }
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setIsDragOverMessages(false);
-                  const droppedFile = event.dataTransfer.files?.[0];
-                  if (droppedFile) {
-                    void sendMediaFile(droppedFile);
-                  }
-                }}
-              >
-                {messages.map((message) => (
-                  <div key={message.id} className={`bubble ${message.direction}`}>
-                    {message.body ? <div className="bubbleBody">{message.body}</div> : null}
-                    {message.attachment_url && message.attachment_type === "image" ? (
-                      <a href={getMediaUrl(message.attachment_url)} target="_blank" rel="noreferrer">
-                        <img
-                          className="bubbleMedia bubbleMediaImage"
-                          src={getMediaUrl(message.attachment_url)}
-                          alt={message.attachment_name || "image"}
-                          loading="lazy"
-                        />
-                      </a>
-                    ) : null}
-                    {message.attachment_url && message.attachment_type === "video" ? (
-                      <video className="bubbleMedia bubbleMediaVideo" controls preload="metadata">
-                        <source src={getMediaUrl(message.attachment_url)} />
-                      </video>
-                    ) : null}
-                  </div>
-                ))}
-                {isDragOverMessages ? <div className="dropHint">{UI.dropMediaHint}</div> : null}
-              </div>
-
-              <div className="scriptPanel">
-                <div className="scriptPanelTop">
-                  <div className="scriptPanelToggle">
-                    <span className="scriptPanelToggleText">
-                      <span className="scriptPanelTitle">{UI.replyScripts}</span>
-                      <span className="sidebarHint">{UI.quickScriptHint}</span>
-                    </span>
-                  </div>
-                  <div className="scriptPanelTopActions">
-                    <button
-                      type="button"
-                      className={`scriptTopButton scriptTopButtonAccent ${scriptPanelOpen ? "active" : ""}`}
-                      onClick={() =>
-                        setScriptPanelOpen((prev) => {
-                          const next = !prev;
-                          if (next) {
-                            setKnowledgeQuickOpen(false);
-                          }
-                          return next;
-                        })
-                      }
-                      title={UI.replyScripts}
-                      aria-expanded={scriptPanelOpen}
-                    >
-                      {"\u270E"}
-                    </button>
-                    <button
-                      type="button"
-                      className={`scriptTopButton scriptTopButtonPrimary ${knowledgeQuickOpen ? "active" : ""}`}
-                      onClick={() =>
-                        setKnowledgeQuickOpen((prev) => {
-                          const next = !prev;
-                          if (next) {
-                            setScriptPanelOpen(false);
-                          }
-                          return next;
-                        })
-                      }
-                      aria-expanded={knowledgeQuickOpen}
-                      title={UI.knowledgeBase}
-                    >
-                      {"\uD83D\uDCD6"}
-                    </button>
-                    <button
-                      type="button"
-                      className="scriptTopButton scriptTopButtonGhost"
-                      onClick={() => setScriptLibraryOpen(true)}
-                      title={UI.scriptLibrary}
-                    >
-                      {"\u22EF"}
-                    </button>
-                  </div>
-                </div>
-
-                {scriptPanelOpen ? (
-                  <>
-                    <input
-                      className="searchInput scriptKnowledgeSearch"
-                      placeholder={UI.searchScripts}
-                      value={scriptSearch}
-                      onChange={(event) => setScriptSearch(event.target.value)}
-                    />
-                    <div className="scriptScroller">
-                      {filteredScripts.map((script) => {
-                        const isSelected = script.id === selectedScriptId;
-                        const preview = applyScriptVariables(script.body, contactCard, selectedConversationData);
-                        return (
-                          <div key={script.id} className={`scriptCard ${isSelected ? "active" : ""}`}>
-                            <button
-                              type="button"
-                              className="scriptCardMain"
-                              onClick={() => {
-                                setSelectedScriptId(script.id);
-                                setMessageBody(preview);
-                              }}
-                            >
-                              <span className="scriptCardTop">
-                                <span className="scriptCardTitle">{script.title}</span>
-                                <span className="scriptBadge">{script.category || UI.general}</span>
-                              </span>
-                              <span className="scriptCardBody">{preview}</span>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {filteredScripts.length ? null : (
-                      <div className="emptyScriptState">{UI.noMatchingScripts}</div>
-                    )}
-                  </>
-                ) : null}
-
-                {!scriptPanelOpen && knowledgeQuickOpen ? (
-                  <div className="scriptKnowledgePanel">
-                    <div className="scriptPanelTitle">{UI.knowledgeBase}</div>
-                    <input
-                      className="searchInput scriptKnowledgeSearch"
-                      placeholder={UI.searchKnowledgeBase}
-                      value={knowledgeSearch}
-                      onChange={(event) => setKnowledgeSearch(event.target.value)}
-                    />
-                    <div className="scriptScroller">
-                      {filteredKnowledgeArticles.map((article) => (
-                        <div key={article.id} className="scriptCard">
-                          <button
-                            type="button"
-                            className="scriptCardMain"
-                            onClick={() => setMessageBody(`${article.title}\n${article.url}`)}
-                          >
-                            <span className="scriptCardTop">
-                              <span className="scriptCardTitle">{article.title}</span>
-                              <span className="scriptBadge">{article.category || UI.general}</span>
-                            </span>
-                            <span className="scriptCardBody">{article.summary || article.url}</span>
-                          </button>
-                          <div className="scriptCardActions">
-                            <button type="button" className="textButton" onClick={() => void sendKnowledgeArticleLink(article)}>
-                              {UI.sendArticleLink}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {filteredKnowledgeArticles.length ? null : (
-                      <div className="emptyScriptState">{UI.noKnowledgeArticles}</div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="composer">
-                <div className="composerInputWrap" ref={emojiPickerRef}>
-                  <button
-                    type="button"
-                    className="emojiButton"
-                    title={UI.emojis}
-                    aria-label={UI.emojis}
-                    onClick={() => setEmojiPickerOpen((prev) => !prev)}
-                  >
-                    {EMOJI_BUTTON_ICON}
-                  </button>
-                  <textarea
-                    className="composerInput composerTextarea"
-                    value={messageBody}
-                    onChange={(event) => {
-                      setMessageBody(event.target.value);
-                      if (mediaUploadError) {
-                        setMediaUploadError("");
-                      }
-                    }}
-                    placeholder={UI.typeMessage}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.ctrlKey && !event.shiftKey) {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
-                    rows={1}
-                  />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,video/*"
-                    className="hiddenFileInput"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) {
-                        void sendMediaFile(file);
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="emojiButton attachButton"
-                    title={UI.attachFile}
-                    aria-label={UI.attachFile}
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingMedia}
-                  >
-                    {uploadingMedia ? (
-                      <span className="attachSpinner" aria-hidden="true" />
-                    ) : (
-                      <svg className="attachIcon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          d="M21 11.5L12.9 19.6a5 5 0 11-7.1-7.1l9.2-9.2a3.5 3.5 0 114.9 5l-9.2 9.2a2 2 0 11-2.8-2.8l8.5-8.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                  {emojiPickerOpen ? (
-                    <div className="emojiPicker">
-                      {EMOJI_OPTIONS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          className="emojiOption"
-                          onClick={() => {
-                            setMessageBody((prev) => `${prev}${emoji}`);
-                            setEmojiPickerOpen(false);
-                          }}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <button className="primaryButton" onClick={() => void sendMessage()} disabled={uploadingMedia}>
-                  {uploadingMedia ? UI.uploadingMedia : UI.send}
-                </button>
-                {mediaUploadError ? <div className="composerError">{mediaUploadError}</div> : null}
-              </div>
-            </>
-          ) : (
-            <div className="emptyState">
-              <div className="emptyTitle">{UI.replyBox}</div>
-              <div className="emptyHint">{UI.selectChatHint}</div>
-            </div>
-          )}
-          </section>
+          <InboxThread
+            ui={{
+              replyBox: UI.replyBox,
+              customerCard: UI.customerCard,
+              openStatusSuffix: UI.openStatusSuffix,
+              closedStatusSuffix: UI.closedStatusSuffix,
+              noMatchingScripts: UI.noMatchingScripts,
+              knowledgeBase: UI.knowledgeBase,
+              searchKnowledgeBase: UI.searchKnowledgeBase,
+              noKnowledgeArticles: UI.noKnowledgeArticles,
+              sendArticleLink: UI.sendArticleLink,
+              general: UI.general,
+              emojis: UI.emojis,
+              typeMessage: UI.typeMessage,
+              attachFile: UI.attachFile,
+              uploadingMedia: UI.uploadingMedia,
+              send: UI.send,
+              selectChatHint: UI.selectChatHint,
+              quickScriptHint: UI.quickScriptHint,
+              replyScripts: UI.replyScripts,
+              searchScripts: UI.searchScripts,
+              noMessages: UI.noMessages
+            }}
+            selectedConversationData={selectedConversationData}
+            messages={messages}
+            isDragOverMessages={isDragOverMessages}
+            messagesContainerRef={messagesContainerRef}
+            emojiPickerRef={emojiPickerRef}
+            scriptPanelOpen={scriptPanelOpen}
+            knowledgeQuickOpen={knowledgeQuickOpen}
+            scriptSearch={scriptSearch}
+            knowledgeSearch={knowledgeSearch}
+            filteredScripts={filteredScripts}
+            filteredKnowledgeArticles={filteredKnowledgeArticles}
+            selectedScriptId={selectedScriptId}
+            messageBody={messageBody}
+            uploadingMedia={uploadingMedia}
+            mediaUploadError={mediaUploadError}
+            emojiPickerOpen={emojiPickerOpen}
+            emojiOptions={EMOJI_OPTIONS}
+            emojiButtonIcon={EMOJI_BUTTON_ICON}
+            getMediaUrl={getMediaUrl}
+            onSetPriority={(conversationId, priority) => void updateConversationPriority(conversationId, priority)}
+            onOpenCustomerCard={() => setCustomerCardOpen(true)}
+            onMessagesDragOver={(event) => {
+              event.preventDefault();
+              setIsDragOverMessages(true);
+            }}
+            onMessagesDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                setIsDragOverMessages(false);
+              }
+            }}
+            onMessagesDrop={(event) => {
+              event.preventDefault();
+              setIsDragOverMessages(false);
+              const droppedFile = event.dataTransfer.files?.[0];
+              if (droppedFile) {
+                void sendMediaFile(droppedFile);
+              }
+            }}
+            onToggleScriptPanel={() =>
+              setScriptPanelOpen((prev) => {
+                const next = !prev;
+                if (next) {
+                  setKnowledgeQuickOpen(false);
+                }
+                return next;
+              })
+            }
+            onToggleKnowledgeQuick={() =>
+              setKnowledgeQuickOpen((prev) => {
+                const next = !prev;
+                if (next) {
+                  setScriptPanelOpen(false);
+                }
+                return next;
+              })
+            }
+            onScriptSearchChange={(value) => setScriptSearch(value)}
+            onKnowledgeSearchChange={(value) => setKnowledgeSearch(value)}
+            onSelectScript={(scriptId, body) => {
+              setSelectedScriptId(scriptId);
+              setMessageBody(body);
+            }}
+            onSelectKnowledgeArticle={(body) => setMessageBody(body)}
+            onSendKnowledgeArticleLink={(article) => void sendKnowledgeArticleLink(article)}
+            onToggleEmojiPicker={() => setEmojiPickerOpen((prev) => !prev)}
+            onMessageBodyChange={(value) => {
+              setMessageBody(value);
+              if (mediaUploadError) {
+                setMediaUploadError("");
+              }
+            }}
+            onPickFile={(file) => {
+              void sendMediaFile(file);
+            }}
+            onSendMessage={() => void sendMessage()}
+            onAppendEmoji={(emoji) => {
+              setMessageBody((prev) => `${prev}${emoji}`);
+              setEmojiPickerOpen(false);
+            }}
+            onAcknowledgeSlaEscalation={(conversationId) => void acknowledgeSlaEscalation(conversationId)}
+            onDeferSlaEscalation={(conversationId, minutes) => void deferSlaEscalation(conversationId, minutes)}
+          />
 
           <aside className="rightRail card">
           <div className="railHeader">
@@ -1759,6 +1947,8 @@ export function App(): JSX.Element {
               </div>
             </div>
           </section>
+        ) : currentSection === "integrations" ? (
+          token ? <IntegrationsPanel authToken={token} /> : null
         ) : currentSection === "analytics" ? (
           <section className="analyticsPage card">
             <div className="railHeader">
@@ -1807,7 +1997,64 @@ export function App(): JSX.Element {
                     onChange={(event) => setAnalyticsTo(event.target.value)}
                   />
                 </label>
-                {!isCustomRangeValid ? <div className="analyticsDateError">������� ���������� �������� ���.</div> : null}
+                {!isCustomRangeValid ? <div className="analyticsDateError">������� ���������� �������� ���.</div> : null}
+              </div>
+            ) : null}
+            {sessionUser?.role === "admin" ? (
+              <div className="analyticsSettingsCard">
+                <div className="analyticsSettingsColumn">
+                  <div>
+                    <div className="analyticsLabel">{UI.autoAssignmentTitle}</div>
+                    <div className="sidebarHint">{UI.autoAssignmentHint}</div>
+                  </div>
+                  <div className="pipelineFilterButtons">
+                    <select
+                      className="filterInput"
+                      value={autoAssignmentStrategy}
+                      onChange={(event) => setAutoAssignmentStrategy(event.target.value as AutoAssignmentStrategy)}
+                    >
+                      <option value="round_robin">{UI.strategyRoundRobin}</option>
+                      <option value="least_open_load">{UI.strategyLeastLoad}</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="secondaryButton"
+                      disabled={autoAssignmentSaving}
+                      onClick={() => void saveAutoAssignmentStrategy()}
+                    >
+                      {UI.saveStrategy}
+                    </button>
+                  </div>
+                </div>
+                <div className="analyticsSettingsColumn">
+                  <div className="analyticsLoadHeader">
+                    <div className="analyticsLabel">{UI.loadTitle}</div>
+                    <button
+                      type="button"
+                      className="secondaryButton"
+                      disabled={autoAssignmentRefreshing}
+                      onClick={() => void refreshAutoAssignmentLoad()}
+                    >
+                      {UI.refreshNow}
+                    </button>
+                  </div>
+                  <div className="analyticsLoadMeta">
+                    {autoAssignmentLoadUpdatedAt
+                      ? `${UI.updatedAgo} ${formatSecondsAgo(autoAssignmentLoadUpdatedAt)}`
+                      : null}
+                  </div>
+                  <div className="analyticsLoadList">
+                    {autoAssignmentLoad.map((row) => (
+                      <div key={row.managerId} className="analyticsLoadRow">
+                        <span>{row.managerName}</span>
+                        <strong>{`${row.openConversations} ${UI.loadDialogs}`}</strong>
+                      </div>
+                    ))}
+                    {autoAssignmentLoad.length ? null : (
+                      <div className="analyticsManagersEmpty">Нет активных менеджеров.</div>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : null}
             <div className="analyticsGrid">
@@ -1821,7 +2068,7 @@ export function App(): JSX.Element {
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.closedConversations7d ?? 0}</div>
-                <div className="analyticsLabel">{`������� �� ${metrics?.periodDays ?? analyticsPeriod} ��.`}</div>
+                <div className="analyticsLabel">{`������� �� ${metrics?.periodDays ?? analyticsPeriod} ��.`}</div>
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.firstResponseMinutes ?? 0} {UI.min}</div>
@@ -1833,7 +2080,7 @@ export function App(): JSX.Element {
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.messages7d ?? 0}</div>
-                <div className="analyticsLabel">{`���� ��������� �� ${metrics?.periodDays ?? analyticsPeriod} ��.`}</div>
+                <div className="analyticsLabel">{`���� ��������� �� ${metrics?.periodDays ?? analyticsPeriod} ��.`}</div>
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.avgMessagesPerConversation ?? 0}</div>
@@ -1849,6 +2096,76 @@ export function App(): JSX.Element {
                   <div className="analyticsChannelItem">
                     <span>{UI.telegramChannel}</span>
                     <strong>{metrics?.telegramConversations ?? 0}</strong>
+                  </div>
+                </div>
+              </div>
+              <div className="analyticsCard analyticsCardWide">
+                <div className="analyticsLabel">{UI.managersKpiTitle}</div>
+                <div className="analyticsManagersTable">
+                  <div className="analyticsManagersHead">
+                    <span>{UI.managerLabel}</span>
+                    <span>{UI.dialogsHandledLabel}</span>
+                    <span>{UI.outgoingMessagesLabel}</span>
+                  </div>
+                  {(metrics?.managersKpi || []).map((row) => (
+                    <div key={row.managerId} className="analyticsManagersRow">
+                      <span>{row.managerName}</span>
+                      <strong>{row.dialogsHandled}</strong>
+                      <strong>{row.outgoingMessages}</strong>
+                    </div>
+                  ))}
+                  {metrics?.managersKpi?.length ? null : (
+                    <div className="analyticsManagersEmpty">Нет данных по менеджерам за выбранный период.</div>
+                  )}
+                </div>
+              </div>
+              <div className="analyticsCard analyticsCardWide">
+                <div className="analyticsLabel">{UI.stageKpiTitle}</div>
+                <div className="analyticsManagersTable">
+                  <div className="analyticsManagersHead">
+                    <span>{UI.stageLabel}</span>
+                    <span>{UI.stageDealsLabel}</span>
+                    <span>{UI.stageAmountLabel}</span>
+                  </div>
+                  {(metrics?.stageKpi || []).map((row) => (
+                    <div key={row.stageName} className="analyticsManagersRow">
+                      <span>{formatStageLabel(row.stageName, UI)}</span>
+                      <strong>{row.dealsCount}</strong>
+                      <strong>{row.dealsAmount.toLocaleString("ru-RU")}</strong>
+                    </div>
+                  ))}
+                  {metrics?.stageKpi?.length ? null : (
+                    <div className="analyticsManagersEmpty">Нет данных по этапам за выбранный период.</div>
+                  )}
+                </div>
+              </div>
+              <div className="analyticsCard analyticsCardWide">
+                <div className="analyticsLabel">{UI.slaKpiTitle}</div>
+                <div className="analyticsManagersTable">
+                  <div className="analyticsManagersHead">
+                    <span>{UI.managerLabel}</span>
+                    <span>{UI.slaManagerEscalationsLabel}</span>
+                    <span>{UI.slaManagerDelayLabel}</span>
+                  </div>
+                  {(metrics?.slaManagers || []).map((row) => (
+                    <div key={row.managerId} className="analyticsManagersRow">
+                      <span>{row.managerName}</span>
+                      <strong>{row.escalatedCount}</strong>
+                      <strong>{row.avgDelayMinutes}</strong>
+                    </div>
+                  ))}
+                  {metrics?.slaManagers?.length ? null : (
+                    <div className="analyticsManagersEmpty">Нет SLA-эскалаций за выбранный период.</div>
+                  )}
+                </div>
+                <div className="analyticsChannels">
+                  <div className="analyticsChannelItem">
+                    <span>{UI.slaEscalationsLabel}</span>
+                    <strong>{metrics?.slaEscalations ?? 0}</strong>
+                  </div>
+                  <div className="analyticsChannelItem">
+                    <span>{UI.slaDelayLabel}</span>
+                    <strong>{metrics?.slaAverageDelayMinutes ?? 0}</strong>
                   </div>
                 </div>
               </div>
@@ -1870,6 +2187,30 @@ export function App(): JSX.Element {
                     values={(metrics?.dailySeries || []).map((item) => item.closed)}
                     labels={(metrics?.dailySeries || []).map((item) => item.day)}
                   />
+                </div>
+              </div>
+              <div className="analyticsCard analyticsCardWide">
+                <div className="analyticsLabel">{UI.snapshotsTitle}</div>
+                <div className="pipelineFilterButtons">
+                  <button type="button" className="secondaryButton" onClick={() => void exportMetricsCsv()}>
+                    {UI.exportCsv}
+                  </button>
+                  <button type="button" className="secondaryButton" onClick={() => void exportMetricsXlsx()}>
+                    {UI.exportXlsx}
+                  </button>
+                  <button type="button" className="secondaryButton" onClick={() => void createMetricSnapshot()}>
+                    {UI.createSnapshot}
+                  </button>
+                </div>
+                <div className="analyticsSnapshotsList">
+                  {metricSnapshots.map((snapshot) => (
+                    <div key={`${snapshot.periodStart}-${snapshot.periodEnd}-${snapshot.createdAt}`} className="analyticsSnapshotRow">
+                      <span>{`${snapshot.periodStart} - ${snapshot.periodEnd}`}</span>
+                      <span>{`${snapshot.totalConversations}/${snapshot.openConversations}/${snapshot.closedConversations}`}</span>
+                      <span>{snapshot.messages}</span>
+                    </div>
+                  ))}
+                  {metricSnapshots.length ? null : <div className="analyticsManagersEmpty">Снимков пока нет.</div>}
                 </div>
               </div>
             </div>
@@ -2371,51 +2712,20 @@ export function App(): JSX.Element {
           </aside>
         </div>
       ) : null}
+      {toastVisible ? (
+        <div
+          className={`appToast ${toastKind}`}
+          onMouseEnter={pauseToastAutoHide}
+          onMouseLeave={resumeToastAutoHide}
+        >
+          <span>{toastMessage}</span>
+          <button type="button" className="appToastClose" onClick={closeToast} aria-label="Закрыть уведомление">
+            ×
+          </button>
+        </div>
+      ) : null}
     </div>
   );
-}
-
-async function loadConversations(
-  token: string,
-  search: string,
-  filters: { city: string; inquiryReason: string; clientType: string; category: string },
-  setConversations: (data: Conversation[]) => void
-): Promise<Conversation[]> {
-  const params = new URLSearchParams({
-    q: search,
-    city: filters.city,
-    inquiryReason: filters.inquiryReason,
-    clientType: filters.clientType,
-    category: filters.category
-  });
-  const response = await fetch(`${API}/conversations?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const data = (await response.json()) as Conversation[];
-  setConversations(data);
-  return data;
-}
-
-async function loadMessages(
-  token: string,
-  conversationId: string,
-  setMessages: (data: Message[]) => void
-): Promise<void> {
-  const response = await fetch(`${API}/conversations/${conversationId}/messages`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  setMessages(await response.json());
-}
-
-async function loadContactCard(
-  token: string,
-  conversationId: string,
-  setContactCard: (data: ContactCard | null) => void
-): Promise<void> {
-  const response = await fetch(`${API}/conversations/${conversationId}/contact`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  setContactCard(await response.json());
 }
 
 async function loadDeals(token: string, setDeals: (data: Deal[]) => void): Promise<void> {
@@ -2437,21 +2747,19 @@ async function loadDealStages(
   return data;
 }
 
-async function loadScripts(token: string, setScripts: (data: MessageScript[]) => void): Promise<void> {
-  const response = await fetch(`${API}/conversations/scripts`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  setScripts(await response.json());
-}
-
-async function loadKnowledgeArticles(
+async function loadQuickActionsMeta(
   token: string,
-  setKnowledgeArticles: (data: KnowledgeArticle[]) => void
+  setManagers: (data: QuickActionManager[]) => void,
+  setDealStages: (data: PipelineStage[]) => void
 ): Promise<void> {
-  const response = await fetch(`${API}/conversations/knowledge-base`, {
+  const response = await fetch(`${API}/conversations/quick-actions-meta`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  setKnowledgeArticles(await response.json());
+  const data = (await response.json()) as { managers?: QuickActionManager[]; stages?: PipelineStage[] };
+  setManagers(data.managers || []);
+  if (data.stages?.length) {
+    setDealStages(data.stages);
+  }
 }
 
 async function loadMetrics(
@@ -2472,6 +2780,59 @@ async function loadMetrics(
   setMetrics(await response.json());
 }
 
+async function loadMetricSnapshots(
+  token: string,
+  setMetricSnapshots: (data: MetricSnapshot[]) => void
+): Promise<void> {
+  const response = await fetch(`${API}/metrics/snapshots`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  setMetricSnapshots(await response.json());
+}
+
+async function loadAutoAssignmentStrategy(
+  token: string,
+  setStrategy: (strategy: AutoAssignmentStrategy) => void
+): Promise<void> {
+  const response = await fetch(`${API}/metrics/auto-assignment-strategy`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    return;
+  }
+  const data = (await response.json()) as { strategy?: AutoAssignmentStrategy };
+  if (data.strategy === "least_open_load" || data.strategy === "round_robin") {
+    setStrategy(data.strategy);
+  }
+}
+
+async function updateAutoAssignmentStrategy(
+  token: string,
+  strategy: AutoAssignmentStrategy
+): Promise<void> {
+  await fetch(`${API}/metrics/auto-assignment-strategy`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ strategy })
+  });
+}
+
+async function loadAutoAssignmentLoad(
+  token: string,
+  setLoad: (data: AutoAssignmentLoadItem[]) => void
+): Promise<void> {
+  const response = await fetch(`${API}/metrics/auto-assignment-load`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    return;
+  }
+  setLoad((await response.json()) as AutoAssignmentLoadItem[]);
+}
+
 function dateOffsetISO(daysBeforeToday: number): string {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
@@ -2484,6 +2845,15 @@ function diffDaysInclusive(from: string, to: string): number {
   const toDate = new Date(`${to}T00:00:00`);
   const diffMs = Math.max(0, toDate.getTime() - fromDate.getTime());
   return Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function formatSecondsAgo(timestampMs: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
+  if (seconds < 60) {
+    return `${seconds} сек. назад`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} мин. назад`;
 }
 
 function formatDateRangeLabel(value: string): string {

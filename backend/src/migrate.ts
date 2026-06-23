@@ -2,11 +2,112 @@ import { pool } from "./db";
 
 /** Гарантирует колонку login и индекс (старые БД без полного прогона сида). */
 export async function ensureUserLoginSchema(): Promise<void> {
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS managers (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      last_assigned_at TIMESTAMP,
+      first_response_target_minutes INTEGER NOT NULL DEFAULT 15,
+      close_rate_target NUMERIC(5,2),
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS activities (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      user_id UUID REFERENCES users(id),
+      conversation_id UUID REFERENCES conversations(id),
+      action TEXT NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspace_settings (
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT now(),
+      PRIMARY KEY (workspace_id, key)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      conversation_id UUID REFERENCES conversations(id),
+      deal_id UUID REFERENCES deals(id),
+      owner_user_id UUID REFERENCES users(id),
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done', 'cancelled')),
+      due_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metric_snapshots (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      manager_user_id UUID REFERENCES users(id),
+      metric_key TEXT NOT NULL,
+      metric_value NUMERIC(14,2) NOT NULL DEFAULT 0,
+      period_start DATE NOT NULL,
+      period_end DATE NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE managers ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMP`);
+
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal'`);
+  await pool.query(
+    `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS first_response_due_at TIMESTAMP`
+  );
+
+  await pool.query(`ALTER TABLE deals ADD COLUMN IF NOT EXISTS expected_close_at TIMESTAMP`);
+
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_users_login_lower ON users (lower(login))
       WHERE login IS NOT NULL AND trim(login) <> ''
   `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at ON messages (conversation_id, created_at)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_conversations_status_assigned_updated
+      ON conversations (status, assigned_manager_id, updated_at DESC)`
+  );
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_deals_stage_amount ON deals (stage, amount)`);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_metric_snapshots_unique_period
+      ON metric_snapshots (workspace_id, COALESCE(manager_user_id, '00000000-0000-0000-0000-000000000000'::uuid), metric_key, period_start, period_end)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_tasks_workspace_status_due ON tasks (workspace_id, status, due_at)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_workspace_settings_workspace
+      ON workspace_settings (workspace_id)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_managers_workspace_active_last_assigned
+      ON managers (workspace_id, is_active, last_assigned_at, created_at)`
+  );
+
   await pool.query(`
     UPDATE users SET login = 'admin'
     WHERE email = 'admin@demo.local' AND (login IS NULL OR trim(login) = '')
@@ -45,5 +146,32 @@ export async function ensureUserLoginSchema(): Promise<void> {
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_stages_workspace_name_lower
       ON pipeline_stages (workspace_id, lower(name))
+  `);
+
+  await pool.query(`
+    INSERT INTO managers (workspace_id, user_id, display_name)
+    SELECT u.workspace_id, u.id, u.full_name
+    FROM users u
+    WHERE u.role = 'manager'
+      AND NOT EXISTS (
+        SELECT 1 FROM managers m WHERE m.user_id = u.id
+      )
+  `);
+
+  await pool.query(`
+    INSERT INTO activities (workspace_id, user_id, conversation_id, action, metadata, created_at)
+    SELECT workspace_id, user_id, conversation_id, action, metadata, created_at
+    FROM activity_logs al
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM activities a
+      WHERE a.workspace_id = al.workspace_id
+        AND a.action = al.action
+        AND a.created_at = al.created_at
+        AND COALESCE(a.user_id, '00000000-0000-0000-0000-000000000000'::uuid)
+            = COALESCE(al.user_id, '00000000-0000-0000-0000-000000000000'::uuid)
+        AND COALESCE(a.conversation_id, '00000000-0000-0000-0000-000000000000'::uuid)
+            = COALESCE(al.conversation_id, '00000000-0000-0000-0000-000000000000'::uuid)
+    )
   `);
 }

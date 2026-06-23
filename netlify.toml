@@ -3,6 +3,10 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  VITE_API_URL = "https://light-crm-backend.onrender.com/api"
+  VITE_PUBLIC_WEBHOOK_BASE_URL = "https://light-crm-backend.onrender.com"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -40,6 +40,12 @@
 - Pipeline сделок и смена стадий
 - KPI-дашборд (FRT, обработанные диалоги, исходящие сообщения)
 
+## Архитектурные артефакты
+- ERD v1: `docs/architecture/erd-v1.md`
+- План спринтов: `docs/roadmap/crm-sprints.md`
+- Целевая структура папок: `docs/architecture/folder-structure.md`
+- План снижения рисков: `docs/architecture/risk-mitigation.md`
+
 ## Telegram интеграция
 1. Создайте бота через `@BotFather` и получите токен.
 2. Задайте переменные окружения:
@@ -57,8 +63,43 @@
 
 Для локальной разработки webhook требует публичный HTTPS URL, например через `ngrok` или Cloudflare Tunnel.
 
+## WhatsApp: официальный Meta Cloud API (рекомендуется)
+1. В [Meta for Developers](https://developers.facebook.com/) создайте приложение и подключите продукт **WhatsApp**.
+2. В разделе WhatsApp → API Setup получите:
+   - **Phone number ID** → `WHATSAPP_PHONE_NUMBER_ID`
+   - **Temporary access token** (или permanent system user token) → `WHATSAPP_ACCESS_TOKEN`
+3. В App Settings → Basic скопируйте **App ID** и **App Secret**:
+   - `WHATSAPP_APP_ID`
+   - `WHATSAPP_APP_SECRET`
+4. Придумайте строку для верификации webhook → `WHATSAPP_VERIFY_TOKEN`.
+5. Пропишите переменные в `infra/.env` или Render:
+   - `WHATSAPP_PROVIDER=meta`
+   - `WHATSAPP_ACCESS_TOKEN=...`
+   - `WHATSAPP_PHONE_NUMBER_ID=...`
+   - `WHATSAPP_APP_ID=...`
+   - `WHATSAPP_VERIFY_TOKEN=...`
+   - `WHATSAPP_APP_SECRET=...`
+   - `WHATSAPP_API_VERSION=v21.0` (опционально)
+6. Поднимите backend с публичным HTTPS URL.
+7. Автоподписка webhook (или вручную в Meta Console):
+   - `npm run -w backend setup:whatsapp-meta -- https://<your-domain>`
+   - Callback URL: `https://<your-domain>/api/integrations/whatsapp/webhook`
+   - Verify token: то же значение, что `WHATSAPP_VERIFY_TOKEN`
+   - Поле подписки: **messages**
+8. Проверьте статус:
+   - `GET https://<your-domain>/api/integrations/whatsapp/status`
+
+Что работает:
+- входящие текстовые сообщения и изображения/видео из WhatsApp;
+- создание контакта и диалога канала `whatsapp`;
+- ответ менеджера из CRM уходит клиенту через Graph API;
+- webhook verify (`hub.challenge`) и проверка подписи `X-Hub-Signature-256`.
+
+Для локальной разработки нужен публичный HTTPS туннель (`ngrok`, Cloudflare Tunnel).
+
 ## WhatsApp интеграция через ChatApp
-1. В кабинете [ChatApp](https://chatapp.online/) получите/задайте:
+1. Задайте `WHATSAPP_PROVIDER=chatapp` (или не задавайте Meta-переменные).
+2. В кабинете [ChatApp](https://chatapp.online/) получите/задайте:
    - `CHATAPP_API_TOKEN`
    - `CHATAPP_SEND_MESSAGE_PATH` (по умолчанию `/v1/messages`)
    - `CHATAPP_WEBHOOK_SECRET` (ваша строка)
@@ -88,7 +129,13 @@
 2. Дождитесь статуса `Live`.
 3. Проверьте health backend:
    - `https://<render-backend-domain>/health`
-4. После первого запуска заполните в Render переменные ChatApp/Telegram при необходимости:
+4. После первого запуска заполните в Render переменные WhatsApp/Telegram при необходимости:
+   - `WHATSAPP_PROVIDER=meta`
+   - `WHATSAPP_ACCESS_TOKEN`
+   - `WHATSAPP_PHONE_NUMBER_ID`
+   - `WHATSAPP_VERIFY_TOKEN`
+   - `WHATSAPP_APP_SECRET`
+   - `WHATSAPP_API_VERSION`
    - `CHATAPP_API_BASE_URL`
    - `CHATAPP_API_TOKEN`
    - `CHATAPP_SEND_MESSAGE_PATH`
@@ -98,6 +145,7 @@
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_WEBHOOK_SECRET`
    - `TELEGRAM_DELIVERY_MODE=webhook`
+   - `AUTO_ASSIGNMENT_STRATEGY=round_robin` (`least_open_load` для назначения по минимальной загрузке)
 
 ### 2) Frontend на Netlify
 1. Откройте [Netlify](https://app.netlify.com/) и импортируйте GitHub-репозиторий.

@@ -50,6 +50,24 @@ conversationsRouter.get("/scripts", async (req: AuthRequest, res) => {
   res.json(rows);
 });
 
+conversationsRouter.get("/quick-actions-meta", async (req: AuthRequest, res) => {
+  const managers = await query<{ id: string; full_name: string }>(
+    `SELECT id, full_name
+     FROM users
+     WHERE workspace_id = $1 AND role = 'manager' AND is_active = true
+     ORDER BY full_name ASC`,
+    [req.user?.workspaceId]
+  );
+  const stages = await query<{ id: string; name: string; position: number }>(
+    `SELECT id, name, position
+     FROM pipeline_stages
+     WHERE workspace_id = $1
+     ORDER BY position ASC, created_at ASC`,
+    [req.user?.workspaceId]
+  );
+  res.json({ managers, stages });
+});
+
 conversationsRouter.post("/scripts", async (req: AuthRequest, res) => {
   const { title, category, body } = req.body as { title: string; category?: string; body: string };
   const cleanTitle = title.trim();
@@ -186,20 +204,60 @@ conversationsRouter.delete("/knowledge-base/:articleId", async (req: AuthRequest
 });
 
 conversationsRouter.get("/", async (req: AuthRequest, res) => {
-  const { q = "", managerId = "", stage = "", city = "", inquiryReason = "", clientType = "", category = "" } =
-    req.query as Record<string, string>;
+  const {
+    q = "",
+    managerId = "",
+    stage = "",
+    city = "",
+    inquiryReason = "",
+    clientType = "",
+    category = "",
+    priority = "",
+    attention = ""
+  } = req.query as Record<string, string>;
   const rows = await query(
-    `SELECT c.id, c.contact_id, c.assigned_manager_id, c.channel, c.status, c.updated_at,
+    `SELECT c.id, c.contact_id, c.assigned_manager_id, c.channel, c.status, c.priority, c.first_response_due_at, c.updated_at,
             ct.name AS contact_name, ct.phone, ct.city, ct.inquiry_reason, ct.client_type, ct.category,
             ct.channel AS contact_channel, ct.external_id AS contact_external_id,
             d.id AS deal_id, d.stage, d.amount,
-            m.body AS last_message_body, m.direction AS last_message_direction, m.created_at AS last_message_at
+            m.body AS last_message_body, m.direction AS last_message_direction, m.created_at AS last_message_at,
+            COALESCE(unread.unread_count, 0) AS unread_count,
+            COALESCE(sla_follow_up.has_sla_follow_up, false) AS has_sla_follow_up,
+            (COALESCE(unread.unread_count, 0) > 0 AND c.first_response_due_at IS NOT NULL AND c.first_response_due_at < now()) AS sla_overdue,
+            (
+              c.status = 'open'
+              AND COALESCE(unread.unread_count, 0) > 0
+              AND c.first_response_due_at IS NOT NULL
+              AND c.first_response_due_at < now()
+            ) AS sla_escalated
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN deals d ON d.conversation_id = c.id
      LEFT JOIN LATERAL (
        SELECT body, direction, created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
      ) m ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS unread_count
+       FROM messages mi
+       WHERE mi.conversation_id = c.id
+         AND mi.direction = 'incoming'
+         AND mi.created_at > COALESCE((
+           SELECT MAX(mo.created_at)
+           FROM messages mo
+           WHERE mo.conversation_id = c.id
+             AND mo.direction = 'outgoing'
+         ), '1970-01-01'::timestamp)
+     ) unread ON true
+     LEFT JOIN LATERAL (
+       SELECT EXISTS (
+         SELECT 1
+         FROM tasks t
+         WHERE t.workspace_id = c.workspace_id
+           AND t.conversation_id = c.id
+           AND t.status = 'open'
+           AND t.title = 'SLA follow-up'
+       ) AS has_sla_follow_up
+     ) sla_follow_up ON true
      WHERE c.workspace_id = $1
        AND ($2 = '' OR LOWER(ct.name) LIKE LOWER('%' || $2 || '%') OR ct.phone LIKE '%' || $2 || '%')
        AND (NULLIF($3, '') IS NULL OR c.assigned_manager_id = NULLIF($3, '')::uuid)
@@ -208,8 +266,21 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
        AND ($6 = '' OR LOWER(COALESCE(ct.inquiry_reason, '')) = LOWER($6))
        AND ($7 = '' OR LOWER(COALESCE(ct.client_type, '')) = LOWER($7))
        AND ($8 = '' OR LOWER(COALESCE(ct.category, '')) = LOWER($8))
+       AND ($9 = '' OR c.priority = $9)
+       AND (
+         $10 = ''
+         OR ($10 = 'unread' AND COALESCE(unread.unread_count, 0) > 0)
+         OR ($10 = 'overdue' AND COALESCE(unread.unread_count, 0) > 0 AND c.first_response_due_at IS NOT NULL AND c.first_response_due_at < now())
+         OR (
+           $10 = 'escalated'
+           AND c.status = 'open'
+           AND COALESCE(unread.unread_count, 0) > 0
+           AND c.first_response_due_at IS NOT NULL
+           AND c.first_response_due_at < now()
+         )
+       )
      ORDER BY c.updated_at DESC`,
-    [req.user?.workspaceId, q, managerId, stage, city, inquiryReason, clientType, category]
+    [req.user?.workspaceId, q, managerId, stage, city, inquiryReason, clientType, category, priority, attention]
   );
 
   res.json(rows);
@@ -255,7 +326,195 @@ conversationsRouter.patch("/:id/status", async (req: AuthRequest, res) => {
      RETURNING id, status, updated_at`,
     [cleanStatus, req.params.id, req.user?.workspaceId]
   );
+
+  if (cleanStatus === "closed" && rows[0]) {
+    await createSlaFollowUpTaskIfNeeded(req.user?.workspaceId || "", req.user?.id || "", req.params.id);
+  }
+
   res.json(rows[0] || null);
+});
+
+conversationsRouter.patch("/:id/priority", async (req: AuthRequest, res) => {
+  const { priority } = req.body as { priority: string };
+  const cleanPriority = (priority || "").trim().toLowerCase();
+  if (!["low", "normal", "high", "urgent"].includes(cleanPriority)) {
+    res.status(400).json({ error: "invalid_priority" });
+    return;
+  }
+
+  const rows = await query(
+    `UPDATE conversations
+     SET priority = $1, updated_at = now()
+     WHERE id = $2 AND workspace_id = $3
+     RETURNING id, priority, updated_at`,
+    [cleanPriority, req.params.id, req.user?.workspaceId]
+  );
+  res.json(rows[0] || null);
+});
+
+conversationsRouter.patch("/:id/assign-manager", async (req: AuthRequest, res) => {
+  const { managerId } = req.body as { managerId?: string | null };
+  const managerValue = (managerId || "").trim();
+  if (managerValue) {
+    const managerExists = await query<{ id: string }>(
+      `SELECT id
+       FROM users
+       WHERE id = $1
+         AND workspace_id = $2
+         AND role = 'manager'
+         AND is_active = true
+       LIMIT 1`,
+      [managerValue, req.user?.workspaceId]
+    );
+    if (!managerExists[0]) {
+      res.status(400).json({ error: "invalid_manager" });
+      return;
+    }
+  }
+
+  const rows = await query(
+    `UPDATE conversations
+     SET assigned_manager_id = NULLIF($1, '')::uuid, updated_at = now()
+     WHERE id = $2 AND workspace_id = $3
+     RETURNING id, assigned_manager_id, updated_at`,
+    [managerValue, req.params.id, req.user?.workspaceId]
+  );
+  res.json(rows[0] || null);
+});
+
+conversationsRouter.post("/:id/tasks", async (req: AuthRequest, res) => {
+  const { title, dueAt } = req.body as { title?: string; dueAt?: string | null };
+  const cleanTitle = (title || "").trim();
+  if (!cleanTitle) {
+    res.status(400).json({ error: "task_title_required" });
+    return;
+  }
+
+  const conversationRows = await query<{ id: string; workspace_id: string; deal_id: string | null }>(
+    `SELECT c.id, c.workspace_id, d.id AS deal_id
+     FROM conversations c
+     LEFT JOIN deals d ON d.conversation_id = c.id
+     WHERE c.id = $1 AND c.workspace_id = $2
+     LIMIT 1`,
+    [req.params.id, req.user?.workspaceId]
+  );
+  const conversation = conversationRows[0];
+  if (!conversation) {
+    res.status(404).json({ error: "conversation_not_found" });
+    return;
+  }
+
+  const inserted = await query(
+    `INSERT INTO tasks (workspace_id, conversation_id, deal_id, owner_user_id, title, due_at)
+     VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::timestamp)
+     RETURNING id, conversation_id, deal_id, owner_user_id, title, status, due_at, created_at`,
+    [
+      req.user?.workspaceId,
+      req.params.id,
+      conversation.deal_id,
+      req.user?.id,
+      cleanTitle,
+      dueAt || ""
+    ]
+  );
+
+  res.status(201).json(inserted[0]);
+});
+
+conversationsRouter.patch("/:id/tasks/sla-follow-up/done", async (req: AuthRequest, res) => {
+  const rows = await query<{ id: string }>(
+    `UPDATE tasks
+     SET status = 'done', updated_at = now()
+     WHERE id = (
+       SELECT id
+       FROM tasks
+       WHERE workspace_id = $1
+         AND conversation_id = $2
+         AND status = 'open'
+         AND title = 'SLA follow-up'
+       ORDER BY created_at DESC
+       LIMIT 1
+     )
+     RETURNING id`,
+    [req.user?.workspaceId, req.params.id]
+  );
+
+  if (!rows[0]) {
+    res.status(404).json({ error: "sla_follow_up_not_found" });
+    return;
+  }
+
+  res.json({ ok: true, taskId: rows[0].id });
+});
+
+conversationsRouter.patch("/:id/sla-escalation/ack", async (req: AuthRequest, res) => {
+  const rows = await query<{ id: string; first_response_due_at: string | null }>(
+    `UPDATE conversations
+     SET first_response_due_at = now() + interval '15 minutes',
+         updated_at = now()
+     WHERE id = $1
+       AND workspace_id = $2
+       AND status = 'open'
+     RETURNING id, first_response_due_at`,
+    [req.params.id, req.user?.workspaceId]
+  );
+
+  if (!rows[0]) {
+    res.status(404).json({ error: "conversation_not_found_or_closed" });
+    return;
+  }
+
+  await query(
+    `INSERT INTO activities (workspace_id, user_id, conversation_id, action, metadata)
+     VALUES ($1, $2, $3, 'sla_escalation_acknowledged', $4::jsonb)`,
+    [
+      req.user?.workspaceId,
+      req.user?.id,
+      req.params.id,
+      JSON.stringify({ newDueAt: rows[0].first_response_due_at })
+    ]
+  );
+
+  res.json({ ok: true, conversationId: rows[0].id, firstResponseDueAt: rows[0].first_response_due_at });
+});
+
+conversationsRouter.patch("/:id/sla-escalation/defer", async (req: AuthRequest, res) => {
+  const rawMinutes = Number(req.body?.minutes || 30);
+  const minutes = [15, 30, 60].includes(rawMinutes) ? rawMinutes : 30;
+
+  const rows = await query<{ id: string; first_response_due_at: string | null }>(
+    `UPDATE conversations
+     SET first_response_due_at = now() + ($3::int * interval '1 minute'),
+         updated_at = now()
+     WHERE id = $1
+       AND workspace_id = $2
+       AND status = 'open'
+     RETURNING id, first_response_due_at`,
+    [req.params.id, req.user?.workspaceId, minutes]
+  );
+
+  if (!rows[0]) {
+    res.status(404).json({ error: "conversation_not_found_or_closed" });
+    return;
+  }
+
+  await query(
+    `INSERT INTO activities (workspace_id, user_id, conversation_id, action, metadata)
+     VALUES ($1, $2, $3, 'sla_escalation_deferred', $4::jsonb)`,
+    [
+      req.user?.workspaceId,
+      req.user?.id,
+      req.params.id,
+      JSON.stringify({ minutes, newDueAt: rows[0].first_response_due_at })
+    ]
+  );
+
+  res.json({
+    ok: true,
+    conversationId: rows[0].id,
+    firstResponseDueAt: rows[0].first_response_due_at,
+    deferredMinutes: minutes
+  });
 });
 
 conversationsRouter.patch("/:id/contact", async (req: AuthRequest, res) => {
@@ -320,9 +579,12 @@ conversationsRouter.post("/:id/messages", upload.single("file"), async (req: Aut
     [req.params.id, req.user?.workspaceId, body, req.user?.id, externalMessageId, attachmentUrl, attachmentType, attachmentName]
   );
 
-  await query("UPDATE conversations SET updated_at = now() WHERE id = $1", [req.params.id]);
   await query(
-    `INSERT INTO activity_logs (workspace_id, user_id, conversation_id, action, metadata)
+    "UPDATE conversations SET updated_at = now(), first_response_due_at = NULL WHERE id = $1",
+    [req.params.id]
+  );
+  await query(
+    `INSERT INTO activities (workspace_id, user_id, conversation_id, action, metadata)
      VALUES ($1, $2, $3, 'message_sent', $4::jsonb)`,
     [
       req.user?.workspaceId,
@@ -338,3 +600,62 @@ conversationsRouter.post("/:id/messages", upload.single("file"), async (req: Aut
 
   res.status(201).json(inserted[0]);
 });
+
+async function createSlaFollowUpTaskIfNeeded(
+  workspaceId: string,
+  ownerUserId: string,
+  conversationId: string
+): Promise<void> {
+  if (!workspaceId || !ownerUserId || !conversationId) {
+    return;
+  }
+
+  const [signal] = await query<{ is_overdue: boolean; deal_id: string | null }>(
+    `SELECT (
+        c.first_response_due_at IS NOT NULL
+        AND c.first_response_due_at < now()
+        AND EXISTS (
+          SELECT 1
+          FROM messages mi
+          WHERE mi.conversation_id = c.id
+            AND mi.direction = 'incoming'
+            AND mi.created_at > COALESCE((
+              SELECT MAX(mo.created_at)
+              FROM messages mo
+              WHERE mo.conversation_id = c.id
+                AND mo.direction = 'outgoing'
+            ), '1970-01-01'::timestamp)
+        )
+      ) AS is_overdue,
+      d.id AS deal_id
+     FROM conversations c
+     LEFT JOIN deals d ON d.conversation_id = c.id
+     WHERE c.workspace_id = $1 AND c.id = $2
+     LIMIT 1`,
+    [workspaceId, conversationId]
+  );
+
+  if (!signal?.is_overdue) {
+    return;
+  }
+
+  const existing = await query<{ id: string }>(
+    `SELECT id
+     FROM tasks
+     WHERE workspace_id = $1
+       AND conversation_id = $2
+       AND status = 'open'
+       AND title = 'SLA follow-up'
+     LIMIT 1`,
+    [workspaceId, conversationId]
+  );
+  if (existing[0]) {
+    return;
+  }
+
+  await query(
+    `INSERT INTO tasks (workspace_id, conversation_id, deal_id, owner_user_id, title, due_at)
+     VALUES ($1, $2, $3, $4, 'SLA follow-up', now() + interval '4 hours')`,
+    [workspaceId, conversationId, signal.deal_id, ownerUserId]
+  );
+}

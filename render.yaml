@@ -11,7 +11,8 @@ services:
     plan: free
     rootDir: backend
     buildCommand: npm install --include=dev && npm run build
-    startCommand: node dist/seed.js && npm run start
+    startCommand: (node dist/seed.js || echo "seed skipped") && npm run start
+    healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: PORT
@@ -20,6 +21,24 @@ services:
         generateValue: true
       - key: SIMULATOR_INTERVAL_MS
         value: 0
+      - key: WHATSAPP_PROVIDER
+        value: meta
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_APP_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_API_VERSION
+        value: v21.0
+      - key: WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
       - key: DB_HOST
         fromDatabase:
           name: light-crm-db

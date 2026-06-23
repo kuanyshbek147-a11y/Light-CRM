@@ -1,4 +1,7 @@
 node_modules
 dist
 .env
+frontend/.env
+infra/.env
+infra/meta.secrets.env
 npm-debug.log*

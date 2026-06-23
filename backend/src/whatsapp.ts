@@ -1,7 +1,30 @@
 import { Router } from "express";
 import { readFile } from "fs/promises";
 import { Server } from "socket.io";
+import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
+import { authMiddleware, type AuthRequest } from "./modules/auth";
+import { finalizeEmbeddedSignupConnection } from "./modules/integrations/whatsapp/embedded-signup";
+import {
+  extractMetaContactNames,
+  extractMetaMediaIds,
+  extractWabaIdFromPayload,
+  getMetaCloudConfig,
+  getMetaCloudConfigForWorkspace,
+  getMetaCloudMissing,
+  getPlatformMetaSecrets,
+  isValidMetaWebhookSignature,
+  resolveMetaMediaUrl,
+  sendMetaFileMessage,
+  sendMetaTextMessage,
+  validateMetaPhoneNumber,
+  verifyMetaWebhookChallenge
+} from "./modules/integrations/whatsapp/meta-cloud";
+import {
+  findWorkspaceIdByWabaId,
+  getWorkspaceMetaCredentials,
+  saveWorkspaceMetaCredentials
+} from "./modules/integrations/whatsapp/workspace-meta";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -22,16 +45,45 @@ const CHATAPP_WEBHOOK_SECRET = process.env.CHATAPP_WEBHOOK_SECRET || "";
 const CHATAPP_WEBHOOK_SECRET_HEADER = (process.env.CHATAPP_WEBHOOK_SECRET_HEADER || "x-chatapp-secret").toLowerCase();
 const CHATAPP_CHANNEL_ID = process.env.CHATAPP_CHANNEL_ID || "";
 const CHATAPP_LICENSE_ID = process.env.CHATAPP_LICENSE_ID || "";
+const WHATSAPP_PROVIDER = resolveWhatsAppProvider();
+
+function resolveWhatsAppProvider(): "meta" | "chatapp" {
+  const explicit = (process.env.WHATSAPP_PROVIDER || "meta").trim().toLowerCase();
+  if (explicit === "chatapp") {
+    return "chatapp";
+  }
+  return "meta";
+}
 
 export function createWhatsAppRouter(io: Server): Router {
   const router = Router();
 
-  router.get("/webhook", (_req, res) => {
+  router.get("/webhook", (req, res) => {
+    if (WHATSAPP_PROVIDER === "meta") {
+      const challenge = verifyMetaWebhookChallenge(req.query as Record<string, unknown>);
+      if (challenge) {
+        res.status(200).send(challenge);
+        return;
+      }
+      res.json({ ok: true, provider: "meta" });
+      return;
+    }
+
     res.json({ ok: true });
   });
 
   router.post("/webhook", async (req, res) => {
-    if (!isValidWebhookSecret(req)) {
+    if (WHATSAPP_PROVIDER === "meta") {
+      const config = getMetaCloudConfig();
+      const rawBody = (req as { rawBody?: Buffer }).rawBody;
+      const signatureHeader =
+        typeof req.headers["x-hub-signature-256"] === "string" ? req.headers["x-hub-signature-256"] : undefined;
+
+      if (!isValidMetaWebhookSignature(rawBody, signatureHeader, config?.appSecret || "")) {
+        res.status(403).json({ ok: false, error: "forbidden" });
+        return;
+      }
+    } else if (!isValidWebhookSecret(req)) {
       res.status(403).json({ ok: false, error: "forbidden" });
       return;
     }
@@ -40,12 +92,34 @@ export function createWhatsAppRouter(io: Server): Router {
       await processWhatsAppWebhook(req.body as JsonRecord, io);
       res.json({ ok: true });
     } catch (error) {
-      console.error("ChatApp webhook failed", error);
+      console.error(`${WHATSAPP_PROVIDER} WhatsApp webhook failed`, error);
       res.status(500).json({ ok: false });
     }
   });
 
-  router.get("/status", (_req, res) => {
+  router.get("/status", async (req, res) => {
+    if (WHATSAPP_PROVIDER === "meta") {
+      const workspaceId = typeof req.query.workspaceId === "string" ? req.query.workspaceId : "";
+      const config = workspaceId
+        ? await getMetaCloudConfigForWorkspace(workspaceId)
+        : getMetaCloudConfig();
+      const missing = getMetaCloudMissing(config);
+      const workspaceCreds = workspaceId ? await getWorkspaceMetaCredentials(workspaceId) : null;
+      res.json({
+        provider: "meta",
+        enabled: missing.length === 0,
+        missing,
+        phoneNumberId: config?.phoneNumberId || null,
+        appId: config?.appId || null,
+        apiVersion: config?.apiVersion || "v21.0",
+        webhookPath: "/api/integrations/whatsapp/webhook",
+        workspaceConnected: Boolean(workspaceCreds),
+        wabaId: workspaceCreds?.wabaId || null,
+        connectedAt: workspaceCreds?.connectedAt || null
+      });
+      return;
+    }
+
     const missing: string[] = [];
     if (!CHATAPP_API_TOKEN) {
       missing.push("CHATAPP_API_TOKEN");
@@ -61,6 +135,100 @@ export function createWhatsAppRouter(io: Server): Router {
       sendMessagePath: CHATAPP_SEND_MESSAGE_PATH,
       webhookPath: "/api/integrations/whatsapp/webhook"
     });
+  });
+
+  router.get("/connect/setup", (_req, res) => {
+    const platform = getPlatformMetaSecrets();
+    res.json({
+      provider: "meta",
+      appId: platform.appId || null,
+      configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || null,
+      apiVersion: platform.apiVersion,
+      featureType: "whatsapp_business_app_onboarding",
+      sessionInfoVersion: "3"
+    });
+  });
+
+  router.get("/connect/status", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const credentials = await getWorkspaceMetaCredentials(req.user.workspaceId);
+    const config = await getMetaCloudConfigForWorkspace(req.user.workspaceId);
+    let phone: Record<string, unknown> | null = null;
+    if (config?.accessToken && config.phoneNumberId) {
+      try {
+        phone = (await validateMetaPhoneNumber(config)) as Record<string, unknown>;
+      } catch {
+        phone = null;
+      }
+    }
+
+    const platformType = typeof phone?.platform_type === "string" ? phone.platform_type : null;
+    const phoneStatus = typeof phone?.status === "string" ? phone.status : null;
+    const messagingReady = platformType === "CLOUD_API" && phoneStatus === "CONNECTED";
+
+    res.json({
+      connected: Boolean(credentials),
+      wabaId: credentials?.wabaId || null,
+      phoneNumberId: credentials?.phoneNumberId || null,
+      connectedAt: credentials?.connectedAt || null,
+      enabled: getMetaCloudMissing(config).length === 0,
+      phone,
+      messagingReady,
+      needsCoexistence: Boolean(credentials) && !messagingReady
+    });
+  });
+
+  router.post("/connect/complete", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+
+    const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+    const wabaId = typeof req.body?.wabaId === "string" ? req.body.wabaId.trim() : "";
+    const phoneNumberId = typeof req.body?.phoneNumberId === "string" ? req.body.phoneNumberId.trim() : "";
+    const webhookPublicBaseUrl =
+      typeof req.body?.webhookPublicBaseUrl === "string" ? req.body.webhookPublicBaseUrl.trim() : "";
+
+    if (!code) {
+      res.status(400).json({ error: "code is required" });
+      return;
+    }
+
+    try {
+      const result = await finalizeEmbeddedSignupConnection({
+        code,
+        wabaId: wabaId || undefined,
+        phoneNumberId: phoneNumberId || undefined,
+        webhookPublicBaseUrl: webhookPublicBaseUrl || undefined
+      });
+
+      await saveWorkspaceMetaCredentials(req.user.workspaceId, {
+        accessToken: result.accessToken,
+        phoneNumberId: result.phoneNumberId,
+        wabaId: result.wabaId
+      });
+
+      res.json({
+        ok: true,
+        connected: true,
+        wabaId: result.wabaId,
+        phoneNumberId: result.phoneNumberId,
+        phone: result.phone,
+        webhookSubscribed: result.webhookSubscribed
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "connect failed";
+      res.status(400).json({ ok: false, error: message });
+    }
   });
 
   return router;
@@ -84,12 +252,22 @@ export async function sendWhatsAppMessageForConversation(
     return null;
   }
 
-  if (!CHATAPP_API_TOKEN || !CHATAPP_SEND_MESSAGE_PATH) {
+  const to = normalizeWhatsAppRecipient(conversation.external_id || conversation.phone);
+  if (!to) {
     return null;
   }
 
-  const to = normalizeWhatsAppRecipient(conversation.external_id || conversation.phone);
-  if (!to) {
+  if (WHATSAPP_PROVIDER === "meta") {
+    try {
+      const metaConfig = await getMetaCloudConfigForWorkspace(workspaceId);
+      return await sendMetaTextMessage(to, body, metaConfig);
+    } catch (error) {
+      console.error("Meta WhatsApp send failed with exception", error);
+      return null;
+    }
+  }
+
+  if (!CHATAPP_API_TOKEN || !CHATAPP_SEND_MESSAGE_PATH) {
     return null;
   }
 
@@ -143,11 +321,25 @@ export async function sendWhatsAppFileForConversation(
     [conversationId, workspaceId]
   );
   const conversation = rows[0];
-  if (!conversation || conversation.channel !== "whatsapp" || !CHATAPP_API_TOKEN) {
+  if (!conversation || conversation.channel !== "whatsapp") {
     return null;
   }
   const to = normalizeWhatsAppRecipient(conversation.external_id || conversation.phone);
   if (!to) {
+    return null;
+  }
+
+  if (WHATSAPP_PROVIDER === "meta") {
+    try {
+      const metaConfig = await getMetaCloudConfigForWorkspace(workspaceId);
+      return await sendMetaFileMessage(to, filePath, fileName, caption, metaConfig);
+    } catch (error) {
+      console.error("Meta WhatsApp file send failed with exception", error);
+      return null;
+    }
+  }
+
+  if (!CHATAPP_API_TOKEN) {
     return null;
   }
 
@@ -188,24 +380,54 @@ export async function sendWhatsAppFileForConversation(
 }
 
 async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<void> {
-  const messages = extractTextMessages(payload);
+  const contactNames = WHATSAPP_PROVIDER === "meta" ? extractMetaContactNames(payload) : {};
+  const mediaIdsByMessage = WHATSAPP_PROVIDER === "meta" ? extractMetaMediaIds(payload) : {};
+  const messages = extractTextMessages(payload, contactNames);
   if (!messages.length) {
     return;
   }
 
-  const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-  const managerRows = await query<{ id: string }>(
-    "SELECT id FROM users WHERE role = 'manager' ORDER BY created_at ASC NULLS LAST, id ASC LIMIT 1"
-  );
+  let workspaceId: string | null = null;
+  if (WHATSAPP_PROVIDER === "meta") {
+    const wabaId = extractWabaIdFromPayload(payload);
+    if (wabaId) {
+      workspaceId = await findWorkspaceIdByWabaId(wabaId);
+    }
+  }
 
-  const workspaceId = workspaceRows[0]?.id;
-  const managerId = managerRows[0]?.id;
+  if (!workspaceId) {
+    const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
+    workspaceId = workspaceRows[0]?.id ?? null;
+  }
   if (!workspaceId) {
     return;
   }
 
+  const metaConfig =
+    WHATSAPP_PROVIDER === "meta" ? await getMetaCloudConfigForWorkspace(workspaceId) : null;
+  const managerId = await resolveAutoAssignedManager(workspaceId);
+
   for (const message of messages) {
-    if (!message.body || !message.externalContactId) {
+    if (!message.externalContactId) {
+      continue;
+    }
+
+    if (!message.body && !message.attachmentUrl && message.externalMessageId) {
+      const mediaId = mediaIdsByMessage[message.externalMessageId];
+      if (mediaId) {
+        const media = await resolveMetaMediaUrl(mediaId, metaConfig);
+        if (media) {
+          message.attachmentUrl = media.url;
+          message.attachmentType = media.mimeType.startsWith("video/") ? "video" : "image";
+          message.attachmentName = message.attachmentName || "whatsapp-media";
+          if (!message.body) {
+            message.body = message.attachmentType === "video" ? "[Видео]" : "[Изображение]";
+          }
+        }
+      }
+    }
+
+    if (!message.body && !message.attachmentUrl) {
       continue;
     }
 
@@ -240,8 +462,8 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       conversationRows[0]?.id ??
       (
         await query<{ id: string }>(
-          `INSERT INTO conversations (workspace_id, contact_id, assigned_manager_id, channel)
-           VALUES ($1, $2, $3, 'whatsapp')
+          `INSERT INTO conversations (workspace_id, contact_id, assigned_manager_id, channel, priority, first_response_due_at)
+           VALUES ($1, $2, $3, 'whatsapp', 'normal', now() + interval '15 minutes')
            RETURNING id`,
           [workspaceId, contactId, managerId ?? null]
         )
@@ -277,7 +499,13 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       ]
     );
 
-    await query("UPDATE conversations SET updated_at = now() WHERE id = $1", [conversationId]);
+    await query(
+      `UPDATE conversations
+       SET updated_at = now(),
+           first_response_due_at = now() + interval '15 minutes'
+       WHERE id = $1`,
+      [conversationId]
+    );
 
     io.emit("message:new", {
       conversationId,
@@ -289,7 +517,7 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
   }
 }
 
-function extractTextMessages(payload: JsonRecord): NormalizedIncomingMessage[] {
+function extractTextMessages(payload: JsonRecord, contactNames: Record<string, string> = {}): NormalizedIncomingMessage[] {
   const candidates: unknown[] = [];
   const entry = asArray(payload.entry);
   for (const entryItem of entry) {
@@ -312,11 +540,11 @@ function extractTextMessages(payload: JsonRecord): NormalizedIncomingMessage[] {
   }
 
   const normalized = candidates
-    .map((candidate) => normalizeIncomingMessage(candidate, payload))
+    .map((candidate) => normalizeIncomingMessage(candidate, payload, contactNames))
     .filter((item): item is NormalizedIncomingMessage => Boolean(item));
 
   if (!normalized.length) {
-    const fallback = normalizeIncomingMessage(payload, payload);
+    const fallback = normalizeIncomingMessage(payload, payload, contactNames);
     if (fallback) {
       normalized.push(fallback);
     }
@@ -329,7 +557,11 @@ function normalizeWhatsAppRecipient(value: string): string {
   return value.replace(/\D/g, "");
 }
 
-function normalizeIncomingMessage(candidate: unknown, root: JsonRecord): NormalizedIncomingMessage | null {
+function normalizeIncomingMessage(
+  candidate: unknown,
+  root: JsonRecord,
+  contactNames: Record<string, string> = {}
+): NormalizedIncomingMessage | null {
   const obj = asRecord(candidate);
   if (!obj) {
     return null;
@@ -352,10 +584,16 @@ function normalizeIncomingMessage(candidate: unknown, root: JsonRecord): Normali
         ? "video"
         : null;
 
+  const metaImage = asRecord(obj.image);
+  const metaVideo = asRecord(obj.video);
+  const metaDocument = asRecord(obj.document);
+  const metaCaption = firstString([metaImage?.caption, metaVideo?.caption, metaDocument?.caption]);
+
   const bodyRaw =
     firstString([
       getValue(obj, "text.body"),
       obj.text,
+      metaCaption,
       getValue(obj, "message.caption"),
       getValue(obj, "message.text"),
       obj.message,
@@ -364,7 +602,8 @@ function normalizeIncomingMessage(candidate: unknown, root: JsonRecord): Normali
       getValue(root, "message.text")
     ]) || "";
   const body = String(bodyRaw).trim();
-  if (!body && !fileLink) {
+  const hasMetaMedia = Boolean(metaImage?.id || metaVideo?.id || metaDocument?.id);
+  if (!body && !fileLink && !hasMetaMedia) {
     return null;
   }
 
@@ -394,13 +633,15 @@ function normalizeIncomingMessage(candidate: unknown, root: JsonRecord): Normali
       root.id
     ]) || null;
   const contactName =
+    contactNames[externalContactId] ||
     firstString([
       getValue(obj, "sender.name"),
       getValue(obj, "chat.name"),
       getValue(obj, "customer.name"),
       getValue(obj, "contact.name"),
       root.name
-    ]) || `WhatsApp ${externalContactId}`;
+    ]) ||
+    `WhatsApp ${externalContactId}`;
 
   return {
     externalMessageId,

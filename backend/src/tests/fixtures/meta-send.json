@@ -1,0 +1,6 @@
+{
+  "messaging_product": "whatsapp",
+  "to": "77003131055",
+  "type": "text",
+  "text": { "body": "Тест Light CRM — WhatsApp API подключён!" }
+}

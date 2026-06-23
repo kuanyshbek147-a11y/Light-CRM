@@ -1,24 +1,27 @@
+import "./load-env";
 import cors from "cors";
-import dotenv from "dotenv";
 import express from "express";
 import http from "http";
 import path from "path";
 import { Server } from "socket.io";
-import { authMiddleware } from "./auth";
-import { authRouter } from "./routes.auth";
-import { conversationsRouter } from "./routes.conversations";
-import { dealsRouter } from "./routes.deals";
-import { metricsRouter } from "./routes.metrics";
+import { authMiddleware, authRouter } from "./modules/auth";
+import { metricsRouter } from "./modules/analytics";
+import { conversationsRouter } from "./modules/conversations";
+import { dealsRouter } from "./modules/deals";
+import { createTelegramRouter, startTelegramPolling } from "./modules/integrations/telegram";
+import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
 import { startSimulator } from "./simulator";
-import { createTelegramRouter, startTelegramPolling } from "./telegram";
 import { ensureUserLoginSchema } from "./migrate";
-import { createWhatsAppRouter } from "./whatsapp";
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    }
+  })
+);
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 const server = http.createServer(app);
@@ -41,13 +44,14 @@ startTelegramPolling(io);
 
 const port = Number(process.env.PORT || 4000);
 
+server.listen(port, () => {
+  console.log(`Backend running on ${port}`);
+});
+
 void ensureUserLoginSchema()
   .then(() => {
-    server.listen(port, () => {
-      console.log(`Backend running on ${port}`);
-    });
+    console.log("Database schema ready");
   })
   .catch((error) => {
-    console.error("Migration failed:", error);
-    process.exit(1);
+    console.error("Migration failed (will retry on requests):", error);
   });

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { Server } from "socket.io";
+import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
 
 type TelegramUser = {
@@ -112,15 +113,11 @@ async function processTelegramUpdate(update: TelegramUpdate, io: Server): Promis
   }
 
   const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-  const managerRows = await query<{ id: string }>(
-    "SELECT id FROM users WHERE role = 'manager' ORDER BY created_at ASC NULLS LAST, id ASC LIMIT 1"
-  );
-
   const workspaceId = workspaceRows[0]?.id;
-  const managerId = managerRows[0]?.id;
   if (!workspaceId) {
     return;
   }
+  const managerId = await resolveAutoAssignedManager(workspaceId);
 
   const contactName = formatTelegramContactName(message.from);
   const chatId = String(message.chat.id);
@@ -156,8 +153,8 @@ async function processTelegramUpdate(update: TelegramUpdate, io: Server): Promis
     conversationRows[0]?.id ??
     (
       await query<{ id: string }>(
-        `INSERT INTO conversations (workspace_id, contact_id, assigned_manager_id, channel)
-         VALUES ($1, $2, $3, 'telegram')
+        `INSERT INTO conversations (workspace_id, contact_id, assigned_manager_id, channel, priority, first_response_due_at)
+         VALUES ($1, $2, $3, 'telegram', 'normal', now() + interval '15 minutes')
          RETURNING id`,
         [workspaceId, contactId, managerId ?? null]
       )
@@ -170,7 +167,13 @@ async function processTelegramUpdate(update: TelegramUpdate, io: Server): Promis
     [conversationId, workspaceId, message.text, String(message.message_id)]
   );
 
-  await query("UPDATE conversations SET updated_at = now() WHERE id = $1", [conversationId]);
+  await query(
+    `UPDATE conversations
+     SET updated_at = now(),
+         first_response_due_at = now() + interval '15 minutes'
+     WHERE id = $1`,
+    [conversationId]
+  );
 
   io.emit("message:new", {
     conversationId,
