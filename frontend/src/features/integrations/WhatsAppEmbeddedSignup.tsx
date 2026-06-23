@@ -324,6 +324,13 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
       {connectStep ? <div className="integrationsHint">{connectStep}</div> : null}
       {error ? <div className="integrationsError">{error}</div> : null}
 
+      {!configId || !appId ? (
+        <div className="integrationsError">
+          На backend не заданы Meta-переменные (appId/configId). Для Render добавьте `WHATSAPP_APP_ID` и
+          `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID`, затем перезапустите сервис.
+        </div>
+      ) : null}
+
       {!PUBLIC_WEBHOOK_BASE ? (
         <div className="integrationsWarning">
           Для webhook укажите `VITE_PUBLIC_WEBHOOK_BASE_URL` (HTTPS-туннель или прод-домен).

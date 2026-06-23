@@ -139,10 +139,12 @@ export function createWhatsAppRouter(io: Server): Router {
 
   router.get("/connect/setup", (_req, res) => {
     const platform = getPlatformMetaSecrets();
+    const appId = platform.appId || process.env.META_APP_ID || "2788233571542840";
+    const configId = process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || "859655197221237";
     res.json({
       provider: "meta",
-      appId: platform.appId || null,
-      configId: process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID || null,
+      appId,
+      configId,
       apiVersion: platform.apiVersion,
       featureType: "whatsapp_business_app_onboarding",
       sessionInfoVersion: "3"

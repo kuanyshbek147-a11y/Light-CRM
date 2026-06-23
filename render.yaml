@@ -28,17 +28,19 @@ services:
       - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
       - key: WHATSAPP_APP_ID
-        sync: false
+        value: "2788233571542840"
       - key: WHATSAPP_VERIFY_TOKEN
-        sync: false
+        value: lightcrm-meta-verify-2026
       - key: WHATSAPP_APP_SECRET
         sync: false
       - key: WHATSAPP_API_VERSION
         value: v21.0
       - key: WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID
-        sync: false
+        value: "859655197221237"
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        value: "116703198190347"
       - key: PUBLIC_BASE_URL
-        sync: false
+        value: https://light-crm-backend.onrender.com
       - key: DB_HOST
         fromDatabase:
           name: light-crm-db
