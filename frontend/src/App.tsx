@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL } from "./shared/config/api";
+import {
+  clearStoredSession,
+  persistSession,
+  readStoredSession,
+  SESSION_TOKEN_KEY,
+  SESSION_USER_KEY,
+  validateStoredSession,
+  type SessionUser
+} from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
 import {
@@ -107,13 +116,6 @@ type MetricSnapshot = {
   createdAt: string;
 };
 
-type SessionUser = {
-  email: string;
-  fullName: string;
-  role: string;
-  login: string | null;
-};
-
 type AutoAssignmentStrategy = "round_robin" | "least_open_load";
 type AutoAssignmentLoadItem = {
   managerId: string;
@@ -124,8 +126,6 @@ type AutoAssignmentLoadItem = {
 type ToastKind = "success" | "error";
 
 const API = API_BASE_URL;
-const SESSION_TOKEN_KEY = "lightcrm.token";
-const SESSION_USER_KEY = "lightcrm.user";
 const INBOX_FILTER_PRESETS_KEY = "lightcrm.inboxFilterPresets";
 const DEFAULT_INBOX_FILTERS: InboxFilters = {
   city: "",
@@ -176,6 +176,7 @@ const UI = {
   demoOperatorHint: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440: \u043b\u043e\u0433\u0438\u043d operator, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
   demoAdminHint:
     "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123. \u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
+  sessionRestoring: "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...",
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
   workspaceMenu: "\u041c\u0435\u043d\u044e",
@@ -345,12 +346,14 @@ function isSuperAdminUser(user: SessionUser | null | undefined): boolean {
 }
 
 export function App(): JSX.Element {
+  const initialSession = readStoredSession();
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const loginInputRef = useRef<HTMLInputElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
-  const [token, setToken] = useState<string>("");
-  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [token, setToken] = useState<string>(initialSession.token);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialSession.user);
+  const [sessionRestoring, setSessionRestoring] = useState<boolean>(Boolean(initialSession.token));
   const [loginInput, setLoginInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -521,45 +524,41 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     const savedToken = localStorage.getItem(SESSION_TOKEN_KEY);
-    let savedUser: SessionUser | null = null;
-    const rawUser = localStorage.getItem(SESSION_USER_KEY);
-    if (rawUser) {
-      try {
-        savedUser = JSON.parse(rawUser) as SessionUser;
-      } catch {
-        localStorage.removeItem(SESSION_USER_KEY);
-      }
-    }
-
     if (!savedToken) {
+      setSessionRestoring(false);
       return;
     }
 
-    setToken(savedToken);
-    setSessionUser(savedUser);
-
-    if (isSuperAdminUser(savedUser)) {
-      setCurrentSection("platform");
-      return;
-    }
-
-    const bootstrapTimeout = window.setTimeout(() => {
-      localStorage.removeItem(SESSION_TOKEN_KEY);
-      localStorage.removeItem(SESSION_USER_KEY);
-      setToken("");
-      setSessionUser(null);
-    }, 15000);
-
-    void hydrateWorkspace(savedToken)
-      .catch(() => {
-        localStorage.removeItem(SESSION_TOKEN_KEY);
-        localStorage.removeItem(SESSION_USER_KEY);
+    void (async () => {
+      const validation = await validateStoredSession(savedToken);
+      if (validation.status === "invalid") {
+        clearStoredSession();
         setToken("");
         setSessionUser(null);
-      })
-      .finally(() => {
-        window.clearTimeout(bootstrapTimeout);
-      });
+        setSessionRestoring(false);
+        return;
+      }
+
+      if (validation.status === "valid") {
+        setSessionUser(validation.user);
+        persistSession(savedToken, validation.user);
+        if (isSuperAdminUser(validation.user)) {
+          setCurrentSection("platform");
+          setSessionRestoring(false);
+          return;
+        }
+      }
+
+      try {
+        await hydrateWorkspace(savedToken);
+      } catch {
+        if (validation.status === "unreachable") {
+          showToast("Не удалось загрузить данные. Проверьте интернет.", "error");
+        }
+      } finally {
+        setSessionRestoring(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -709,8 +708,7 @@ export function App(): JSX.Element {
 
       setSessionUser(data.user ?? null);
       setToken(data.token);
-      localStorage.setItem(SESSION_TOKEN_KEY, data.token);
-      localStorage.setItem(SESSION_USER_KEY, JSON.stringify(data.user ?? null));
+      persistSession(data.token, data.user ?? null);
       if (isSuperAdminUser(data.user ?? null)) {
         setCurrentSection("platform");
         return;
@@ -747,8 +745,7 @@ export function App(): JSX.Element {
   }
 
   function logout(): void {
-    localStorage.removeItem(SESSION_TOKEN_KEY);
-    localStorage.removeItem(SESSION_USER_KEY);
+    clearStoredSession();
     setToken("");
     setSessionUser(null);
     setConversations([]);
@@ -1471,6 +1468,17 @@ export function App(): JSX.Element {
     }
     setCustomerDealStage("");
   }, [selectedConversation, deals, dealStages]);
+
+  if (sessionRestoring) {
+    return (
+      <main className="centered">
+        <div className="integrationsCard" style={{ maxWidth: 360, textAlign: "center" }}>
+          <div className="integrationsTitle">Light CRM</div>
+          <p className="integrationsHint">{UI.sessionRestoring}</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!token) {
     return (
