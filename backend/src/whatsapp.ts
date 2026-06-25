@@ -4,7 +4,7 @@ import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./modules/auth";
-import { finalizeEmbeddedSignupConnection } from "./modules/integrations/whatsapp/embedded-signup";
+import { finalizeEmbeddedSignupConnection, subscribeWabaToApp } from "./modules/integrations/whatsapp/embedded-signup";
 import {
   ensureMetaPhoneRegistered,
   extractMetaContactNames,
@@ -19,6 +19,7 @@ import {
   resolveMetaMediaUrl,
   sendMetaFileMessage,
   sendMetaTextMessage,
+  subscribeMetaAppWebhook,
   validateMetaPhoneNumber,
   verifyMetaWebhookChallenge
 } from "./modules/integrations/whatsapp/meta-cloud";
@@ -299,6 +300,77 @@ export function createWhatsAppRouter(io: Server): Router {
 
     await clearWorkspaceMetaCredentials(req.user.workspaceId);
     res.json({ ok: true, connected: false });
+  });
+
+  router.post("/connect/bootstrap", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+
+    const accessToken =
+      (typeof req.body?.accessToken === "string" ? req.body.accessToken.trim() : "") ||
+      process.env.WHATSAPP_ACCESS_TOKEN ||
+      "";
+    const phoneNumberId =
+      (typeof req.body?.phoneNumberId === "string" ? req.body.phoneNumberId.trim() : "") ||
+      process.env.WHATSAPP_PHONE_NUMBER_ID ||
+      "";
+    const wabaId =
+      (typeof req.body?.wabaId === "string" ? req.body.wabaId.trim() : "") ||
+      process.env.WHATSAPP_BUSINESS_ACCOUNT_ID ||
+      "";
+    const publicBase = (
+      typeof req.body?.webhookPublicBaseUrl === "string" ? req.body.webhookPublicBaseUrl.trim() : ""
+    )
+      .replace(/\/+$/, "") ||
+      (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+
+    if (!accessToken || !phoneNumberId || !wabaId) {
+      res.status(400).json({
+        ok: false,
+        error: "accessToken, phoneNumberId and wabaId are required"
+      });
+      return;
+    }
+
+    try {
+      await saveWorkspaceMetaCredentials(req.user.workspaceId, {
+        accessToken,
+        phoneNumberId,
+        wabaId
+      });
+      await subscribeWabaToApp(wabaId, accessToken);
+
+      let webhookSubscribed = false;
+      if (publicBase) {
+        await subscribeMetaAppWebhook(`${publicBase}/api/integrations/whatsapp/webhook`);
+        webhookSubscribed = true;
+      }
+
+      const config = await getMetaCloudConfigForWorkspace(req.user.workspaceId);
+      const { phone, registered } = config
+        ? await ensureMetaPhoneRegistered(config)
+        : { phone: null, registered: false };
+
+      res.json({
+        ok: true,
+        connected: true,
+        wabaId,
+        phoneNumberId,
+        phone,
+        registered,
+        webhookSubscribed,
+        messagingReady: isMetaPhoneMessagingReady(phone as Record<string, unknown> | null)
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "bootstrap failed";
+      res.status(400).json({ ok: false, error: message });
+    }
   });
 
   return router;
