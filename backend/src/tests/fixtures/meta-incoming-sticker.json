@@ -1,0 +1,33 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "2252824615477997",
+      "changes": [
+        {
+          "value": {
+            "contacts": [
+              {
+                "profile": { "name": "Test User" },
+                "wa_id": "77001234567"
+              }
+            ],
+            "messages": [
+              {
+                "from": "77001234567",
+                "id": "wamid.sticker123",
+                "timestamp": "1710000001",
+                "type": "sticker",
+                "sticker": {
+                  "mime_type": "image/webp",
+                  "sha256": "abc",
+                  "id": "sticker-media-id"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

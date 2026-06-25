@@ -719,22 +719,34 @@ function normalizeIncomingMessage(
   const fileLink = firstString([getValue(obj, "message.file.link"), getValue(obj, "file.link")]);
   const fileName = firstString([getValue(obj, "message.file.name"), getValue(obj, "file.name")]);
   const contentType = firstString([getValue(obj, "message.file.contentType"), getValue(obj, "file.contentType")]) || "";
+
+  const metaImage = asRecord(obj.image);
+  const metaVideo = asRecord(obj.video);
+  const metaDocument = asRecord(obj.document);
+  const metaSticker = asRecord(obj.sticker);
+  const metaAudio = asRecord(obj.audio);
+  const metaReaction = asRecord(obj.reaction);
+  const textRecord = asRecord(obj.text);
+  const textBody = typeof textRecord?.body === "string" ? textRecord.body : "";
+  const reactionEmoji =
+    typeof metaReaction?.emoji === "string" && metaReaction.emoji.trim() ? metaReaction.emoji.trim() : "";
+  if (type === "reaction" && !reactionEmoji) {
+    return null;
+  }
+  const metaCaption = firstString([metaImage?.caption, metaVideo?.caption, metaDocument?.caption]);
+
   const attachmentType: "image" | "video" | null =
-    type === "image" || contentType.startsWith("image/")
+    type === "image" || type === "sticker" || contentType.startsWith("image/") || Boolean(metaSticker?.id)
       ? "image"
       : type === "video" || contentType.startsWith("video/")
         ? "video"
         : null;
 
-  const metaImage = asRecord(obj.image);
-  const metaVideo = asRecord(obj.video);
-  const metaDocument = asRecord(obj.document);
-  const metaCaption = firstString([metaImage?.caption, metaVideo?.caption, metaDocument?.caption]);
-
-  const bodyRaw =
+  let body =
     firstString([
       getValue(obj, "text.body"),
-      obj.text,
+      textBody,
+      reactionEmoji,
       metaCaption,
       getValue(obj, "message.caption"),
       getValue(obj, "message.text"),
@@ -743,8 +755,43 @@ function normalizeIncomingMessage(
       getValue(root, "text"),
       getValue(root, "message.text")
     ]) || "";
-  const body = String(bodyRaw).trim();
-  const hasMetaMedia = Boolean(metaImage?.id || metaVideo?.id || metaDocument?.id);
+  body = body.trim();
+
+  const hasMetaMedia = Boolean(
+    metaImage?.id || metaVideo?.id || metaDocument?.id || metaSticker?.id || metaAudio?.id
+  );
+
+  if (!body && !fileLink && !hasMetaMedia) {
+    if (type === "location") {
+      body = "[Локация]";
+    } else if (type === "contacts") {
+      body = "[Контакт]";
+    } else if (type === "interactive") {
+      body = "[Интерактивное сообщение]";
+    } else if (type === "button" || type === "request_welcome") {
+      body = "[Системное сообщение]";
+    } else {
+      return null;
+    }
+  }
+
+  if (!body && (fileLink || hasMetaMedia)) {
+    if (type === "sticker" || metaSticker?.id) {
+      body = "[Стикер]";
+    } else if (type === "audio" || metaAudio?.id) {
+      body = "[Голосовое сообщение]";
+    } else if (type === "document" || metaDocument?.id) {
+      body =
+        typeof metaDocument?.filename === "string" && metaDocument.filename.trim()
+          ? metaDocument.filename.trim()
+          : "[Документ]";
+    } else if (type === "video" || metaVideo?.id) {
+      body = "[Видео]";
+    } else if (type === "image" || metaImage?.id) {
+      body = "[Изображение]";
+    }
+  }
+
   if (!body && !fileLink && !hasMetaMedia) {
     return null;
   }

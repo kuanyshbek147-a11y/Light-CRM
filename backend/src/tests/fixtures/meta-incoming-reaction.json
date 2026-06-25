@@ -1,0 +1,32 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "2252824615477997",
+      "changes": [
+        {
+          "value": {
+            "contacts": [
+              {
+                "profile": { "name": "Test User" },
+                "wa_id": "77001234567"
+              }
+            ],
+            "messages": [
+              {
+                "from": "77001234567",
+                "id": "wamid.reaction123",
+                "timestamp": "1710000002",
+                "type": "reaction",
+                "reaction": {
+                  "message_id": "wamid.original",
+                  "emoji": "😀"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
