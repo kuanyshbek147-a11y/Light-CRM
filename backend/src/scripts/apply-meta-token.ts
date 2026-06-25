@@ -49,7 +49,43 @@ function extractWabaIds(debugPayload: Record<string, unknown>): string[] {
   return [...ids];
 }
 
+function stripToken(value: string): string {
+  return value.replace(/^\uFEFF/, "").trim();
+}
+
+async function discoverWabaIdFromBusiness(accessToken: string): Promise<string | null> {
+  const businessId = process.env.WHATSAPP_BUSINESS_PORTFOLIO_ID || "813111725070066";
+  const response = await fetch(
+    `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || "v21.0"}/${businessId}/owned_whatsapp_business_accounts?fields=id,name,phone_numbers{id}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const payload = (await response.json()) as { data?: Array<{ id?: string; phone_numbers?: { data?: Array<{ id?: string }> } }> };
+  const rows = payload.data || [];
+  for (const row of rows) {
+    const phoneIds = (row.phone_numbers?.data || []).map((phone) => phone.id).filter(Boolean);
+    if (row.id && phoneIds.includes(PHONE_NUMBER_ID)) {
+      return row.id;
+    }
+  }
+  return rows[0]?.id || null;
+}
+
 async function resolveWabaId(accessToken: string, hints: string[]): Promise<string> {
+  try {
+    const phoneResponse = await fetch(
+      `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || "v21.0"}/${PHONE_NUMBER_ID}?fields=id,display_phone_number,whatsapp_business_account`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const phonePayload = (await phoneResponse.json()) as Record<string, unknown>;
+    const linked = phonePayload.whatsapp_business_account as Record<string, unknown> | undefined;
+    const linkedId = typeof linked?.id === "string" ? linked.id : "";
+    if (linkedId) {
+      return linkedId;
+    }
+  } catch {
+    // fall through to hint-based resolution
+  }
+
   if (hints.length === 1) {
     return hints[0];
   }
@@ -69,6 +105,12 @@ async function resolveWabaId(accessToken: string, hints: string[]): Promise<stri
   if (hints[0]) {
     return hints[0];
   }
+
+  const discovered = await discoverWabaIdFromBusiness(accessToken);
+  if (discovered) {
+    return discovered;
+  }
+
   throw new Error("Token has no WABA access. Assign WhatsApp account Light CRM to system user nn and regenerate token.");
 }
 
@@ -93,7 +135,7 @@ async function updateSecretsFile(accessToken: string, wabaId: string): Promise<v
 }
 
 async function main(): Promise<void> {
-  const accessToken = (process.argv[3] || process.env.META_TOKEN_INPUT || "").trim();
+  const accessToken = stripToken(process.argv[3] || process.env.META_TOKEN_INPUT || "");
   if (!accessToken) {
     throw new Error("Usage: npm run apply:meta-token -- <public-base-url> <access-token>");
   }
