@@ -1,5 +1,8 @@
 node_modules
 dist
+releases/*.apk
+mobile/node_modules
+mobile/android
 .env
 frontend/.env
 infra/.env

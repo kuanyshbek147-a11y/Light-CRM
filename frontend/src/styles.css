@@ -2163,6 +2163,44 @@ button {
     overflow: visible;
   }
 
+  .appGrid.mobileThreadOpen .sidebar,
+  .appGrid.mobileThreadOpen .rightRail {
+    display: none;
+  }
+
+  .appGrid.mobileThreadOpen .thread {
+    min-height: calc(100dvh - 180px);
+  }
+
+  .appGrid.mobileThreadOpen .messages {
+    max-height: none;
+    min-height: calc(100dvh - 320px);
+    flex: 1;
+  }
+
+  .appGrid:not(.mobileThreadOpen) .thread {
+    display: none;
+  }
+
+  .mobileBackButton {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--primary);
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .threadHeader {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chatList {
+    max-height: calc(100dvh - 220px);
+  }
+
   .knowledgePageGrid {
     grid-template-columns: 1fr;
     padding: 10px 12px 12px;
@@ -2204,10 +2242,6 @@ button {
 
   .filterGrid {
     grid-template-columns: 1fr;
-  }
-
-  .chatList {
-    max-height: 280px;
   }
 
   .chatItem {

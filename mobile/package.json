@@ -1,0 +1,19 @@
+{
+  "name": "light-crm-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "cap:sync": "cap sync android",
+    "android:debug": "cd android && gradlew.bat assembleDebug",
+    "apk": "npm run cap:sync && npm run android:debug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/splash-screen": "^6.0.4",
+    "@capacitor/status-bar": "^6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1"
+  }
+}

@@ -65,6 +65,8 @@ type InboxThreadProps = {
   onAppendEmoji: (emoji: string) => void;
   onAcknowledgeSlaEscalation: (conversationId: string) => void;
   onDeferSlaEscalation: (conversationId: string, minutes: number) => void;
+  onBack?: () => void;
+  backLabel?: string;
 };
 
 export function InboxThread(props: InboxThreadProps): JSX.Element {
@@ -107,7 +109,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onSendMessage,
     onAppendEmoji,
     onAcknowledgeSlaEscalation,
-    onDeferSlaEscalation
+    onDeferSlaEscalation,
+    onBack,
+    backLabel
   } = props;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deferMinutes, setDeferMinutes] = useState<number>(30);
@@ -117,6 +121,11 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
       {selectedConversationData ? (
         <>
           <div className="threadHeader">
+            {onBack ? (
+              <button type="button" className="mobileBackButton" onClick={onBack}>
+                {backLabel || "←"}
+              </button>
+            ) : null}
             <div className="threadTitle">
               <div className="threadLabel">{ui.replyBox}</div>
               <div className="threadName">{selectedConversationData.contact_name}</div>

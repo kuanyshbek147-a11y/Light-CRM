@@ -1,0 +1,28 @@
+import type { CapacitorConfig } from "@capacitor/cli";
+
+const config: CapacitorConfig = {
+  appId: "kz.lightcrm.app",
+  appName: "Light CRM",
+  webDir: "www",
+  server: {
+    url: "https://light-crm-kz.netlify.app",
+    androidScheme: "https"
+  },
+  android: {
+    allowMixedContent: false
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1200,
+      backgroundColor: "#5b5ce9",
+      showSpinner: true,
+      spinnerColor: "#ffffff"
+    },
+    StatusBar: {
+      style: "LIGHT",
+      backgroundColor: "#5b5ce9"
+    }
+  }
+};
+
+export default config;

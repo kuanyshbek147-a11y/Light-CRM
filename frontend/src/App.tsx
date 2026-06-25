@@ -183,6 +183,7 @@ const UI = {
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
   menuAnalytics: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
+  backToChats: "\u041a \u0447\u0430\u0442\u0430\u043c",
   menuIntegrations: "\u0418\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
   menuPlatform: "\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
@@ -421,6 +422,10 @@ export function App(): JSX.Element {
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const [toastKind, setToastKind] = useState<ToastKind>("success");
   const toastTimerRef = useRef<number | null>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
+  );
+  const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const isCustomRangeValid = Boolean(analyticsFrom && analyticsTo && analyticsFrom <= analyticsTo);
   const customRangeDays = isCustomRangeValid ? diffDaysInclusive(analyticsFrom, analyticsTo) : 14;
   const metricsQuery =
@@ -455,6 +460,20 @@ export function App(): JSX.Element {
     void loadMetrics(token, setMetrics, metricsQuery);
     void loadMetricSnapshots(token, setMetricSnapshots);
   }, [token, analyticsPeriod, analyticsMode, analyticsFrom, analyticsTo, isCustomRangeValid]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 768px)");
+    const onChange = (): void => {
+      const mobile = media.matches;
+      setIsMobileLayout(mobile);
+      if (!mobile) {
+        setMobileThreadOpen(false);
+      }
+    };
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -778,6 +797,9 @@ export function App(): JSX.Element {
     const nextConversation = conversations.find((conversation) => conversation.id === id) || null;
     setSelectedConversation(id);
     setSelectedConversationData(nextConversation);
+    if (isMobileLayout) {
+      setMobileThreadOpen(true);
+    }
     await loadMessages(token, id, setMessages);
     await loadContactCard(token, id, setContactCard);
   }
@@ -1664,7 +1686,7 @@ export function App(): JSX.Element {
         {currentSection === "platform" ? (
           token ? <PlatformPanel authToken={token} /> : null
         ) : currentSection === "dialogs" ? (
-        <div className="appGrid">
+        <div className={`appGrid ${isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : ""}`}>
           <InboxSidebar
             ui={{
               inboxTitle: UI.inboxTitle,
@@ -1776,6 +1798,8 @@ export function App(): JSX.Element {
             getMediaUrl={getMediaUrl}
             onSetPriority={(conversationId, priority) => void updateConversationPriority(conversationId, priority)}
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
+            onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+            backLabel={UI.backToChats}
             onMessagesDragOver={(event) => {
               event.preventDefault();
               setIsDragOverMessages(true);

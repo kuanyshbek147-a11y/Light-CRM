@@ -8,6 +8,7 @@
     "docker:up": "docker compose -f infra/docker-compose.yml up --build",
     "docker:down": "docker compose -f infra/docker-compose.yml down",
     "docker:logs": "docker compose -f infra/docker-compose.yml logs -f",
-    "docker:reset": "docker compose -f infra/docker-compose.yml down -v"
+    "docker:reset": "docker compose -f infra/docker-compose.yml down -v",
+    "android:apk": "powershell -ExecutionPolicy Bypass -File infra/scripts/build-android-apk.ps1"
   }
 }
