@@ -10,6 +10,7 @@
     "setup:whatsapp": "ts-node src/scripts/setup-whatsapp-webhook.ts",
     "setup:whatsapp-meta": "ts-node src/scripts/setup-meta-webhook.ts",
     "bootstrap:whatsapp": "ts-node src/scripts/bootstrap-whatsapp-workspace.ts",
+    "apply:meta-token": "ts-node src/scripts/apply-meta-token.ts",
     "smoke:schema": "ts-node src/tests/smoke.ts"
   },
   "dependencies": {
