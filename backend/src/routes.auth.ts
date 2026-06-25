@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { query } from "./db";
+import { authMiddleware, type AuthRequest } from "./auth";
 import type { UserRole } from "./auth";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
@@ -125,4 +126,40 @@ authRouter.get("/me", async (req, res) => {
   } catch {
     res.status(401).json({ error: "Invalid token" });
   }
+});
+
+authRouter.post("/change-password", authMiddleware, async (req: AuthRequest, res) => {
+  const body = req.body as { currentPassword?: string; newPassword?: string };
+  const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+
+  if (!req.user?.id) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  if (!currentPassword || newPassword.length < 10) {
+    res.status(400).json({ error: "Текущий пароль обязателен. Новый — минимум 10 символов." });
+    return;
+  }
+
+  const users = await query<{ id: string; password_hash: string }>(
+    `SELECT id, password_hash FROM users WHERE id = $1 AND is_active = true LIMIT 1`,
+    [req.user.id]
+  );
+  const user = users[0];
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const isValid = await bcrypt.compare(currentPassword, user.password_hash);
+  if (!isValid) {
+    res.status(400).json({ error: "Неверный текущий пароль" });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await query(`UPDATE users SET password_hash = $2 WHERE id = $1`, [user.id, passwordHash]);
+
+  res.json({ ok: true });
 });
