@@ -39,6 +39,12 @@ services:
         value: "859655197221237"
       - key: WHATSAPP_BUSINESS_ACCOUNT_ID
         value: "2252824615477997"
+      - key: SUPER_ADMIN_LOGIN
+        value: superadmin
+      - key: SUPER_ADMIN_EMAIL
+        value: platform@lightcrm.local
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
       - key: PUBLIC_BASE_URL
         value: https://light-crm-backend.onrender.com
       - key: DB_HOST

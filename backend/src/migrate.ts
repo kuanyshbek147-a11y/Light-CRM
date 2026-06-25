@@ -1,4 +1,5 @@
 import { pool } from "./db";
+import bcrypt from "bcryptjs";
 
 /** Гарантирует колонку login и индекс (старые БД без полного прогона сида). */
 export async function ensureUserLoginSchema(): Promise<void> {
@@ -174,4 +175,75 @@ export async function ensureUserLoginSchema(): Promise<void> {
             = COALESCE(al.conversation_id, '00000000-0000-0000-0000-000000000000'::uuid)
     )
   `);
+
+  await ensureSuperAdminSchema();
+  await ensureSuperAdminUser();
+}
+
+export async function ensureSuperAdminSchema(): Promise<void> {
+  await pool.query(`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT now()`);
+  await pool.query(`ALTER TABLE users ALTER COLUMN workspace_id DROP NOT NULL`);
+  await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
+  await pool.query(
+    `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'manager', 'superadmin'))`
+  );
+}
+
+export async function ensureSuperAdminUser(): Promise<void> {
+  const login = (process.env.SUPER_ADMIN_LOGIN || "superadmin").trim().toLowerCase();
+  const email = (process.env.SUPER_ADMIN_EMAIL || "platform@lightcrm.local").trim().toLowerCase();
+  const passwordFromEnv = process.env.SUPER_ADMIN_PASSWORD?.trim() || "";
+  const password = passwordFromEnv || "superadmin123";
+  const fullName = process.env.SUPER_ADMIN_NAME || "Супер-админ Light CRM";
+
+  if (!login) {
+    return;
+  }
+
+  const existing = await pool.query<{ id: string; role: string }>(
+    `SELECT id, role FROM users
+     WHERE role = 'superadmin'
+        OR LOWER(TRIM(login)) = $1
+        OR LOWER(TRIM(email)) = $2
+     LIMIT 1`,
+    [login, email]
+  );
+
+  if (existing.rows[0]) {
+    if (passwordFromEnv) {
+      const passwordHash = await bcrypt.hash(passwordFromEnv, 10);
+      await pool.query(
+        `UPDATE users
+         SET full_name = $2,
+             email = $3,
+             login = $4,
+             role = 'superadmin',
+             workspace_id = NULL,
+             password_hash = $5,
+             is_active = true
+         WHERE id = $1`,
+        [existing.rows[0].id, fullName, email, login, passwordHash]
+      );
+    } else {
+      await pool.query(
+        `UPDATE users
+         SET full_name = $2,
+             email = $3,
+             login = $4,
+             role = 'superadmin',
+             workspace_id = NULL,
+             is_active = true
+         WHERE id = $1`,
+        [existing.rows[0].id, fullName, email, login]
+      );
+    }
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await pool.query(
+    `INSERT INTO users (workspace_id, full_name, email, login, role, password_hash, is_active)
+     VALUES (NULL, $1, $2, $3, 'superadmin', $4, true)`,
+    [fullName, email, login, passwordHash]
+  );
 }

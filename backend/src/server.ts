@@ -10,8 +10,10 @@ import { conversationsRouter } from "./modules/conversations";
 import { dealsRouter } from "./modules/deals";
 import { createTelegramRouter, startTelegramPolling } from "./modules/integrations/telegram";
 import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
+import { platformRouter } from "./modules/platform";
 import { startSimulator } from "./simulator";
 import { ensureUserLoginSchema } from "./migrate";
+import { requireWorkspaceMiddleware } from "./auth";
 
 const app = express();
 app.use(cors());
@@ -34,11 +36,12 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/platform", authMiddleware, platformRouter);
 app.use("/api/integrations/telegram", createTelegramRouter(io));
 app.use("/api/integrations/whatsapp", createWhatsAppRouter(io));
-app.use("/api/conversations", authMiddleware, conversationsRouter);
-app.use("/api/deals", authMiddleware, dealsRouter);
-app.use("/api/metrics", authMiddleware, metricsRouter);
+app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conversationsRouter);
+app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
+app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRouter);
 startSimulator(io);
 startTelegramPolling(io);
 

@@ -40,6 +40,7 @@ import {
   refreshScripts
 } from "./features/inbox/model/actions";
 import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
+import { PlatformPanel } from "./features/platform/PlatformPanel";
 
 type Deal = {
   id: string;
@@ -174,7 +175,7 @@ const UI = {
   loginFailed: "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c",
   demoOperatorHint: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440: \u043b\u043e\u0433\u0438\u043d operator, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
   demoAdminHint:
-    "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
+    "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123. \u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
   workspaceMenu: "\u041c\u0435\u043d\u044e",
@@ -183,6 +184,7 @@ const UI = {
   menuAnalytics: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
   menuIntegrations: "\u0418\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
+  menuPlatform: "\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
   chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
@@ -337,6 +339,10 @@ const UI = {
   saveScript: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u043a\u0440\u0438\u043f\u0442"
 } as const;
 
+function isSuperAdminUser(user: SessionUser | null | undefined): boolean {
+  return user?.role === "superadmin";
+}
+
 export function App(): JSX.Element {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
@@ -359,7 +365,7 @@ export function App(): JSX.Element {
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<
-    "dialogs" | "pipeline" | "analytics" | "knowledge" | "integrations"
+    "dialogs" | "pipeline" | "analytics" | "knowledge" | "integrations" | "platform"
   >("dialogs");
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
@@ -512,6 +518,11 @@ export function App(): JSX.Element {
 
     setToken(savedToken);
     setSessionUser(savedUser);
+
+    if (isSuperAdminUser(savedUser)) {
+      setCurrentSection("platform");
+      return;
+    }
 
     const bootstrapTimeout = window.setTimeout(() => {
       localStorage.removeItem(SESSION_TOKEN_KEY);
@@ -681,6 +692,10 @@ export function App(): JSX.Element {
       setToken(data.token);
       localStorage.setItem(SESSION_TOKEN_KEY, data.token);
       localStorage.setItem(SESSION_USER_KEY, JSON.stringify(data.user ?? null));
+      if (isSuperAdminUser(data.user ?? null)) {
+        setCurrentSection("platform");
+        return;
+      }
       await hydrateWorkspace(data.token);
     } catch {
       setLoginError("Сервер API недоступен. Проверьте backend или используйте http://localhost:5173");
@@ -1577,6 +1592,19 @@ export function App(): JSX.Element {
       <main className="workspaceLayout">
         <aside className="leftMenu card">
           <div className="leftMenuTitle">{UI.workspaceMenu}</div>
+          {isSuperAdminUser(sessionUser) ? (
+            <button
+              type="button"
+              className={`leftMenuButton ${currentSection === "platform" ? "active" : ""}`}
+              onClick={() => setCurrentSection("platform")}
+            >
+              <span className="leftMenuButtonIcon" aria-hidden="true">
+                {"\u25A3"}
+              </span>
+              <span>{UI.menuPlatform}</span>
+            </button>
+          ) : (
+            <>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "dialogs" ? "active" : ""}`}
@@ -1629,9 +1657,13 @@ export function App(): JSX.Element {
               <span>{UI.menuIntegrations}</span>
             </button>
           ) : null}
+            </>
+          )}
         </aside>
 
-        {currentSection === "dialogs" ? (
+        {currentSection === "platform" ? (
+          token ? <PlatformPanel authToken={token} /> : null
+        ) : currentSection === "dialogs" ? (
         <div className="appGrid">
           <InboxSidebar
             ui={{

@@ -63,6 +63,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
   const [apiVersion, setApiVersion] = useState("v21.0");
   const [setupReady, setSetupReady] = useState(true);
   const [setupMissing, setSetupMissing] = useState<string[]>([]);
+  const [fbReady, setFbReady] = useState(false);
   const signupDataRef = useRef<{ wabaId: string; phoneNumberId: string }>({ wabaId: "", phoneNumberId: "" });
   const signupErrorRef = useRef<string | null>(null);
   const connectTimeoutRef = useRef<number | null>(null);
