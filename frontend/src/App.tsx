@@ -445,17 +445,64 @@ export function App(): JSX.Element {
       return;
     }
 
-    const socket = io(SOCKET_BASE_URL, {
-      transports: ["websocket", "polling"]
-    });
-    socket.on("message:new", (payload: { conversationId?: string }) => {
+    const refreshOpenThread = (conversationId?: string): void => {
+      const targetId = conversationId || selectedConversation;
+      if (targetId) {
+        void loadMessages(token, targetId, setMessages);
+      }
+    };
+
+    const refreshInbox = (): void => {
       void loadConversations(token, search, filters, setConversations);
-      if (payload?.conversationId && payload.conversationId === selectedConversation) {
+    };
+
+    const socket = io(SOCKET_BASE_URL, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelayMax: 10000
+    });
+
+    const onSocketReady = (): void => {
+      refreshInbox();
+      refreshOpenThread();
+    };
+
+    socket.on("connect", onSocketReady);
+    socket.on("message:new", (payload: {
+      conversationId?: string;
+      messageId?: string;
+      direction?: "incoming" | "outgoing";
+      body?: string;
+      createdAt?: string;
+    }) => {
+      void loadConversations(token, search, filters, setConversations);
+      if (!payload?.conversationId) {
+        return;
+      }
+      if (payload.conversationId === selectedConversation && payload.messageId) {
+        setMessages((prev) => {
+          if (prev.some((message) => message.id === payload.messageId)) {
+            return prev;
+          }
+          return [
+            ...prev,
+            {
+              id: payload.messageId as string,
+              direction: payload.direction || "incoming",
+              body: payload.body || "",
+              created_at: payload.createdAt || new Date().toISOString()
+            }
+          ];
+        });
+      }
+      if (payload.conversationId === selectedConversation) {
         void loadMessages(token, payload.conversationId, setMessages);
       }
     });
 
     return () => {
+      socket.off("connect", onSocketReady);
       socket.disconnect();
     };
   }, [token, search, filters, selectedConversation]);
@@ -469,7 +516,7 @@ export function App(): JSX.Element {
       void loadConversations(token, search, filters, setConversations);
     };
 
-    const intervalId = window.setInterval(refreshInbox, 15000);
+    const intervalId = window.setInterval(refreshInbox, 5000);
     return () => window.clearInterval(intervalId);
   }, [token, search, filters, currentSection]);
 
@@ -482,9 +529,33 @@ export function App(): JSX.Element {
       void loadMessages(token, selectedConversation, setMessages);
     };
 
-    const intervalId = window.setInterval(refreshThread, 10000);
+    refreshThread();
+    const intervalId = window.setInterval(refreshThread, 5000);
     return () => window.clearInterval(intervalId);
   }, [token, selectedConversation, currentSection]);
+
+  useEffect(() => {
+    if (!token || currentSection !== "dialogs") {
+      return;
+    }
+
+    const refreshVisible = (): void => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      void loadConversations(token, search, filters, setConversations);
+      if (selectedConversation) {
+        void loadMessages(token, selectedConversation, setMessages);
+      }
+    };
+
+    document.addEventListener("visibilitychange", refreshVisible);
+    window.addEventListener("focus", refreshVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshVisible);
+      window.removeEventListener("focus", refreshVisible);
+    };
+  }, [token, search, filters, selectedConversation, currentSection]);
 
   useEffect(() => {
     if (!token) {
@@ -572,6 +643,8 @@ export function App(): JSX.Element {
         return;
       }
 
+      setToken(savedToken);
+
       if (validation.status === "valid") {
         setSessionUser(validation.user);
         persistSession(savedToken, validation.user);
@@ -596,21 +669,12 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!conversations.length) {
-      if (selectedConversation) {
-        setSelectedConversation("");
-        setSelectedConversationData(null);
-        setMessages([]);
-      }
       return;
     }
 
     const existingConversation = conversations.find((conversation) => conversation.id === selectedConversation);
     if (existingConversation) {
       setSelectedConversationData(existingConversation);
-      if (token) {
-        void loadMessages(token, existingConversation.id, setMessages);
-        void loadContactCard(token, existingConversation.id, setContactCard);
-      }
       return;
     }
 

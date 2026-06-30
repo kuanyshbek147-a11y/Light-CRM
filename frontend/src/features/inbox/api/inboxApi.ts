@@ -3,6 +3,17 @@ import type { ContactCard, Conversation, InboxFilters, Message } from "../model/
 
 const API = API_BASE_URL;
 
+const authHeaders = (token: string): HeadersInit => ({
+  Authorization: `Bearer ${token}`,
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache"
+});
+
+const fetchOpts = (token: string): RequestInit => ({
+  headers: authHeaders(token),
+  cache: "no-store"
+});
+
 export async function loadConversations(
   token: string,
   search: string,
@@ -18,12 +29,19 @@ export async function loadConversations(
     priority: filters.priority,
     attention: filters.attention
   });
-  const response = await fetch(`${API}/conversations?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const data = (await response.json()) as Conversation[];
-  setConversations(data);
-  return data;
+  try {
+    const response = await fetch(`${API}/conversations?${params.toString()}`, fetchOpts(token));
+    const data = (await response.json()) as Conversation[] | { error?: string };
+    if (!response.ok || !Array.isArray(data)) {
+      console.error("loadConversations failed", response.status, data);
+      return [];
+    }
+    setConversations(data);
+    return data;
+  } catch (error) {
+    console.error("loadConversations failed", error);
+    return [];
+  }
 }
 
 export async function loadMessages(
@@ -31,10 +49,17 @@ export async function loadMessages(
   conversationId: string,
   setMessages: (data: Message[]) => void
 ): Promise<void> {
-  const response = await fetch(`${API}/conversations/${conversationId}/messages`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  setMessages(await response.json());
+  try {
+    const response = await fetch(`${API}/conversations/${conversationId}/messages`, fetchOpts(token));
+    const data = (await response.json()) as Message[] | { error?: string };
+    if (!response.ok || !Array.isArray(data)) {
+      console.error("loadMessages failed", response.status, data);
+      return;
+    }
+    setMessages(data);
+  } catch (error) {
+    console.error("loadMessages failed", error);
+  }
 }
 
 export async function loadContactCard(
