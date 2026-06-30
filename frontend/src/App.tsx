@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
-import { API_BASE_URL } from "./shared/config/api";
+import { API_BASE_URL, SOCKET_BASE_URL } from "./shared/config/api";
 import {
   clearStoredSession,
   persistSession,
@@ -441,17 +441,50 @@ export function App(): JSX.Element {
       : `${analyticsPeriod} \u0434\u043d\u0435\u0439`;
 
   useEffect(() => {
-    const socket = io(API.replace("/api", ""));
-    socket.on("message:new", () => {
-      if (token) {
-        void loadConversations(token, search, filters, setConversations);
+    if (!token) {
+      return;
+    }
+
+    const socket = io(SOCKET_BASE_URL, {
+      transports: ["websocket", "polling"]
+    });
+    socket.on("message:new", (payload: { conversationId?: string }) => {
+      void loadConversations(token, search, filters, setConversations);
+      if (payload?.conversationId && payload.conversationId === selectedConversation) {
+        void loadMessages(token, payload.conversationId, setMessages);
       }
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [token, search, filters]);
+  }, [token, search, filters, selectedConversation]);
+
+  useEffect(() => {
+    if (!token || currentSection !== "dialogs") {
+      return;
+    }
+
+    const refreshInbox = (): void => {
+      void loadConversations(token, search, filters, setConversations);
+    };
+
+    const intervalId = window.setInterval(refreshInbox, 15000);
+    return () => window.clearInterval(intervalId);
+  }, [token, search, filters, currentSection]);
+
+  useEffect(() => {
+    if (!token || !selectedConversation || currentSection !== "dialogs") {
+      return;
+    }
+
+    const refreshThread = (): void => {
+      void loadMessages(token, selectedConversation, setMessages);
+    };
+
+    const intervalId = window.setInterval(refreshThread, 10000);
+    return () => window.clearInterval(intervalId);
+  }, [token, selectedConversation, currentSection]);
 
   useEffect(() => {
     if (!token) {

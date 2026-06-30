@@ -78,12 +78,12 @@ export function createWhatsAppRouter(io: Server): Router {
 
   router.post("/webhook", async (req, res) => {
     if (WHATSAPP_PROVIDER === "meta") {
-      const config = getMetaCloudConfig();
+      const platform = getPlatformMetaSecrets();
       const rawBody = (req as { rawBody?: Buffer }).rawBody;
       const signatureHeader =
         typeof req.headers["x-hub-signature-256"] === "string" ? req.headers["x-hub-signature-256"] : undefined;
 
-      if (!isValidMetaWebhookSignature(rawBody, signatureHeader, config?.appSecret || "")) {
+      if (!isValidMetaWebhookSignature(rawBody, signatureHeader, platform.appSecret || "")) {
         res.status(403).json({ ok: false, error: "forbidden" });
         return;
       }
