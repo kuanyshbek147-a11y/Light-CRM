@@ -383,6 +383,11 @@ button {
   grid-template-columns: 210px 1fr;
   gap: 16px;
   overflow: hidden;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.appShell.leftMenuCollapsed .workspaceLayout {
+  grid-template-columns: 72px 1fr;
 }
 
 .leftMenu {
@@ -394,6 +399,20 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
+  transition: padding 0.2s ease;
+}
+
+.appShell.leftMenuCollapsed .leftMenu {
+  padding: 12px 8px;
+}
+
+.leftMenuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 2px;
 }
 
 .leftMenuTitle {
@@ -403,6 +422,43 @@ button {
   text-transform: uppercase;
   color: #64748b;
   padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-width 0.2s ease;
+  max-width: 140px;
+}
+
+.appShell.leftMenuCollapsed .leftMenuTitle {
+  opacity: 0;
+  max-width: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.appShell.leftMenuCollapsed .leftMenuHeader {
+  justify-content: center;
+}
+
+.leftMenuCollapseBtn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #e5e9f5;
+  background: #fff;
+  color: #5b628f;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leftMenuCollapseBtn:hover {
+  background: #f3f5ff;
+  border-color: #cfd6ff;
+  color: #4338ca;
 }
 
 .leftMenuButton {
@@ -418,6 +474,26 @@ button {
   padding: 0 12px;
   font-weight: 700;
   cursor: pointer;
+  transition: padding 0.2s ease, gap 0.2s ease;
+}
+
+.leftMenuButtonLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-width 0.2s ease;
+  max-width: 180px;
+}
+
+.appShell.leftMenuCollapsed .leftMenuButton {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+
+.appShell.leftMenuCollapsed .leftMenuButtonLabel {
+  opacity: 0;
+  max-width: 0;
+  pointer-events: none;
 }
 
 .leftMenuButtonIcon {
@@ -425,6 +501,12 @@ button {
   text-align: center;
   color: #6e75a7;
   font-size: 13px;
+  flex-shrink: 0;
+}
+
+.appShell.leftMenuCollapsed .leftMenuButtonIcon {
+  width: auto;
+  font-size: 15px;
 }
 
 .leftMenuButton:hover {

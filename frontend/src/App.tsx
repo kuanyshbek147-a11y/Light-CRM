@@ -147,6 +147,7 @@ type ToastKind = "success" | "error";
 
 const API = API_BASE_URL;
 const INBOX_FILTER_PRESETS_KEY = "lightcrm.inboxFilterPresets";
+const LEFT_MENU_COLLAPSED_KEY = "lightcrm.leftMenuCollapsed";
 const DEFAULT_INBOX_FILTERS: InboxFilters = {
   city: "",
   inquiryReason: "",
@@ -200,6 +201,8 @@ const UI = {
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
   workspaceMenu: "\u041c\u0435\u043d\u044e",
+  collapseMenu: "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e",
+  expandMenu: "\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e",
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
   menuFunnelKpi: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u0438 KPI",
@@ -503,6 +506,12 @@ export function App(): JSX.Element {
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
   const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
   const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(true);
+  const [leftMenuCollapsed, setLeftMenuCollapsed] = useState(() => {
+    return localStorage.getItem(LEFT_MENU_COLLAPSED_KEY) === "1";
+  });
+  const [canCollapseLeftMenu, setCanCollapseLeftMenu] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1101px)").matches
+  );
   const [draggingConversationId, setDraggingConversationId] = useState<string>("");
   const [dragOverStageKey, setDragOverStageKey] = useState<string>("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -761,6 +770,18 @@ export function App(): JSX.Element {
   useEffect(() => {
     localStorage.setItem(INBOX_FILTER_PRESETS_KEY, JSON.stringify(savedFilterPresets));
   }, [savedFilterPresets]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1101px)");
+    const onChange = (): void => setCanCollapseLeftMenu(media.matches);
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(LEFT_MENU_COLLAPSED_KEY, leftMenuCollapsed ? "1" : "0");
+  }, [leftMenuCollapsed]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -2075,6 +2096,7 @@ export function App(): JSX.Element {
 
   const mobileChatOpen = isMobileLayout && mobileThreadOpen && currentSection === "dialogs";
   const showBottomNav = isMobileLayout && !mobileChatOpen && !isSuperAdminUser(sessionUser);
+  const leftMenuCollapsedEffective = leftMenuCollapsed && canCollapseLeftMenu;
 
   const mobileSectionSubtitle =
     currentSection === "dialogs"
@@ -2125,7 +2147,11 @@ export function App(): JSX.Element {
   const openConversationsWithFollowUp = conversations.filter((conversation) => conversation.has_sla_follow_up);
 
   return (
-    <div className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}${showBottomNav ? " hasBottomNav" : ""}`}>
+    <div
+      className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}${showBottomNav ? " hasBottomNav" : ""}${
+        leftMenuCollapsedEffective ? " leftMenuCollapsed" : ""
+      }`}
+    >
       <header className="topbar">
         <div className="brand">
           <div className="brandMark" />
@@ -2177,17 +2203,30 @@ export function App(): JSX.Element {
 
       <main className="workspaceLayout">
         <aside className="leftMenu card">
-          <div className="leftMenuTitle">{UI.workspaceMenu}</div>
+          <div className="leftMenuHeader">
+            <div className="leftMenuTitle">{UI.workspaceMenu}</div>
+            <button
+              type="button"
+              className="leftMenuCollapseBtn"
+              onClick={() => setLeftMenuCollapsed((collapsed) => !collapsed)}
+              title={leftMenuCollapsedEffective ? UI.expandMenu : UI.collapseMenu}
+              aria-label={leftMenuCollapsedEffective ? UI.expandMenu : UI.collapseMenu}
+              aria-expanded={!leftMenuCollapsedEffective}
+            >
+              {leftMenuCollapsedEffective ? "\u00BB" : "\u00AB"}
+            </button>
+          </div>
           {isSuperAdminUser(sessionUser) ? (
             <button
               type="button"
               className={`leftMenuButton ${currentSection === "platform" ? "active" : ""}`}
               onClick={() => setCurrentSection("platform")}
+              title={UI.menuPlatform}
             >
               <span className="leftMenuButtonIcon" aria-hidden="true">
                 {"\u25A3"}
               </span>
-              <span>{UI.menuPlatform}</span>
+              <span className="leftMenuButtonLabel">{UI.menuPlatform}</span>
             </button>
           ) : (
             <>
@@ -2195,63 +2234,69 @@ export function App(): JSX.Element {
             type="button"
             className={`leftMenuButton ${currentSection === "dialogs" ? "active" : ""}`}
             onClick={() => setCurrentSection("dialogs")}
+            title={UI.menuDialogs}
           >
             <span className="leftMenuButtonIcon" aria-hidden="true">
               {"\u25AD"}
             </span>
-            <span>{UI.menuDialogs}</span>
+            <span className="leftMenuButtonLabel">{UI.menuDialogs}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "dialogs" && funnelKpiPanelOpen ? "active" : ""}`}
             onClick={toggleFunnelKpiPanel}
             aria-pressed={funnelKpiPanelOpen}
+            title={UI.menuFunnelKpi}
           >
             <span className="leftMenuButtonIcon" aria-hidden="true">
               {"\u25C8"}
             </span>
-            <span>{UI.menuFunnelKpi}</span>
+            <span className="leftMenuButtonLabel">{UI.menuFunnelKpi}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "pipeline" ? "active" : ""}`}
             onClick={() => openPipelineSection("board")}
+            title={UI.menuPipeline}
           >
             <span className="leftMenuButtonIcon" aria-hidden="true">
               {"\u29D2"}
             </span>
-            <span>{UI.menuPipeline}</span>
+            <span className="leftMenuButtonLabel">{UI.menuPipeline}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "analytics" ? "active" : ""}`}
             onClick={() => setCurrentSection("analytics")}
+            title={UI.menuAnalytics}
           >
             <span className="leftMenuButtonIcon" aria-hidden="true">
               {"\u25F4"}
             </span>
-            <span>{UI.menuAnalytics}</span>
+            <span className="leftMenuButtonLabel">{UI.menuAnalytics}</span>
           </button>
           <button
             type="button"
             className={`leftMenuButton ${currentSection === "knowledge" ? "active" : ""}`}
             onClick={() => setCurrentSection("knowledge")}
+            title={UI.menuKnowledgeBase}
           >
             <span className="leftMenuButtonIcon" aria-hidden="true">
               {"\u25A6"}
             </span>
-            <span>{UI.menuKnowledgeBase}</span>
+            <span className="leftMenuButtonLabel">{UI.menuKnowledgeBase}</span>
           </button>
           {sessionUser?.role === "admin" ? (
             <button
               type="button"
               className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
               onClick={() => setCurrentSection("integrations")}
+              title={UI.menuIntegrations}
             >
               <span className="leftMenuButtonIcon" aria-hidden="true">
                 {"\u2699"}
               </span>
-              <span>{UI.menuIntegrations}</span>
+              <span className="leftMenuButtonLabel">{UI.menuIntegrations}</span>
             </button>
           ) : null}
             </>
