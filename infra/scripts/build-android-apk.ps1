@@ -25,6 +25,7 @@ if (-not (Test-Path "android")) {
 }
 
 & (Join-Path $Mobile "scripts\apply-android-permissions.ps1")
+& (Join-Path $Mobile "scripts\patch-android-gradle.ps1")
 
 $gradleProps = Join-Path $Mobile "android\gradle.properties"
 if (Test-Path $gradleProps) {
@@ -35,6 +36,9 @@ if (Test-Path $gradleProps) {
 }
 
 npm run apk
+if ($LASTEXITCODE -ne 0) {
+  throw "Gradle APK build failed with exit code $LASTEXITCODE"
+}
 
 $apk = Join-Path $Mobile "android\app\build\outputs\apk\debug\app-debug.apk"
 if (-not (Test-Path $apk)) {

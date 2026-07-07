@@ -5,7 +5,7 @@
   "scripts": {
     "cap:sync": "cap sync android",
     "android:debug": "cd android && gradlew.bat assembleDebug",
-    "apk": "powershell -ExecutionPolicy Bypass -File scripts/apply-android-permissions.ps1 && npm run cap:sync && npm run android:debug"
+    "apk": "powershell -ExecutionPolicy Bypass -File scripts/apply-android-permissions.ps1 && powershell -ExecutionPolicy Bypass -File scripts/patch-android-gradle.ps1 && npm run cap:sync && npm run android:debug"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
