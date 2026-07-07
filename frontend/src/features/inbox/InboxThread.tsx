@@ -58,6 +58,7 @@ type InboxThreadProps = {
   voiceRecordingAvailable: boolean;
   voiceRecordMode: "tap" | "hold";
   recordingSendReady: boolean;
+  isNativeApp: boolean;
   onSetPriority: (conversationId: string, priority: string) => void;
   onOpenCustomerCard: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
@@ -113,6 +114,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     voiceRecordingAvailable,
     voiceRecordMode,
     recordingSendReady,
+    isNativeApp,
     onSetPriority,
     onOpenCustomerCard,
     onMessagesDragOver,
@@ -142,6 +144,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const micHoldRef = useRef(false);
   const micHoldStartedAtRef = useRef(0);
+  const lastMicTapAtRef = useRef(0);
   const [deferMinutes, setDeferMinutes] = useState<number>(30);
 
   const contactInitial = (selectedConversationData?.contact_name || "?").trim().slice(0, 1).toUpperCase();
@@ -156,7 +159,14 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
 
   const hasComposerText = messageBody.trim().length > 0;
 
-  function handleMicTap(): void {
+  function handleMicTap(event: React.SyntheticEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const now = Date.now();
+    if (now - lastMicTapAtRef.current < 350) {
+      return;
+    }
+    lastMicTapAtRef.current = now;
     if (uploadingMedia || recordingAudio) {
       return;
     }
@@ -326,13 +336,18 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
       ) : (
         <button
           className="micFab"
-          disabled={uploadingMedia || !voiceRecordingAvailable}
-          title={voiceRecordingAvailable ? ui.recordAudio : ui.voiceRecordingAppOnly}
+          disabled={uploadingMedia || (!isNativeApp && !voiceRecordingAvailable)}
+          title={isNativeApp || voiceRecordingAvailable ? ui.recordAudio : ui.voiceRecordingAppOnly}
           aria-label={ui.recordAudio}
           type="button"
-          onClick={voiceRecordMode === "tap" ? handleMicTap : undefined}
+          onPointerUp={
+            voiceRecordMode === "tap"
+              ? handleMicTap
+              : voiceRecordMode === "hold"
+                ? handleMicPointerUp
+                : undefined
+          }
           onPointerDown={voiceRecordMode === "hold" ? handleMicPointerDown : undefined}
-          onPointerUp={voiceRecordMode === "hold" ? handleMicPointerUp : undefined}
           onPointerCancel={voiceRecordMode === "hold" ? handleMicPointerCancel : undefined}
           onContextMenu={(event) => event.preventDefault()}
         >

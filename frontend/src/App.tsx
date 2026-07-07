@@ -2314,6 +2314,7 @@ export function App(): JSX.Element {
             voiceRecordingAvailable={canRecordVoiceForWhatsApp()}
             voiceRecordMode={isNativeApp() ? "tap" : "hold"}
             recordingSendReady={recordingSeconds >= 1}
+            isNativeApp={isNativeApp()}
             onSetPriority={(conversationId, priority) => void updateConversationPriority(conversationId, priority)}
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
             onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
