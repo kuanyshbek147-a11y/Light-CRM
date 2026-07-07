@@ -222,8 +222,11 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
                 </span>
                 <span className="chatBody">
                   <span className="chatTopLine">
-                    <span className="chatName">{conversation.contact_name}</span>
-                    <span className="chatPhone">{conversation.channel}</span>
+                    <span className="chatName">
+                      {conversation.contact_name}
+                      {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
+                    </span>
+                    <span className="chatPhone">{conversation.is_group ? "whatsapp group" : conversation.channel}</span>
                   </span>
                   <span className="chatMetaRow">
                     <span className={`priorityBadge ${conversation.priority || "normal"}`}>

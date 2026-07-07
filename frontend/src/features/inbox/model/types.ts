@@ -2,6 +2,7 @@ export type Conversation = {
   id: string;
   contact_name: string;
   phone: string;
+  is_group?: boolean;
   city?: string | null;
   inquiry_reason?: string | null;
   client_type?: string | null;
@@ -27,7 +28,7 @@ export type Message = {
   direction: "incoming" | "outgoing";
   body: string;
   attachment_url?: string | null;
-  attachment_type?: "image" | "video" | null;
+  attachment_type?: "image" | "video" | "audio" | "document" | null;
   attachment_name?: string | null;
   created_at: string;
 };

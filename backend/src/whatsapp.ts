@@ -6,17 +6,19 @@ import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./modules/auth";
 import { finalizeEmbeddedSignupConnection, subscribeWabaToApp } from "./modules/integrations/whatsapp/embedded-signup";
 import {
+  downloadMetaMediaToUploads,
   ensureMetaPhoneRegistered,
   extractMetaContactNames,
-  extractMetaMediaIds,
+  extractMetaMediaMeta,
   extractWabaIdFromPayload,
+  fetchMetaGroupSubject,
   getMetaCloudConfig,
   getMetaCloudConfigForWorkspace,
   getMetaCloudMissing,
   getPlatformMetaSecrets,
   isMetaPhoneMessagingReady,
   isValidMetaWebhookSignature,
-  resolveMetaMediaUrl,
+  listMetaActiveGroups,
   sendMetaFileMessage,
   sendMetaTextMessage,
   subscribeMetaAppWebhook,
@@ -37,8 +39,11 @@ type NormalizedIncomingMessage = {
   externalContactId: string;
   body: string;
   contactName: string;
+  groupId: string | null;
+  senderName: string | null;
+  isGroup: boolean;
   attachmentUrl: string | null;
-  attachmentType: "image" | "video" | null;
+  attachmentType: "image" | "video" | "audio" | "document" | null;
   attachmentName: string | null;
 };
 
@@ -202,6 +207,22 @@ export function createWhatsAppRouter(io: Server): Router {
       platformType,
       phoneStatus
     });
+  });
+
+  router.get("/groups", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const config = await getMetaCloudConfigForWorkspace(req.user.workspaceId);
+    if (!config?.accessToken || !config.phoneNumberId) {
+      res.json({ groups: [], enabled: false });
+      return;
+    }
+
+    const groups = await listMetaActiveGroups(config);
+    res.json({ groups, enabled: true });
   });
 
   router.post("/connect/complete", authMiddleware, async (req: AuthRequest, res) => {
@@ -523,7 +544,7 @@ export async function sendWhatsAppFileForConversation(
 
 async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<void> {
   const contactNames = WHATSAPP_PROVIDER === "meta" ? extractMetaContactNames(payload) : {};
-  const mediaIdsByMessage = WHATSAPP_PROVIDER === "meta" ? extractMetaMediaIds(payload) : {};
+  const mediaMetaByMessage = WHATSAPP_PROVIDER === "meta" ? extractMetaMediaMeta(payload) : {};
   const messages = extractTextMessages(payload, contactNames);
   if (!messages.length) {
     return;
@@ -548,22 +569,58 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
   const metaConfig =
     WHATSAPP_PROVIDER === "meta" ? await getMetaCloudConfigForWorkspace(workspaceId) : null;
   const managerId = await resolveAutoAssignedManager(workspaceId);
+  const groupNameCache = new Map<string, string>();
 
   for (const message of messages) {
     if (!message.externalContactId) {
       continue;
     }
 
-    if (!message.body && !message.attachmentUrl && message.externalMessageId) {
-      const mediaId = mediaIdsByMessage[message.externalMessageId];
-      if (mediaId) {
-        const media = await resolveMetaMediaUrl(mediaId, metaConfig);
-        if (media) {
-          message.attachmentUrl = media.url;
-          message.attachmentType = media.mimeType.startsWith("video/") ? "video" : "image";
-          message.attachmentName = message.attachmentName || "whatsapp-media";
-          if (!message.body) {
-            message.body = message.attachmentType === "video" ? "[Видео]" : "[Изображение]";
+    if (message.isGroup && message.groupId && metaConfig) {
+      const cachedName = groupNameCache.get(message.groupId);
+      if (cachedName) {
+        message.contactName = cachedName;
+      } else {
+        const subject = await fetchMetaGroupSubject(message.groupId, metaConfig);
+        const resolvedName = subject || "Группа WhatsApp";
+        groupNameCache.set(message.groupId, resolvedName);
+        message.contactName = resolvedName;
+      }
+    }
+
+    if (message.senderName && message.isGroup && message.body) {
+      const prefix = `${message.senderName}: `;
+      if (!message.body.startsWith(prefix)) {
+        message.body = `${prefix}${message.body}`;
+      }
+    }
+
+    if (message.externalMessageId) {
+      const mediaMeta = mediaMetaByMessage[message.externalMessageId];
+      if (mediaMeta?.mediaId) {
+        const stored = await downloadMetaMediaToUploads(mediaMeta.mediaId, metaConfig, mediaMeta.messageType);
+        if (stored) {
+          message.attachmentUrl = stored.url;
+          message.attachmentType = stored.attachmentType;
+          message.attachmentName = message.attachmentName || stored.fileName;
+          if (!message.body || message.body.startsWith("[")) {
+            if (stored.attachmentType === "audio") {
+              message.body = message.isGroup && message.senderName
+                ? `${message.senderName}: [Голосовое сообщение]`
+                : "[Голосовое сообщение]";
+            } else if (stored.attachmentType === "document") {
+              message.body = message.isGroup && message.senderName
+                ? `${message.senderName}: [Документ]`
+                : "[Документ]";
+            } else if (stored.attachmentType === "video") {
+              message.body = message.isGroup && message.senderName
+                ? `${message.senderName}: [Видео]`
+                : "[Видео]";
+            } else {
+              message.body = message.isGroup && message.senderName
+                ? `${message.senderName}: [Изображение]`
+                : "[Изображение]";
+            }
           }
         }
       }
@@ -585,12 +642,27 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       contactRows[0]?.id ??
       (
         await query<{ id: string }>(
-          `INSERT INTO contacts (workspace_id, name, phone, channel, external_id)
-           VALUES ($1, $2, $3, 'whatsapp', $4)
+          `INSERT INTO contacts (workspace_id, name, phone, channel, external_id, is_group)
+           VALUES ($1, $2, $3, 'whatsapp', $4, $5)
            RETURNING id`,
-          [workspaceId, message.contactName, message.externalContactId, message.externalContactId]
+          [
+            workspaceId,
+            message.contactName,
+            message.isGroup ? message.groupId || message.externalContactId : message.externalContactId,
+            message.externalContactId,
+            message.isGroup
+          ]
         )
       )[0].id;
+
+    if (message.isGroup) {
+      await query(
+        `UPDATE contacts
+         SET name = $1, is_group = true
+         WHERE id = $2 AND workspace_id = $3`,
+        [message.contactName, contactId, workspaceId]
+      );
+    }
 
     const conversationRows = await query<{ id: string }>(
       `SELECT id
@@ -654,6 +726,9 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       messageId: inserted[0].id,
       direction: "incoming",
       body: message.body,
+      attachmentUrl: message.attachmentUrl,
+      attachmentType: message.attachmentType,
+      attachmentName: message.attachmentName,
       createdAt: inserted[0].created_at
     });
   }
@@ -735,12 +810,16 @@ function normalizeIncomingMessage(
   }
   const metaCaption = firstString([metaImage?.caption, metaVideo?.caption, metaDocument?.caption]);
 
-  const attachmentType: "image" | "video" | null =
-    type === "image" || type === "sticker" || contentType.startsWith("image/") || Boolean(metaSticker?.id)
-      ? "image"
-      : type === "video" || contentType.startsWith("video/")
-        ? "video"
-        : null;
+  const attachmentType: "image" | "video" | "audio" | "document" | null =
+    type === "audio" || Boolean(metaAudio?.id)
+      ? "audio"
+      : type === "document" || Boolean(metaDocument?.id)
+        ? "document"
+        : type === "image" || type === "sticker" || contentType.startsWith("image/") || Boolean(metaSticker?.id)
+          ? "image"
+          : type === "video" || contentType.startsWith("video/")
+            ? "video"
+            : null;
 
   let body =
     firstString([
@@ -796,11 +875,10 @@ function normalizeIncomingMessage(
     return null;
   }
 
-  const externalContactId = normalizeWhatsAppRecipient(
+  const groupId = firstString([obj.group_id, getValue(obj, "group.id")]) || null;
+  const senderWaId = normalizeWhatsAppRecipient(
     firstString([
       obj.from,
-      getValue(obj, "chat.id"),
-      getValue(obj, "chat.phone"),
       getValue(obj, "sender.phone"),
       getValue(obj, "sender.id"),
       getValue(obj, "customer.phone"),
@@ -809,9 +887,34 @@ function normalizeIncomingMessage(
       getValue(root, "customer.phone")
     ]) || ""
   );
+
+  const externalContactId = groupId
+    ? `group:${groupId}`
+    : normalizeWhatsAppRecipient(
+        firstString([
+          obj.from,
+          getValue(obj, "chat.id"),
+          getValue(obj, "chat.phone"),
+          getValue(obj, "sender.phone"),
+          getValue(obj, "sender.id"),
+          getValue(obj, "customer.phone"),
+          getValue(obj, "contact.phone"),
+          root.from,
+          getValue(root, "customer.phone")
+        ]) || ""
+      );
   if (!externalContactId) {
     return null;
   }
+
+  const senderName =
+    (senderWaId ? contactNames[senderWaId] : null) ||
+    firstString([
+      getValue(obj, "sender.name"),
+      getValue(obj, "customer.name"),
+      getValue(obj, "contact.name")
+    ]) ||
+    null;
 
   const externalMessageId =
     firstString([
@@ -821,22 +924,26 @@ function normalizeIncomingMessage(
       getValue(obj, "data.id"),
       root.id
     ]) || null;
-  const contactName =
-    contactNames[externalContactId] ||
-    firstString([
-      getValue(obj, "sender.name"),
-      getValue(obj, "chat.name"),
-      getValue(obj, "customer.name"),
-      getValue(obj, "contact.name"),
-      root.name
-    ]) ||
-    `WhatsApp ${externalContactId}`;
+  const contactName = groupId
+    ? "Группа WhatsApp"
+    : contactNames[externalContactId] ||
+      firstString([
+        getValue(obj, "sender.name"),
+        getValue(obj, "chat.name"),
+        getValue(obj, "customer.name"),
+        getValue(obj, "contact.name"),
+        root.name
+      ]) ||
+      `WhatsApp ${externalContactId}`;
 
   return {
     externalMessageId,
     externalContactId,
     body,
     contactName,
+    groupId,
+    senderName,
+    isGroup: Boolean(groupId),
     attachmentUrl: fileLink || null,
     attachmentType,
     attachmentName: fileName || null

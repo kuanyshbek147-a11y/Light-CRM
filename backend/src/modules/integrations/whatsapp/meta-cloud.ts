@@ -1,8 +1,11 @@
-import { createHmac, timingSafeEqual } from "crypto";
-import { readFile } from "fs/promises";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { mkdir, readFile, writeFile } from "fs/promises";
+import path from "path";
 import { getWorkspaceMetaCredentials } from "./workspace-meta";
 
 type JsonRecord = Record<string, unknown>;
+
+export type AttachmentKind = "image" | "video" | "audio" | "document";
 
 export type MetaCloudConfig = {
   accessToken: string;
@@ -388,6 +391,153 @@ export async function resolveMetaMediaUrl(
   return { url, mimeType };
 }
 
+export function mapMimeToAttachmentType(mimeType: string, messageType = ""): AttachmentKind {
+  const mime = mimeType.toLowerCase();
+  const type = messageType.toLowerCase();
+  if (type === "audio" || mime.startsWith("audio/")) {
+    return "audio";
+  }
+  if (type === "video" || mime.startsWith("video/")) {
+    return "video";
+  }
+  if (type === "document" || (mime.startsWith("application/") && !mime.includes("image"))) {
+    return "document";
+  }
+  if (mime.startsWith("image/")) {
+    return "image";
+  }
+  return "document";
+}
+
+function extensionForMime(mimeType: string, messageType = ""): string {
+  const mime = mimeType.toLowerCase();
+  const type = messageType.toLowerCase();
+  if (mime.includes("ogg")) {
+    return "ogg";
+  }
+  if (mime.includes("mpeg") || mime.includes("mp3")) {
+    return "mp3";
+  }
+  if (mime.includes("mp4")) {
+    return type === "audio" ? "m4a" : "mp4";
+  }
+  if (mime.includes("pdf")) {
+    return "pdf";
+  }
+  if (mime.includes("webp")) {
+    return "webp";
+  }
+  if (mime.includes("png")) {
+    return "png";
+  }
+  if (mime.includes("jpeg") || mime.includes("jpg")) {
+    return "jpg";
+  }
+  return "bin";
+}
+
+export async function downloadMetaMediaToUploads(
+  mediaId: string,
+  configOverride?: MetaCloudConfig | null,
+  messageType = ""
+): Promise<{ url: string; mimeType: string; attachmentType: AttachmentKind; fileName: string } | null> {
+  const media = await resolveMetaMediaUrl(mediaId, configOverride);
+  if (!media) {
+    return null;
+  }
+
+  const config = configOverride ?? getMetaCloudConfig();
+  if (!config) {
+    return null;
+  }
+
+  const downloadResponse = await fetch(media.url, {
+    headers: { Authorization: `Bearer ${config.accessToken}` }
+  });
+  if (!downloadResponse.ok) {
+    console.error(`Meta WhatsApp media download failed: ${downloadResponse.status}`);
+    return null;
+  }
+
+  const buffer = Buffer.from(await downloadResponse.arrayBuffer());
+  const attachmentType = mapMimeToAttachmentType(media.mimeType, messageType);
+  const ext = extensionForMime(media.mimeType, messageType);
+  const fileName = `whatsapp-${randomUUID()}.${ext}`;
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  await mkdir(uploadsDir, { recursive: true });
+  await writeFile(path.join(uploadsDir, fileName), buffer);
+
+  return {
+    url: `/uploads/${fileName}`,
+    mimeType: media.mimeType,
+    attachmentType,
+    fileName
+  };
+}
+
+export async function fetchMetaGroupSubject(
+  groupId: string,
+  configOverride?: MetaCloudConfig | null
+): Promise<string | null> {
+  const config = configOverride ?? getMetaCloudConfig();
+  if (!config || !groupId) {
+    return null;
+  }
+
+  const response = await fetch(`${metaGraphBase(config)}/${groupId}?fields=subject`, {
+    headers: { Authorization: `Bearer ${config.accessToken}` }
+  });
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json()) as JsonRecord;
+  return typeof payload.subject === "string" && payload.subject.trim() ? payload.subject.trim() : null;
+}
+
+export type MetaGroupSummary = {
+  id: string;
+  subject: string;
+  createdAt: string | null;
+};
+
+export async function listMetaActiveGroups(
+  configOverride?: MetaCloudConfig | null
+): Promise<MetaGroupSummary[]> {
+  const config = configOverride ?? getMetaCloudConfig();
+  if (!config?.phoneNumberId) {
+    return [];
+  }
+
+  const response = await fetch(`${metaGraphBase(config)}/${config.phoneNumberId}/groups?limit=50`, {
+    headers: { Authorization: `Bearer ${config.accessToken}` }
+  });
+  if (!response.ok) {
+    console.error(`Meta WhatsApp groups list failed: ${response.status}`);
+    return [];
+  }
+
+  const payload = (await response.json()) as JsonRecord;
+  const data = asRecord(payload.data);
+  const groups = Array.isArray(data?.groups) ? data.groups : [];
+  return groups
+    .map((item) => {
+      const record = asRecord(item);
+      const id = typeof record?.id === "string" ? record.id : "";
+      const subject = typeof record?.subject === "string" ? record.subject.trim() : "";
+      const createdAt = typeof record?.created_at === "string" ? record.created_at : null;
+      if (!id) {
+        return null;
+      }
+      return { id, subject: subject || "Группа WhatsApp", createdAt };
+    })
+    .filter((item): item is MetaGroupSummary => Boolean(item));
+}
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : null;
+}
+
 export function extractMetaContactNames(payload: JsonRecord): Record<string, string> {
   const names: Record<string, string> = {};
   const entry = Array.isArray(payload.entry) ? payload.entry : [];
@@ -414,7 +564,15 @@ export function extractMetaContactNames(payload: JsonRecord): Record<string, str
 }
 
 export function extractMetaMediaIds(payload: JsonRecord): Record<string, string> {
-  const mediaIds: Record<string, string> = {};
+  return Object.fromEntries(
+    Object.entries(extractMetaMediaMeta(payload)).map(([messageId, meta]) => [messageId, meta.mediaId])
+  );
+}
+
+export function extractMetaMediaMeta(
+  payload: JsonRecord
+): Record<string, { mediaId: string; messageType: string }> {
+  const mediaMeta: Record<string, { mediaId: string; messageType: string }> = {};
   const entry = Array.isArray(payload.entry) ? payload.entry : [];
 
   for (const entryItem of entry) {
@@ -430,13 +588,13 @@ export function extractMetaMediaIds(payload: JsonRecord): Record<string, string>
         const media = record[type] as JsonRecord | undefined;
         const mediaId = typeof media?.id === "string" ? media.id : "";
         if (messageId && mediaId) {
-          mediaIds[messageId] = mediaId;
+          mediaMeta[messageId] = { mediaId, messageType: type };
         }
       }
     }
   }
 
-  return mediaIds;
+  return mediaMeta;
 }
 
 export function extractWabaIdFromPayload(payload: JsonRecord): string | null {

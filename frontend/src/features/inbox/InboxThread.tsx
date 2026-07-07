@@ -128,8 +128,13 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             ) : null}
             <div className="threadTitle">
               <div className="threadLabel">{ui.replyBox}</div>
-              <div className="threadName">{selectedConversationData.contact_name}</div>
-              <div className="threadMeta">{selectedConversationData.phone}</div>
+              <div className="threadName">
+                {selectedConversationData.contact_name}
+                {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
+              </div>
+              <div className="threadMeta">
+                {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
+              </div>
             </div>
             <div className="threadStatus">
               <select
@@ -227,6 +232,21 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                   <video className="bubbleMedia bubbleMediaVideo" controls preload="metadata">
                     <source src={getMediaUrl(message.attachment_url)} />
                   </video>
+                ) : null}
+                {message.attachment_url && message.attachment_type === "audio" ? (
+                  <audio className="bubbleMedia bubbleMediaAudio" controls preload="metadata">
+                    <source src={getMediaUrl(message.attachment_url)} />
+                  </audio>
+                ) : null}
+                {message.attachment_url && message.attachment_type === "document" ? (
+                  <a
+                    className="bubbleDocumentLink"
+                    href={getMediaUrl(message.attachment_url)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {message.attachment_name || "Скачать документ"}
+                  </a>
                 ) : null}
               </div>
             ))}

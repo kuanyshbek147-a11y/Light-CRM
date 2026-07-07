@@ -474,6 +474,9 @@ export function App(): JSX.Element {
       messageId?: string;
       direction?: "incoming" | "outgoing";
       body?: string;
+      attachmentUrl?: string | null;
+      attachmentType?: "image" | "video" | "audio" | "document" | null;
+      attachmentName?: string | null;
       createdAt?: string;
     }) => {
       void loadConversations(token, search, filters, setConversations);
@@ -491,6 +494,9 @@ export function App(): JSX.Element {
               id: payload.messageId as string,
               direction: payload.direction || "incoming",
               body: payload.body || "",
+              attachment_url: payload.attachmentUrl || null,
+              attachment_type: payload.attachmentType || null,
+              attachment_name: payload.attachmentName || null,
               created_at: payload.createdAt || new Date().toISOString()
             }
           ];
@@ -1096,7 +1102,7 @@ export function App(): JSX.Element {
     if (attachmentUrl.startsWith("http://") || attachmentUrl.startsWith("https://")) {
       return attachmentUrl;
     }
-    return `${API.replace("/api", "")}${attachmentUrl}`;
+    return `${SOCKET_BASE_URL}${attachmentUrl}`;
   }
 
   async function createScript(): Promise<void> {

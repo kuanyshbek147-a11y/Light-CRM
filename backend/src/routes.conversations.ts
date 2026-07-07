@@ -218,7 +218,7 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
   const rows = await query(
     `SELECT c.id, c.contact_id, c.assigned_manager_id, c.channel, c.status, c.priority, c.first_response_due_at, c.updated_at,
             ct.name AS contact_name, ct.phone, ct.city, ct.inquiry_reason, ct.client_type, ct.category,
-            ct.channel AS contact_channel, ct.external_id AS contact_external_id,
+            ct.channel AS contact_channel, ct.external_id AS contact_external_id, ct.is_group,
             d.id AS deal_id, d.stage, d.amount,
             m.body AS last_message_body, m.direction AS last_message_direction, m.created_at AS last_message_at,
             COALESCE(unread.unread_count, 0) AS unread_count,
