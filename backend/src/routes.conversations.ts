@@ -645,10 +645,19 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
   const whatsappTextMessageId = body.trim() && !file
     ? await sendWhatsAppMessageForConversation(req.params.id, workspaceId, body)
     : null;
-  const whatsappFileMessageId =
+  const whatsappFileResult =
     file && attachmentType
-      ? await sendWhatsAppFileForConversation(req.params.id, workspaceId, path.join(uploadsDir, file.filename), file.originalname, body)
+      ? await sendWhatsAppFileForConversation(
+          req.params.id,
+          workspaceId,
+          path.join(uploadsDir, file.filename),
+          file.originalname,
+          body,
+          uploadMimeType
+        )
       : null;
+  const whatsappFileMessageId = whatsappFileResult?.messageId ?? null;
+  const whatsappDeliveryError = whatsappFileResult?.deliveryError;
   const telegramMessageId = body.trim() && !file
     ? await sendTelegramMessageForConversation(req.params.id, workspaceId, body)
     : null;
@@ -686,7 +695,8 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
 
   res.status(201).json({
     ...inserted[0],
-    whatsappDeliveryFailed
+    whatsappDeliveryFailed,
+    deliveryError: whatsappDeliveryFailed ? whatsappDeliveryError || "meta_message_send_failed" : null
   });
 });
 

@@ -1,5 +1,5 @@
 export function pickVoiceRecorderMimeType(): string {
-  const candidates = ["audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm", "audio/mp4", ""];
+  const candidates = ["audio/ogg;codecs=opus", "audio/ogg", "audio/mp4", ""];
   for (const type of candidates) {
     if (!type || (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type))) {
       return type;

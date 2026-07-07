@@ -289,21 +289,78 @@ export async function sendMetaTextMessage(
   return typeof first?.id === "string" ? first.id : null;
 }
 
+export type MetaFileSendResult = { messageId: string } | { error: string; code: string };
+
+export function resolveMetaUploadMimeType(fileName: string, mimeHint = ""): string | null {
+  const lower = fileName.toLowerCase();
+  const mime = mimeHint.toLowerCase().split(";")[0].trim();
+
+  if (lower.endsWith(".m4a") || mime === "audio/mp4" || mime === "audio/x-m4a") {
+    return "audio/mp4";
+  }
+  if (lower.endsWith(".aac") || mime === "audio/aac") {
+    return "audio/aac";
+  }
+  if (lower.endsWith(".ogg") || lower.endsWith(".opus") || mime === "audio/ogg") {
+    return "audio/ogg";
+  }
+  if (lower.endsWith(".mp3") || mime === "audio/mpeg") {
+    return "audio/mpeg";
+  }
+  if (lower.endsWith(".amr") || lower.endsWith(".3gp") || mime === "audio/amr" || mime === "audio/3gpp") {
+    return "audio/amr";
+  }
+  if (mime === "audio/webm" || lower.endsWith(".webm")) {
+    return null;
+  }
+  if (mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("application/")) {
+    return mime;
+  }
+  if (lower.endsWith(".png")) {
+    return "image/png";
+  }
+  if (lower.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (lower.endsWith(".gif")) {
+    return "image/gif";
+  }
+  if (/\.jpe?g$/.test(lower)) {
+    return "image/jpeg";
+  }
+  if (lower.endsWith(".mp4")) {
+    return "video/mp4";
+  }
+  if (lower.endsWith(".mov")) {
+    return "video/quicktime";
+  }
+  return mime || null;
+}
+
+function isWhatsAppVoiceNoteMime(mimeType: string): boolean {
+  return mimeType.toLowerCase().startsWith("audio/ogg");
+}
+
 export async function sendMetaFileMessage(
   to: string,
   filePath: string,
   fileName: string,
   caption = "",
-  configOverride?: MetaCloudConfig | null
-): Promise<string | null> {
+  configOverride?: MetaCloudConfig | null,
+  mimeHint = ""
+): Promise<MetaFileSendResult> {
   const config = configOverride ?? getMetaCloudConfig();
   if (!config) {
-    return null;
+    return { error: "whatsapp_not_configured", code: "whatsapp_not_configured" };
   }
 
-  const fileBuffer = await readFile(filePath);
-  const mimeType = guessMimeType(fileName, filePath);
+  const mimeType = resolveMetaUploadMimeType(fileName, mimeHint) ?? guessMimeType(fileName, filePath);
+  if (!mimeType || mimeType === "audio/webm") {
+    return { error: "unsupported_audio_format", code: "unsupported_audio_format" };
+  }
+
   const mediaType = resolveMetaOutboundMediaType(mimeType);
+  const fileBuffer = await readFile(filePath);
   const uploadForm = new FormData();
   uploadForm.append("messaging_product", "whatsapp");
   uploadForm.append("type", mimeType);
@@ -320,27 +377,32 @@ export async function sendMetaFileMessage(
   if (!uploadResponse.ok) {
     const errorText = await uploadResponse.text();
     console.error(`Meta WhatsApp media upload failed: ${uploadResponse.status} ${errorText}`);
-    return null;
+    return { error: "meta_media_upload_failed", code: "meta_media_upload_failed" };
   }
 
   const uploadPayload = (await uploadResponse.json()) as JsonRecord;
   const mediaId = typeof uploadPayload.id === "string" ? uploadPayload.id : null;
   if (!mediaId) {
-    return null;
+    return { error: "meta_media_upload_failed", code: "meta_media_upload_failed" };
   }
+
+  const audioPayload: JsonRecord =
+    mediaType === "audio"
+      ? {
+          id: mediaId,
+          ...(isWhatsAppVoiceNoteMime(mimeType) ? { voice: true } : {})
+        }
+      : {
+          id: mediaId,
+          ...(caption.trim() ? { caption: caption.trim() } : {})
+        };
 
   const messageBody: JsonRecord = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
     to: normalizeWhatsAppRecipient(to),
     type: mediaType,
-    [mediaType]:
-      mediaType === "audio"
-        ? { id: mediaId }
-        : {
-            id: mediaId,
-            ...(caption.trim() ? { caption: caption.trim() } : {})
-          }
+    [mediaType]: audioPayload
   };
 
   const response = await fetch(metaMessagesUrl(config), {
@@ -355,13 +417,17 @@ export async function sendMetaFileMessage(
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Meta WhatsApp file send failed: ${response.status} ${errorText}`);
-    return null;
+    return { error: "meta_message_send_failed", code: "meta_message_send_failed" };
   }
 
   const payload = (await response.json()) as JsonRecord;
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
   const first = messages[0] as JsonRecord | undefined;
-  return typeof first?.id === "string" ? first.id : null;
+  const messageId = typeof first?.id === "string" ? first.id : null;
+  if (!messageId) {
+    return { error: "meta_message_send_failed", code: "meta_message_send_failed" };
+  }
+  return { messageId };
 }
 
 export async function resolveMetaMediaUrl(

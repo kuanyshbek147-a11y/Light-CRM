@@ -264,6 +264,10 @@ const UI = {
     "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043d\u0430\u0447\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c. \u0423\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0439\u0442\u0435 \u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d \u0447\u0443\u0442\u044c \u0434\u043e\u043b\u044c\u0448\u0435.",
   whatsappDeliveryFailed:
     "\u0424\u0430\u0439\u043b \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u0432 CRM, \u043d\u043e \u043d\u0435 \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d \u0432 WhatsApp.",
+  whatsappAudioFormatUnsupported:
+    "WhatsApp \u043d\u0435 \u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u044d\u0442\u043e\u0442 \u0444\u043e\u0440\u043c\u0430\u0442 \u0430\u0443\u0434\u0438\u043e. \u0417\u0430\u043f\u0438\u0441\u044b\u0432\u0430\u0439\u0442\u0435 \u0433\u043e\u043b\u043e\u0441 \u0447\u0435\u0440\u0435\u0437 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043d\u0430 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0435.",
+  whatsappNotConfigured:
+    "WhatsApp \u043d\u0435 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0451\u043d. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u044e \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445.",
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
   send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
   selectChatHint: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0432 \u0441\u043f\u0438\u0441\u043a\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432, \u0447\u0442\u043e\u0431\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443.",
@@ -1146,6 +1150,10 @@ export function App(): JSX.Element {
       setMediaUploadError(UI.mediaFileTooLarge);
       return;
     }
+    if (isAudio && (normalizedFile.type.includes("webm") || normalizedFile.name.toLowerCase().endsWith(".webm"))) {
+      setMediaUploadError(UI.whatsappAudioFormatUnsupported);
+      return;
+    }
 
     if (isNativeApp() && (isImage || isVideo)) {
       const cameraPermission = await ensureCameraPermission();
@@ -1187,7 +1195,7 @@ export function App(): JSX.Element {
         return;
       }
 
-      const result = (await response.json()) as { whatsappDeliveryFailed?: boolean };
+      const result = (await response.json()) as { whatsappDeliveryFailed?: boolean; deliveryError?: string | null };
       setMessageBody("");
       setEmojiPickerOpen(false);
       await refreshAfterMessage({
@@ -1202,7 +1210,13 @@ export function App(): JSX.Element {
         loadMetrics
       });
       if (result.whatsappDeliveryFailed) {
-        setMediaUploadError(UI.whatsappDeliveryFailed);
+        if (result.deliveryError === "unsupported_audio_format") {
+          setMediaUploadError(UI.whatsappAudioFormatUnsupported);
+        } else if (result.deliveryError === "whatsapp_not_configured") {
+          setMediaUploadError(UI.whatsappNotConfigured);
+        } else {
+          setMediaUploadError(UI.whatsappDeliveryFailed);
+        }
       }
     } catch {
       setMediaUploadError(UI.mediaUploadFailed);

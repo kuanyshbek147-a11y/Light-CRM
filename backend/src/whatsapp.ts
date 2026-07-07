@@ -474,8 +474,9 @@ export async function sendWhatsAppFileForConversation(
   workspaceId: string,
   filePath: string,
   fileName: string,
-  caption = ""
-): Promise<string | null> {
+  caption = "",
+  mimeHint = ""
+): Promise<{ messageId: string | null; deliveryError?: string }> {
   const rows = await query<{ channel: string; external_id: string | null; phone: string }>(
     `SELECT c.channel, ct.external_id, ct.phone
      FROM conversations c
@@ -485,31 +486,35 @@ export async function sendWhatsAppFileForConversation(
   );
   const conversation = rows[0];
   if (!conversation || conversation.channel !== "whatsapp") {
-    return null;
+    return { messageId: null };
   }
   const to = normalizeWhatsAppRecipient(conversation.external_id || conversation.phone);
   if (!to) {
-    return null;
+    return { messageId: null, deliveryError: "invalid_recipient" };
   }
 
   if (WHATSAPP_PROVIDER === "meta") {
     try {
       const metaConfig = await getMetaCloudConfigForWorkspace(workspaceId);
-      return await sendMetaFileMessage(to, filePath, fileName, caption, metaConfig);
+      const result = await sendMetaFileMessage(to, filePath, fileName, caption, metaConfig, mimeHint);
+      if ("messageId" in result) {
+        return { messageId: result.messageId };
+      }
+      return { messageId: null, deliveryError: result.code };
     } catch (error) {
       console.error("Meta WhatsApp file send failed with exception", error);
-      return null;
+      return { messageId: null, deliveryError: "meta_message_send_failed" };
     }
   }
 
   if (!CHATAPP_API_TOKEN) {
-    return null;
+    return { messageId: null };
   }
 
   try {
     const licenseId = await resolveLicenseId();
     if (!licenseId) {
-      return null;
+      return { messageId: null };
     }
     const fileBuffer = await readFile(filePath);
     const payload = new FormData();
@@ -532,13 +537,13 @@ export async function sendWhatsAppFileForConversation(
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`ChatApp file send failed: ${response.status} ${errorText}`);
-      return null;
+      return { messageId: null, deliveryError: "meta_message_send_failed" };
     }
     const data = (await response.json()) as JsonRecord;
-    return extractOutgoingExternalId(data);
+    return { messageId: extractOutgoingExternalId(data) };
   } catch (error) {
     console.error("ChatApp file send failed with exception", error);
-    return null;
+    return { messageId: null, deliveryError: "meta_message_send_failed" };
   }
 }
 
