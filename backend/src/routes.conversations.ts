@@ -7,6 +7,7 @@ import { query } from "./db";
 import { sendTelegramMessageForConversation } from "./telegram";
 import { sendWhatsAppFileForConversation, sendWhatsAppMessageForConversation } from "./whatsapp";
 import { downloadMetaMediaBuffer, getMetaCloudConfigForWorkspace } from "./modules/integrations/whatsapp/meta-cloud";
+import { getRealtimeServer } from "./realtime";
 
 export const conversationsRouter = Router();
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -661,34 +662,14 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
     [req.params.id, workspaceId]
   );
   const conversationChannel = conversationRows[0]?.channel || "";
-  const whatsappTextMessageId = body.trim() && !file
-    ? await sendWhatsAppMessageForConversation(req.params.id, workspaceId, body)
-    : null;
-  const whatsappFileResult =
-    file && attachmentType
-      ? await sendWhatsAppFileForConversation(
-          req.params.id,
-          workspaceId,
-          path.join(uploadsDir, file.filename),
-          file.originalname,
-          body,
-          uploadMimeType
-        )
-      : null;
-  const whatsappFileMessageId = whatsappFileResult?.messageId ?? null;
-  const whatsappMediaId = whatsappFileResult?.mediaId ?? null;
-  const whatsappDeliveryError = whatsappFileResult?.deliveryError;
-  const telegramMessageId = body.trim() && !file
-    ? await sendTelegramMessageForConversation(req.params.id, workspaceId, body)
-    : null;
-  const externalMessageId = whatsappFileMessageId || whatsappTextMessageId || telegramMessageId;
+
   const inserted = await query<{ id: string; created_at: string }>(
     `INSERT INTO messages (
       conversation_id, workspace_id, direction, body, author_user_id, external_message_id, attachment_url, attachment_type, attachment_name, meta_media_id
     )
-     VALUES ($1, $2, 'outgoing', $3, $4, $5, $6, $7, $8, $9)
+     VALUES ($1, $2, 'outgoing', $3, $4, NULL, $5, $6, $7, $8)
      RETURNING id, created_at`,
-    [req.params.id, req.user?.workspaceId, storedBody, req.user?.id, externalMessageId, attachmentUrl, attachmentType, attachmentName, whatsappMediaId]
+    [req.params.id, req.user?.workspaceId, storedBody, req.user?.id, attachmentUrl, attachmentType, attachmentName, null]
   );
 
   await query(
@@ -710,15 +691,100 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
     ]
   );
 
-  const whatsappDeliveryFailed =
-    conversationChannel === "whatsapp" && Boolean(file) && !whatsappFileMessageId && !whatsappTextMessageId;
+  const messageId = inserted[0].id;
+  const createdAt = inserted[0].created_at;
 
   res.status(201).json({
-    ...inserted[0],
-    whatsappDeliveryFailed,
-    deliveryError: whatsappDeliveryFailed ? whatsappDeliveryError || "meta_message_send_failed" : null
+    id: messageId,
+    created_at: createdAt,
+    direction: "outgoing",
+    body: storedBody,
+    attachment_url: attachmentUrl,
+    attachment_type: attachmentType,
+    attachment_name: attachmentName,
+    meta_media_id: null,
+    whatsappDeliveryPending: conversationChannel === "whatsapp",
+    whatsappDeliveryFailed: false,
+    deliveryError: null
+  });
+
+  void deliverOutboundMessage({
+    messageId,
+    conversationId: req.params.id,
+    workspaceId,
+    channel: conversationChannel,
+    body,
+    file: file
+      ? {
+          path: path.join(uploadsDir, file.filename),
+          originalname: file.originalname,
+          uploadMimeType
+        }
+      : null
   });
 });
+
+async function deliverOutboundMessage(params: {
+  messageId: string;
+  conversationId: string;
+  workspaceId: string;
+  channel: string;
+  body: string;
+  file: { path: string; originalname: string; uploadMimeType: string } | null;
+}): Promise<void> {
+  const { messageId, conversationId, workspaceId, channel, body, file } = params;
+  let externalMessageId: string | null = null;
+  let metaMediaId: string | null = null;
+  let deliveryError: string | undefined;
+
+  try {
+    if (channel === "whatsapp") {
+      if (file) {
+        const result = await sendWhatsAppFileForConversation(
+          conversationId,
+          workspaceId,
+          file.path,
+          file.originalname,
+          body,
+          file.uploadMimeType
+        );
+        externalMessageId = result.messageId;
+        metaMediaId = result.mediaId ?? null;
+        deliveryError = result.deliveryError;
+      } else if (body.trim()) {
+        externalMessageId = await sendWhatsAppMessageForConversation(conversationId, workspaceId, body);
+        if (!externalMessageId) {
+          deliveryError = "meta_message_send_failed";
+        }
+      }
+    } else if (body.trim() && !file) {
+      externalMessageId = await sendTelegramMessageForConversation(conversationId, workspaceId, body);
+    }
+  } catch (error) {
+    console.error("Outbound message delivery failed", error);
+    deliveryError = "meta_message_send_failed";
+  }
+
+  await query(
+    `UPDATE messages
+     SET external_message_id = $1,
+         meta_media_id = COALESCE($2, meta_media_id)
+     WHERE id = $3`,
+    [externalMessageId, metaMediaId, messageId]
+  );
+
+  const whatsappDeliveryFailed =
+    channel === "whatsapp" && Boolean(body.trim() || file) && !externalMessageId;
+
+  getRealtimeServer()?.emit("message:updated", {
+    conversationId,
+    messageId,
+    externalMessageId,
+    metaMediaId,
+    whatsappDeliveryFailed,
+    deliveryError: whatsappDeliveryFailed ? deliveryError || "meta_message_send_failed" : null
+  });
+}
 
 async function createSlaFollowUpTaskIfNeeded(
   workspaceId: string,

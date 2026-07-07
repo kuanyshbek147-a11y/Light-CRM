@@ -14,6 +14,7 @@ import { platformRouter } from "./modules/platform";
 import { startSimulator } from "./simulator";
 import { ensureUserLoginSchema } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
+import { setRealtimeServer } from "./realtime";
 
 const app = express();
 app.use(cors());
@@ -30,6 +31,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
 });
+setRealtimeServer(io);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });

@@ -58,10 +58,14 @@ import type {
   SavedInboxFilterPreset
 } from "./features/inbox/model/types";
 import {
+  appendOutgoingMessage,
+  patchOutgoingMessage,
   refreshAfterMessage,
   refreshConversationList,
+  refreshConversationListBackground,
   refreshKnowledge,
-  refreshScripts
+  refreshScripts,
+  type CreatedMessageResponse
 } from "./features/inbox/model/actions";
 import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
@@ -447,6 +451,8 @@ export function App(): JSX.Element {
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>(false);
   const [isDragOverMessages, setIsDragOverMessages] = useState<boolean>(false);
   const [uploadingMedia, setUploadingMedia] = useState<boolean>(false);
+  const [isSendingMessage, setIsSendingMessage] = useState<boolean>(false);
+  const sendingMessageRef = useRef<boolean>(false);
   const [recordingAudio, setRecordingAudio] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -574,36 +580,59 @@ export function App(): JSX.Element {
       createdAt?: string;
     }) => {
       void loadConversations(token, search, filters, setConversations);
-      if (!payload?.conversationId) {
+      if (!payload?.conversationId || payload.conversationId !== selectedConversation || !payload.messageId) {
         return;
       }
-      if (payload.conversationId === selectedConversation && payload.messageId) {
-        setMessages((prev) => {
-          if (prev.some((message) => message.id === payload.messageId)) {
-            return prev;
+      setMessages((prev) => {
+        if (prev.some((message) => message.id === payload.messageId)) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            id: payload.messageId as string,
+            direction: payload.direction || "incoming",
+            body: payload.body || "",
+            attachment_url: payload.attachmentUrl || null,
+            attachment_type: payload.attachmentType || null,
+            attachment_name: payload.attachmentName || null,
+            meta_media_id: payload.metaMediaId || null,
+            created_at: payload.createdAt || new Date().toISOString()
           }
-          return [
-            ...prev,
-            {
-              id: payload.messageId as string,
-              direction: payload.direction || "incoming",
-              body: payload.body || "",
-              attachment_url: payload.attachmentUrl || null,
-              attachment_type: payload.attachmentType || null,
-              attachment_name: payload.attachmentName || null,
-              meta_media_id: payload.metaMediaId || null,
-              created_at: payload.createdAt || new Date().toISOString()
-            }
-          ];
-        });
+        ];
+      });
+    });
+
+    socket.on("message:updated", (payload: {
+      conversationId?: string;
+      messageId?: string;
+      metaMediaId?: string | null;
+      whatsappDeliveryFailed?: boolean;
+      deliveryError?: string | null;
+    }) => {
+      if (!payload?.conversationId || payload.conversationId !== selectedConversation || !payload.messageId) {
+        return;
       }
-      if (payload.conversationId === selectedConversation) {
-        void loadMessages(token, payload.conversationId, setMessages);
+      patchOutgoingMessage(setMessages, {
+        messageId: payload.messageId,
+        metaMediaId: payload.metaMediaId
+      });
+      if (payload.whatsappDeliveryFailed) {
+        if (payload.deliveryError === "unsupported_audio_format") {
+          setMediaUploadError(UI.whatsappAudioFormatUnsupported);
+        } else if (payload.deliveryError === "whatsapp_not_configured") {
+          setMediaUploadError(UI.whatsappNotConfigured);
+        } else {
+          setMediaUploadError(UI.whatsappDeliveryFailed);
+        }
       }
+      void loadConversations(token, search, filters, setConversations);
     });
 
     return () => {
       socket.off("connect", onSocketReady);
+      socket.off("message:new");
+      socket.off("message:updated");
       socket.disconnect();
     };
   }, [token, search, filters, selectedConversation]);
@@ -1106,11 +1135,21 @@ export function App(): JSX.Element {
   }
 
   async function sendMessage(): Promise<void> {
-    if (!messageBody.trim() || !selectedConversation || !token || uploadingMedia || recordingAudio) {
+    if (
+      !messageBody.trim() ||
+      !selectedConversation ||
+      !token ||
+      uploadingMedia ||
+      recordingAudio ||
+      sendingMessageRef.current
+    ) {
       return;
     }
 
+    sendingMessageRef.current = true;
+    setIsSendingMessage(true);
     setMediaUploadError("");
+    const bodyToSend = messageBody.trim();
     try {
       const response = await fetch(`${API}/conversations/${selectedConversation}/messages`, {
         method: "POST",
@@ -1118,33 +1157,28 @@ export function App(): JSX.Element {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ body: messageBody })
+        body: JSON.stringify({ body: bodyToSend })
       });
       if (!response.ok) {
         setMediaUploadError(UI.messageSendFailed);
         return;
       }
 
+      const created = (await response.json()) as CreatedMessageResponse;
       setMessageBody("");
       setEmojiPickerOpen(false);
-      await refreshAfterMessage({
-        token,
-        conversationId: selectedConversation,
-        search,
-        filters,
-        metricsQuery,
-        setMessages,
-        setConversations,
-        setMetrics,
-        loadMetrics
-      });
+      appendOutgoingMessage(setMessages, created);
+      refreshConversationListBackground({ token, search, filters, setConversations });
     } catch {
       setMediaUploadError(UI.messageSendFailed);
+    } finally {
+      sendingMessageRef.current = false;
+      setIsSendingMessage(false);
     }
   }
 
   async function sendMediaFile(file: File): Promise<void> {
-    if (!selectedConversation || !token) {
+    if (!selectedConversation || !token || sendingMessageRef.current) {
       return;
     }
     setMediaUploadError("");
@@ -1173,6 +1207,10 @@ export function App(): JSX.Element {
       }
     }
 
+    sendingMessageRef.current = true;
+    setIsSendingMessage(true);
+    setUploadingMedia(true);
+
     const payload = new FormData();
     payload.append("body", messageBody.trim());
     if (isNativeApp()) {
@@ -1185,7 +1223,6 @@ export function App(): JSX.Element {
     } else {
       payload.append("file", normalizedFile, normalizedFile.name);
     }
-    setUploadingMedia(true);
 
     try {
       const response = await fetch(`${API}/conversations/${selectedConversation}/messages`, {
@@ -1205,20 +1242,11 @@ export function App(): JSX.Element {
         return;
       }
 
-      const result = (await response.json()) as { whatsappDeliveryFailed?: boolean; deliveryError?: string | null };
+      const result = (await response.json()) as CreatedMessageResponse;
       setMessageBody("");
       setEmojiPickerOpen(false);
-      await refreshAfterMessage({
-        token,
-        conversationId: selectedConversation,
-        search,
-        filters,
-        metricsQuery,
-        setMessages,
-        setConversations,
-        setMetrics,
-        loadMetrics
-      });
+      appendOutgoingMessage(setMessages, result);
+      refreshConversationListBackground({ token, search, filters, setConversations });
       if (result.whatsappDeliveryFailed) {
         if (result.deliveryError === "unsupported_audio_format") {
           setMediaUploadError(UI.whatsappAudioFormatUnsupported);
@@ -1232,6 +1260,8 @@ export function App(): JSX.Element {
       setMediaUploadError(UI.mediaUploadFailed);
     } finally {
       setUploadingMedia(false);
+      sendingMessageRef.current = false;
+      setIsSendingMessage(false);
     }
   }
 
@@ -2302,7 +2332,7 @@ export function App(): JSX.Element {
             filteredKnowledgeArticles={filteredKnowledgeArticles}
             selectedScriptId={selectedScriptId}
             messageBody={messageBody}
-            uploadingMedia={uploadingMedia}
+            uploadingMedia={uploadingMedia || isSendingMessage}
             recordingAudio={recordingAudio}
             recordingDurationLabel={formatRecordingDuration(recordingSeconds)}
             mediaUploadError={mediaUploadError}
