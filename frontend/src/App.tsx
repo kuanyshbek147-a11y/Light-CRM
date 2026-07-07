@@ -264,7 +264,7 @@ const UI = {
   mediaFileTooLarge: "\u0424\u0430\u0439\u043b \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u043e\u0439. \u041c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 20 \u041c\u0411.",
   mediaUploadFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b.",
   recordingStartFailed:
-    "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043d\u0430\u0447\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c. \u0423\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0439\u0442\u0435 \u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d \u0447\u0443\u0442\u044c \u0434\u043e\u043b\u044c\u0448\u0435.",
+    "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043d\u0430\u0447\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0434\u043e\u0441\u0442\u0443\u043f \u043a \u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d\u0443 \u0438 \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.",
   whatsappDeliveryFailed:
     "\u0424\u0430\u0439\u043b \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u0432 CRM, \u043d\u043e \u043d\u0435 \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d \u0432 WhatsApp.",
   whatsappAudioFormatUnsupported:
@@ -388,11 +388,12 @@ function isSuperAdminUser(user: SessionUser | null | undefined): boolean {
 }
 
 const MIN_VOICE_RECORDING_MS = 900;
-const RECORDING_READY_TIMEOUT_MS = 5000;
+const RECORDING_READY_TIMEOUT_MS = 12000;
 
 async function waitUntilRecordingActive(
   nativeRecordingRef: { current: boolean },
   mediaRecorderRef: { current: MediaRecorder | null },
+  recordingStartingRef: { current: boolean },
   timeoutMs: number
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
@@ -403,6 +404,9 @@ async function waitUntilRecordingActive(
     const state = mediaRecorderRef.current?.state;
     if (state === "recording" || state === "paused") {
       return true;
+    }
+    if (!recordingStartingRef.current && !nativeRecordingRef.current && !mediaRecorderRef.current) {
+      return false;
     }
     await new Promise<void>((resolve) => {
       window.setTimeout(resolve, 50);
@@ -453,6 +457,7 @@ export function App(): JSX.Element {
   const recordingStartingRef = useRef<boolean>(false);
   const recordingStartedAtRef = useRef<number | null>(null);
   const stopAndSendInProgressRef = useRef<boolean>(false);
+  const pendingStopAndSendRef = useRef<boolean>(false);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
@@ -1243,6 +1248,7 @@ export function App(): JSX.Element {
     setRecordingSeconds(0);
     audioChunksRef.current = [];
     recordingStartedAtRef.current = null;
+    pendingStopAndSendRef.current = false;
   }
 
   async function startAudioRecording(): Promise<void> {
@@ -1280,6 +1286,10 @@ export function App(): JSX.Element {
           recordingTimerRef.current = window.setInterval(() => {
             setRecordingSeconds((prev) => prev + 1);
           }, 1000);
+          if (pendingStopAndSendRef.current) {
+            pendingStopAndSendRef.current = false;
+            void stopAndSendAudioRecording();
+          }
         } catch {
           stopRecordingStream();
           setMediaUploadError(UI.microphoneUnavailable);
@@ -1352,9 +1362,14 @@ export function App(): JSX.Element {
       const ready = await waitUntilRecordingActive(
         nativeRecordingRef,
         mediaRecorderRef,
+        recordingStartingRef,
         RECORDING_READY_TIMEOUT_MS
       );
       if (!ready) {
+        if (recordingStartingRef.current) {
+          pendingStopAndSendRef.current = true;
+          return;
+        }
         setMediaUploadError(UI.recordingStartFailed);
         stopRecordingStream();
         return;
@@ -2297,6 +2312,8 @@ export function App(): JSX.Element {
             getMediaUrl={getMediaUrl}
             token={token}
             voiceRecordingAvailable={canRecordVoiceForWhatsApp()}
+            voiceRecordMode={isNativeApp() ? "tap" : "hold"}
+            recordingSendReady={recordingSeconds >= 1}
             onSetPriority={(conversationId, priority) => void updateConversationPriority(conversationId, priority)}
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
             onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}

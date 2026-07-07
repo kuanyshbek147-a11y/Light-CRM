@@ -56,6 +56,8 @@ type InboxThreadProps = {
   getMediaUrl: (url: string) => string;
   token: string | null;
   voiceRecordingAvailable: boolean;
+  voiceRecordMode: "tap" | "hold";
+  recordingSendReady: boolean;
   onSetPriority: (conversationId: string, priority: string) => void;
   onOpenCustomerCard: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
@@ -109,6 +111,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     getMediaUrl,
     token,
     voiceRecordingAvailable,
+    voiceRecordMode,
+    recordingSendReady,
     onSetPriority,
     onOpenCustomerCard,
     onMessagesDragOver,
@@ -152,7 +156,17 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
 
   const hasComposerText = messageBody.trim().length > 0;
 
+  function handleMicTap(): void {
+    if (uploadingMedia || recordingAudio) {
+      return;
+    }
+    onStartAudioRecording();
+  }
+
   function handleMicPointerDown(event: React.PointerEvent<HTMLButtonElement>): void {
+    if (voiceRecordMode === "tap") {
+      return;
+    }
     event.preventDefault();
     micHoldRef.current = true;
     micHoldStartedAtRef.current = Date.now();
@@ -161,6 +175,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   }
 
   function handleMicPointerUp(event: React.PointerEvent<HTMLButtonElement>): void {
+    if (voiceRecordMode === "tap") {
+      return;
+    }
     if (!micHoldRef.current) {
       return;
     }
@@ -175,6 +192,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   }
 
   function handleMicPointerCancel(event: React.PointerEvent<HTMLButtonElement>): void {
+    if (voiceRecordMode === "tap") {
+      return;
+    }
     if (!micHoldRef.current) {
       return;
     }
@@ -310,9 +330,10 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
           title={voiceRecordingAvailable ? ui.recordAudio : ui.voiceRecordingAppOnly}
           aria-label={ui.recordAudio}
           type="button"
-          onPointerDown={handleMicPointerDown}
-          onPointerUp={handleMicPointerUp}
-          onPointerCancel={handleMicPointerCancel}
+          onClick={voiceRecordMode === "tap" ? handleMicTap : undefined}
+          onPointerDown={voiceRecordMode === "hold" ? handleMicPointerDown : undefined}
+          onPointerUp={voiceRecordMode === "hold" ? handleMicPointerUp : undefined}
+          onPointerCancel={voiceRecordMode === "hold" ? handleMicPointerCancel : undefined}
           onContextMenu={(event) => event.preventDefault()}
         >
           {micIcon}
@@ -633,7 +654,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                   type="button"
                   className="primaryButton recordingSendButton"
                   onClick={onStopAndSendAudioRecording}
-                  disabled={uploadingMedia}
+                  disabled={uploadingMedia || !recordingSendReady}
                 >
                   {uploadingMedia ? ui.uploadingMedia : ui.sendVoice}
                 </button>
