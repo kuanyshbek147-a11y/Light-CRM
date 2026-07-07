@@ -2108,6 +2108,10 @@ button {
     overflow: auto;
   }
 
+  body:has(.mobileChatOpen) {
+    overflow: hidden;
+  }
+
   .landingPage {
     padding: 16px;
     min-height: auto;
@@ -2195,13 +2199,113 @@ button {
     display: none;
   }
 
+  .appShell.mobileChatOpen {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .appShell.mobileChatOpen .topbar,
+  .appShell.mobileChatOpen .leftMenu {
+    display: none;
+  }
+
+  .appShell.mobileChatOpen .workspaceLayout {
+    padding: 0;
+    gap: 0;
+    grid-template-columns: 1fr;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .appShell.mobileChatOpen .appGrid {
+    height: 100%;
+    min-height: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .appShell.mobileChatOpen .thread {
+    height: 100%;
+    min-height: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+  }
+
+  .appShell.mobileChatOpen .threadHeader {
+    flex-shrink: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+
+  .appShell.mobileChatOpen .mobileBackButton {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  .appShell.mobileChatOpen .threadTitle {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .appShell.mobileChatOpen .threadStatus {
+    display: inline-flex;
+    width: auto;
+    flex-shrink: 0;
+    gap: 0;
+  }
+
+  .appShell.mobileChatOpen .threadStatus > :not(.gearButton) {
+    display: none;
+  }
+
+  .appShell.mobileChatOpen .threadLabel {
+    display: none;
+  }
+
+  .appShell.mobileChatOpen .threadName {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  .appShell.mobileChatOpen .threadMeta {
+    font-size: 11px;
+  }
+
+  .appShell.mobileChatOpen .messages {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .appShell.mobileChatOpen .scriptPanel {
+    flex-shrink: 0;
+    max-height: min(28dvh, 220px);
+    overflow-y: auto;
+  }
+
+  .appShell.mobileChatOpen .composer {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: #fcfdff;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+  }
+
   .appGrid.mobileThreadOpen .thread {
-    min-height: calc(100dvh - 180px);
+    min-height: 0;
   }
 
   .appGrid.mobileThreadOpen .messages {
     max-height: none;
-    min-height: calc(100dvh - 320px);
+    min-height: 0;
     flex: 1;
   }
 
@@ -2294,7 +2398,11 @@ button {
     padding: 12px;
     align-items: flex-start;
     gap: 12px;
-    flex-direction: column;
+  }
+
+  .appShell.mobileChatOpen .threadHeader {
+    align-items: center;
+    flex-direction: row;
   }
 
   .threadStatus {
@@ -2303,9 +2411,13 @@ button {
   }
 
   .messages {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .appShell:not(.mobileChatOpen) .messages {
     min-height: 320px;
     max-height: 50vh;
-    padding: 12px;
   }
 
   .scriptPanel {

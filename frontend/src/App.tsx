@@ -1671,8 +1671,10 @@ export function App(): JSX.Element {
     );
   }
 
+  const mobileChatOpen = isMobileLayout && mobileThreadOpen && currentSection === "dialogs";
+
   return (
-    <div className="appShell">
+    <div className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <div className="brandMark" />
