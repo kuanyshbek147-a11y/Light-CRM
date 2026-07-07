@@ -17,6 +17,12 @@ import {
   formatRecordingDuration,
   pickVoiceRecorderMimeType
 } from "./features/inbox/lib/voiceRecorder";
+import { startNativeVoiceRecording, stopNativeVoiceRecording } from "./features/inbox/lib/nativeVoiceRecorder";
+import {
+  ensureCameraPermission,
+  ensureMicrophonePermission,
+  isNativeApp
+} from "./shared/platform/devicePermissions";
 import {
   assignConversationManager as apiAssignConversationManager,
   acknowledgeSlaEscalation as apiAcknowledgeSlaEscalation,
@@ -234,6 +240,10 @@ const UI = {
   sendVoice: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441",
   cancelRecording: "\u041e\u0442\u043c\u0435\u043d\u0430",
   microphoneUnavailable: "\u041c\u0438\u043a\u0440\u043e\u0444\u043e\u043d \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0434\u043e\u0441\u0442\u0443\u043f \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u0438\u043b\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f.",
+  microphonePermissionDenied:
+    "\u0414\u043e\u0441\u0442\u0443\u043f \u043a \u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d\u0443 \u0437\u0430\u043f\u0440\u0435\u0449\u0451\u043d. \u041e\u0442\u043a\u0440\u043e\u0439\u0442\u0435 \u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u2192 \u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f \u2192 Light CRM \u2192 \u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043d\u0438\u044f \u0438 \u0432\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d.",
+  cameraPermissionDenied:
+    "\u0414\u043e\u0441\u0442\u0443\u043f \u043a \u043a\u0430\u043c\u0435\u0440\u0435 \u0438 \u0433\u0430\u043b\u0435\u0440\u0435\u0435 \u0437\u0430\u043f\u0440\u0435\u0449\u0451\u043d. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430 \u0434\u043b\u044f Light CRM.",
   dropMediaHint: "\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0438\u043b\u0438 \u0432\u0438\u0434\u0435\u043e \u0441\u044e\u0434\u0430",
   uploadingMedia: "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430...",
   unsupportedMediaFormat:
@@ -382,6 +392,7 @@ export function App(): JSX.Element {
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
+  const nativeRecordingRef = useRef<boolean>(false);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
@@ -1082,6 +1093,14 @@ export function App(): JSX.Element {
       return;
     }
 
+    if (isNativeApp() && (isImage || isVideo)) {
+      const cameraPermission = await ensureCameraPermission();
+      if (cameraPermission === "denied") {
+        setMediaUploadError(UI.cameraPermissionDenied);
+        return;
+      }
+    }
+
     const payload = new FormData();
     payload.append("body", messageBody.trim());
     payload.append("file", file);
@@ -1122,6 +1141,7 @@ export function App(): JSX.Element {
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     recordingStreamRef.current = null;
     mediaRecorderRef.current = null;
+    nativeRecordingRef.current = false;
     if (recordingTimerRef.current) {
       window.clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
@@ -1135,12 +1155,41 @@ export function App(): JSX.Element {
     if (!selectedConversation || uploadingMedia || recordingAudio) {
       return;
     }
+
+    setMediaUploadError("");
+    const permission = await ensureMicrophonePermission();
+    if (permission === "denied") {
+      setMediaUploadError(UI.microphonePermissionDenied);
+      return;
+    }
+    if (permission === "unavailable" && !isNativeApp()) {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        setMediaUploadError(UI.microphoneUnavailable);
+        return;
+      }
+    }
+
+    if (isNativeApp()) {
+      try {
+        await startNativeVoiceRecording();
+        nativeRecordingRef.current = true;
+        setRecordingAudio(true);
+        setRecordingSeconds(0);
+        recordingTimerRef.current = window.setInterval(() => {
+          setRecordingSeconds((prev) => prev + 1);
+        }, 1000);
+      } catch {
+        stopRecordingStream();
+        setMediaUploadError(UI.microphoneUnavailable);
+      }
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setMediaUploadError(UI.microphoneUnavailable);
       return;
     }
 
-    setMediaUploadError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = pickVoiceRecorderMimeType();
@@ -1166,6 +1215,19 @@ export function App(): JSX.Element {
   }
 
   function cancelAudioRecording(): void {
+    if (nativeRecordingRef.current) {
+      void (async () => {
+        try {
+          await stopNativeVoiceRecording();
+        } catch {
+          // ignore discarded native recording
+        } finally {
+          stopRecordingStream();
+        }
+      })();
+      return;
+    }
+
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") {
       recorder.onstop = () => stopRecordingStream();
@@ -1176,6 +1238,22 @@ export function App(): JSX.Element {
   }
 
   async function stopAndSendAudioRecording(): Promise<void> {
+    if (nativeRecordingRef.current) {
+      try {
+        const file = await stopNativeVoiceRecording();
+        stopRecordingStream();
+        if (file.size < 1) {
+          setMediaUploadError(UI.mediaUploadFailed);
+          return;
+        }
+        await sendMediaFile(file);
+      } catch {
+        stopRecordingStream();
+        setMediaUploadError(UI.mediaUploadFailed);
+      }
+      return;
+    }
+
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") {
       return;
@@ -1205,6 +1283,9 @@ export function App(): JSX.Element {
       const recorder = mediaRecorderRef.current;
       if (recorder && recorder.state !== "inactive") {
         recorder.stop();
+      }
+      if (nativeRecordingRef.current) {
+        void stopNativeVoiceRecording().catch(() => undefined);
       }
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
       if (recordingTimerRef.current) {
@@ -2086,6 +2167,18 @@ export function App(): JSX.Element {
             }}
             onPickFile={(file) => {
               void sendMediaFile(file);
+            }}
+            onPrepareAttach={async () => {
+              if (!isNativeApp()) {
+                return true;
+              }
+              const cameraPermission = await ensureCameraPermission();
+              if (cameraPermission === "denied") {
+                setMediaUploadError(UI.cameraPermissionDenied);
+                return false;
+              }
+              setMediaUploadError("");
+              return true;
             }}
             onStartAudioRecording={() => void startAudioRecording()}
             onStopAndSendAudioRecording={() => void stopAndSendAudioRecording()}

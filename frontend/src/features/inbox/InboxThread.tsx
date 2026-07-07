@@ -67,6 +67,7 @@ type InboxThreadProps = {
   onToggleEmojiPicker: () => void;
   onMessageBodyChange: (value: string) => void;
   onPickFile: (file: File) => void;
+  onPrepareAttach?: () => Promise<boolean>;
   onStartAudioRecording: () => void;
   onStopAndSendAudioRecording: () => void;
   onCancelAudioRecording: () => void;
@@ -117,6 +118,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onToggleEmojiPicker,
     onMessageBodyChange,
     onPickFile,
+    onPrepareAttach,
     onStartAudioRecording,
     onStopAndSendAudioRecording,
     onCancelAudioRecording,
@@ -432,7 +434,17 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 className="emojiButton attachButton"
                 title={ui.attachFile}
                 aria-label={ui.attachFile}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => {
+                  void (async () => {
+                    if (onPrepareAttach) {
+                      const allowed = await onPrepareAttach();
+                      if (!allowed) {
+                        return;
+                      }
+                    }
+                    fileInputRef.current?.click();
+                  })();
+                }}
                 disabled={uploadingMedia}
               >
                 {uploadingMedia ? (

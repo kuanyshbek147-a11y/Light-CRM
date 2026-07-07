@@ -24,6 +24,8 @@ if (-not (Test-Path "android")) {
   npx cap add android
 }
 
+& (Join-Path $Mobile "scripts\apply-android-permissions.ps1")
+
 $gradleProps = Join-Path $Mobile "android\gradle.properties"
 if (Test-Path $gradleProps) {
   $props = Get-Content $gradleProps -Raw
