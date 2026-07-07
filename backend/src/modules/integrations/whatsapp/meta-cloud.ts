@@ -636,6 +636,9 @@ function guessMimeType(fileName: string, filePath = ""): string {
   if (lower.endsWith(".m4a") || lower.endsWith(".aac")) {
     return "audio/mp4";
   }
+  if (lower.endsWith(".amr") || lower.endsWith(".3gp")) {
+    return "audio/amr";
+  }
   if (lower.endsWith(".webm") && filePath.toLowerCase().includes("voice")) {
     return "audio/webm";
   }

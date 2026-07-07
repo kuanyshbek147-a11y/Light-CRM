@@ -16,6 +16,8 @@ import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import {
   extensionForRecordedAudio,
   formatRecordingDuration,
+  isAudioFile,
+  normalizeVoiceFile,
   pickVoiceRecorderMimeType
 } from "./features/inbox/lib/voiceRecorder";
 import { startNativeVoiceRecording, stopNativeVoiceRecording } from "./features/inbox/lib/nativeVoiceRecorder";
@@ -1089,14 +1091,15 @@ export function App(): JSX.Element {
       return;
     }
     setMediaUploadError("");
-    const isAudio = file.type.startsWith("audio/");
-    const isImage = file.type.startsWith("image/");
-    const isVideo = file.type.startsWith("video/");
+    const normalizedFile = isAudioFile(file) ? normalizeVoiceFile(file) : file;
+    const isAudio = isAudioFile(normalizedFile);
+    const isImage = normalizedFile.type.startsWith("image/");
+    const isVideo = normalizedFile.type.startsWith("video/");
     if (!isAudio && !isImage && !isVideo) {
       setMediaUploadError(UI.unsupportedMediaFormat);
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
+    if (normalizedFile.size > 20 * 1024 * 1024) {
       setMediaUploadError(UI.mediaFileTooLarge);
       return;
     }
@@ -1111,7 +1114,7 @@ export function App(): JSX.Element {
 
     const payload = new FormData();
     payload.append("body", messageBody.trim());
-    payload.append("file", file);
+    payload.append("file", normalizedFile, normalizedFile.name);
     setUploadingMedia(true);
 
     try {
@@ -1121,7 +1124,8 @@ export function App(): JSX.Element {
         body: payload
       });
       if (!response.ok) {
-        setMediaUploadError(UI.mediaUploadFailed);
+        const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setMediaUploadError(errorPayload?.error === "body_or_file_required" ? UI.mediaUploadFailed : UI.mediaUploadFailed);
         return;
       }
 
@@ -1275,7 +1279,7 @@ export function App(): JSX.Element {
     const mimeType = recorder.mimeType || "audio/webm";
     const blob = new Blob(audioChunksRef.current, { type: mimeType });
     const extension = extensionForRecordedAudio(mimeType);
-    const file = new File([blob], `voice-${Date.now()}.${extension}`, { type: mimeType });
+    const file = normalizeVoiceFile(new File([blob], `voice-${Date.now()}.${extension}`, { type: mimeType }));
     stopRecordingStream();
 
     if (file.size < 1) {

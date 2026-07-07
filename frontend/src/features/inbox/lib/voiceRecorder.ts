@@ -8,6 +8,43 @@ export function pickVoiceRecorderMimeType(): string {
   return "";
 }
 
+export function mimeTypeFromAudioFileName(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".ogg") || lower.endsWith(".opus")) {
+    return "audio/ogg";
+  }
+  if (lower.endsWith(".mp3")) {
+    return "audio/mpeg";
+  }
+  if (lower.endsWith(".m4a") || lower.endsWith(".aac")) {
+    return "audio/mp4";
+  }
+  if (lower.endsWith(".amr") || lower.endsWith(".3gp")) {
+    return "audio/amr";
+  }
+  if (lower.endsWith(".webm")) {
+    return "audio/webm";
+  }
+  return "audio/mp4";
+}
+
+export function isAudioFile(file: File): boolean {
+  const type = file.type.toLowerCase();
+  if (type.startsWith("audio/")) {
+    return true;
+  }
+  return /\.(ogg|opus|m4a|aac|mp3|webm|amr|3gp|wav)$/i.test(file.name);
+}
+
+export function normalizeVoiceFile(file: File): File {
+  const type = file.type.toLowerCase();
+  if (type.startsWith("audio/") && type !== "application/octet-stream") {
+    return file;
+  }
+  const mimeType = mimeTypeFromAudioFileName(file.name);
+  return new File([file], file.name, { type: mimeType, lastModified: file.lastModified });
+}
+
 export function extensionForRecordedAudio(mimeType: string): string {
   const mime = mimeType.toLowerCase();
   if (mime.includes("ogg")) {

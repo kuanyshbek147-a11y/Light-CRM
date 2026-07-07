@@ -633,6 +633,18 @@
   display: block;
 }
 
+.composer.composerWa.composerRecording .recordingBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.composer.composerWa.composerRecording .recordingSendButton {
+  margin-left: auto;
+}
+
 .composerWaRow {
   display: flex;
   align-items: flex-end;
@@ -708,6 +720,9 @@
   display: grid;
   place-content: center;
   padding: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .micFab:disabled {

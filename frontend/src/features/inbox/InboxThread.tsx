@@ -130,6 +130,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     backLabel
   } = props;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const micHoldRef = useRef(false);
+  const micHoldStartedAtRef = useRef(0);
   const [deferMinutes, setDeferMinutes] = useState<number>(30);
 
   const contactInitial = (selectedConversationData?.contact_name || "?").trim().slice(0, 1).toUpperCase();
@@ -143,6 +145,39 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   }
 
   const hasComposerText = messageBody.trim().length > 0;
+
+  function handleMicPointerDown(event: React.PointerEvent<HTMLButtonElement>): void {
+    event.preventDefault();
+    micHoldRef.current = true;
+    micHoldStartedAtRef.current = Date.now();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onStartAudioRecording();
+  }
+
+  function handleMicPointerUp(event: React.PointerEvent<HTMLButtonElement>): void {
+    if (!micHoldRef.current) {
+      return;
+    }
+    micHoldRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const heldMs = Date.now() - micHoldStartedAtRef.current;
+    if (heldMs >= 500) {
+      onStopAndSendAudioRecording();
+    }
+  }
+
+  function handleMicPointerCancel(event: React.PointerEvent<HTMLButtonElement>): void {
+    if (!micHoldRef.current) {
+      return;
+    }
+    micHoldRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    onCancelAudioRecording();
+  }
 
   const attachIcon = uploadingMedia ? (
     <span className="attachSpinner" aria-hidden="true" />
@@ -265,11 +300,14 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
       ) : (
         <button
           className="micFab"
-          onClick={onStartAudioRecording}
           disabled={uploadingMedia}
           title={ui.recordAudio}
           aria-label={ui.recordAudio}
           type="button"
+          onPointerDown={handleMicPointerDown}
+          onPointerUp={handleMicPointerUp}
+          onPointerCancel={handleMicPointerCancel}
+          onContextMenu={(event) => event.preventDefault()}
         >
           {micIcon}
         </button>
