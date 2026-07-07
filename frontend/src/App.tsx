@@ -2416,7 +2416,6 @@ export function App(): JSX.Element {
             voiceRecordMode={isNativeApp() ? "tap" : "hold"}
             recordingSendReady={recordingSeconds >= 1}
             isNativeApp={isNativeApp()}
-            onSetPriority={(conversationId, priority) => void updateConversationPriority(conversationId, priority)}
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
             onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
             backLabel={UI.backToChats}
@@ -2493,8 +2492,6 @@ export function App(): JSX.Element {
               setMessageBody((prev) => `${prev}${emoji}`);
               setEmojiPickerOpen(false);
             }}
-            onAcknowledgeSlaEscalation={(conversationId) => void acknowledgeSlaEscalation(conversationId)}
-            onDeferSlaEscalation={(conversationId, minutes) => void deferSlaEscalation(conversationId, minutes)}
           />
 
           {funnelKpiPanelOpen ? (

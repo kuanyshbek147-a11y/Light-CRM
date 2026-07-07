@@ -386,6 +386,12 @@ button {
   transition: grid-template-columns 0.2s ease;
 }
 
+.chatQuickActions,
+.dialogCardActions,
+.dialogCardBadges {
+  display: none !important;
+}
+
 .appShell.leftMenuCollapsed .workspaceLayout {
   grid-template-columns: 72px 1fr;
 }

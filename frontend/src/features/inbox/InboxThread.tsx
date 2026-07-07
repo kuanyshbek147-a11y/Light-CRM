@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import type { DragEvent, RefObject } from "react";
 import type { Conversation, KnowledgeArticle, Message, MessageScript } from "./model/types";
 import { MessageAudio } from "./ui/MessageAudio";
@@ -59,7 +59,6 @@ type InboxThreadProps = {
   voiceRecordMode: "tap" | "hold";
   recordingSendReady: boolean;
   isNativeApp: boolean;
-  onSetPriority: (conversationId: string, priority: string) => void;
   onOpenCustomerCard: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onMessagesDragLeave: (event: DragEvent<HTMLDivElement>) => void;
@@ -80,8 +79,6 @@ type InboxThreadProps = {
   onCancelAudioRecording: () => void;
   onSendMessage: () => void;
   onAppendEmoji: (emoji: string) => void;
-  onAcknowledgeSlaEscalation: (conversationId: string) => void;
-  onDeferSlaEscalation: (conversationId: string, minutes: number) => void;
   onBack?: () => void;
   backLabel?: string;
 };
@@ -115,7 +112,6 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     voiceRecordMode,
     recordingSendReady,
     isNativeApp,
-    onSetPriority,
     onOpenCustomerCard,
     onMessagesDragOver,
     onMessagesDragLeave,
@@ -136,8 +132,6 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onCancelAudioRecording,
     onSendMessage,
     onAppendEmoji,
-    onAcknowledgeSlaEscalation,
-    onDeferSlaEscalation,
     onBack,
     backLabel
   } = props;
@@ -145,7 +139,6 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   const micHoldRef = useRef(false);
   const micHoldStartedAtRef = useRef(0);
   const lastMicTapAtRef = useRef(0);
-  const [deferMinutes, setDeferMinutes] = useState<number>(30);
 
   const contactInitial = (selectedConversationData?.contact_name || "?").trim().slice(0, 1).toUpperCase();
 
@@ -404,74 +397,6 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               <div className="threadMeta">
                 {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
               </div>
-            </div>
-            <div className="threadStatus">
-              <select
-                className="stageSelect"
-                value={selectedConversationData.priority || "normal"}
-                onChange={(event) => onSetPriority(selectedConversationData.id, event.target.value)}
-                title="Приоритет диалога"
-              >
-                <option value="low">Низкий</option>
-                <option value="normal">Обычный</option>
-                <option value="high">Высокий</option>
-                <option value="urgent">Срочный</option>
-              </select>
-              <button
-                type="button"
-                className="gearButton"
-                onClick={onOpenCustomerCard}
-                title={ui.customerCard}
-              >
-                <svg className="customerCardIcon" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-                  <path
-                    d="M4.5 19.5C5.6 16.8 8.3 15 12 15s6.4 1.8 7.5 4.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-              <span className="statusDot" aria-hidden="true" />
-              <span>
-                {selectedConversationData.channel}{" "}
-                {selectedConversationData.status === "open" ? ui.openStatusSuffix : ui.closedStatusSuffix}
-              </span>
-              {selectedConversationData.sla_escalated ? (
-                <span className="attentionBadge escalated">Эскалация SLA</span>
-              ) : null}
-              {selectedConversationData.sla_escalated ? (
-                <button
-                  type="button"
-                  className="secondaryButton escalationAckButton"
-                  onClick={() => onAcknowledgeSlaEscalation(selectedConversationData.id)}
-                >
-                  Взять в работу
-                </button>
-              ) : null}
-              {selectedConversationData.sla_escalated ? (
-                <>
-                  <select
-                    className="stageSelect"
-                    value={deferMinutes}
-                    onChange={(event) => setDeferMinutes(Number(event.target.value))}
-                    title="Время отложить SLA"
-                  >
-                    <option value={15}>15 мин</option>
-                    <option value={30}>30 мин</option>
-                    <option value={60}>60 мин</option>
-                  </select>
-                  <button
-                    type="button"
-                    className="secondaryButton"
-                    onClick={() => onDeferSlaEscalation(selectedConversationData.id, deferMinutes)}
-                  >
-                    Отложить
-                  </button>
-                </>
-              ) : null}
             </div>
           </div>
 
