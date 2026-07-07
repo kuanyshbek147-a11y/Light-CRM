@@ -6,6 +6,7 @@ import { AuthRequest } from "./auth";
 import { query } from "./db";
 import { sendTelegramMessageForConversation } from "./telegram";
 import { sendWhatsAppFileForConversation, sendWhatsAppMessageForConversation } from "./whatsapp";
+import { downloadMetaMediaBuffer, getMetaCloudConfigForWorkspace } from "./modules/integrations/whatsapp/meta-cloud";
 
 export const conversationsRouter = Router();
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -361,9 +362,27 @@ conversationsRouter.get("/:id/contact", async (req: AuthRequest, res) => {
   res.json(rows[0] || null);
 });
 
+conversationsRouter.get("/whatsapp-media/:mediaId", async (req: AuthRequest, res) => {
+  const metaConfig = await getMetaCloudConfigForWorkspace(req.user?.workspaceId || "");
+  if (!metaConfig) {
+    res.status(503).json({ error: "whatsapp_not_configured" });
+    return;
+  }
+
+  const media = await downloadMetaMediaBuffer(req.params.mediaId, metaConfig);
+  if (!media) {
+    res.status(404).end();
+    return;
+  }
+
+  res.setHeader("Content-Type", media.mimeType);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.send(media.buffer);
+});
+
 conversationsRouter.get("/:id/messages", async (req: AuthRequest, res) => {
   const rows = await query(
-    `SELECT id, direction, body, author_user_id, external_message_id, attachment_url, attachment_type, attachment_name, created_at
+    `SELECT id, direction, body, author_user_id, external_message_id, attachment_url, attachment_type, attachment_name, meta_media_id, created_at
      FROM messages
      WHERE conversation_id = $1
      ORDER BY created_at ASC`,
@@ -657,6 +676,7 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
         )
       : null;
   const whatsappFileMessageId = whatsappFileResult?.messageId ?? null;
+  const whatsappMediaId = whatsappFileResult?.mediaId ?? null;
   const whatsappDeliveryError = whatsappFileResult?.deliveryError;
   const telegramMessageId = body.trim() && !file
     ? await sendTelegramMessageForConversation(req.params.id, workspaceId, body)
@@ -664,11 +684,11 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
   const externalMessageId = whatsappFileMessageId || whatsappTextMessageId || telegramMessageId;
   const inserted = await query<{ id: string; created_at: string }>(
     `INSERT INTO messages (
-      conversation_id, workspace_id, direction, body, author_user_id, external_message_id, attachment_url, attachment_type, attachment_name
+      conversation_id, workspace_id, direction, body, author_user_id, external_message_id, attachment_url, attachment_type, attachment_name, meta_media_id
     )
-     VALUES ($1, $2, 'outgoing', $3, $4, $5, $6, $7, $8)
+     VALUES ($1, $2, 'outgoing', $3, $4, $5, $6, $7, $8, $9)
      RETURNING id, created_at`,
-    [req.params.id, req.user?.workspaceId, storedBody, req.user?.id, externalMessageId, attachmentUrl, attachmentType, attachmentName]
+    [req.params.id, req.user?.workspaceId, storedBody, req.user?.id, externalMessageId, attachmentUrl, attachmentType, attachmentName, whatsappMediaId]
   );
 
   await query(

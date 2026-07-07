@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
 import type { Conversation, KnowledgeArticle, Message, MessageScript } from "./model/types";
+import { MessageAudio } from "./ui/MessageAudio";
 
 type InboxThreadUi = {
   replyBox: string;
@@ -17,6 +18,7 @@ type InboxThreadUi = {
   typeMessage: string;
   attachFile: string;
   recordAudio: string;
+  voiceRecordingAppOnly: string;
   recordingAudio: string;
   sendVoice: string;
   cancelRecording: string;
@@ -52,6 +54,8 @@ type InboxThreadProps = {
   emojiOptions: readonly string[];
   emojiButtonIcon: string;
   getMediaUrl: (url: string) => string;
+  token: string | null;
+  voiceRecordingAvailable: boolean;
   onSetPriority: (conversationId: string, priority: string) => void;
   onOpenCustomerCard: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
@@ -103,6 +107,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     emojiOptions,
     emojiButtonIcon,
     getMediaUrl,
+    token,
+    voiceRecordingAvailable,
     onSetPriority,
     onOpenCustomerCard,
     onMessagesDragOver,
@@ -300,8 +306,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
       ) : (
         <button
           className="micFab"
-          disabled={uploadingMedia}
-          title={ui.recordAudio}
+          disabled={uploadingMedia || !voiceRecordingAvailable}
+          title={voiceRecordingAvailable ? ui.recordAudio : ui.voiceRecordingAppOnly}
           aria-label={ui.recordAudio}
           type="button"
           onPointerDown={handleMicPointerDown}
@@ -463,10 +469,14 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                     <source src={getMediaUrl(message.attachment_url)} />
                   </video>
                 ) : null}
-                {message.attachment_url && message.attachment_type === "audio" ? (
-                  <audio className="bubbleMedia bubbleMediaAudio" controls preload="metadata">
-                    <source src={getMediaUrl(message.attachment_url)} />
-                  </audio>
+                {message.attachment_type === "audio" && (message.attachment_url || message.meta_media_id) ? (
+                  <MessageAudio
+                    metaMediaId={message.meta_media_id}
+                    attachmentUrl={message.attachment_url}
+                    attachmentName={message.attachment_name}
+                    getMediaUrl={getMediaUrl}
+                    token={token}
+                  />
                 ) : null}
                 {message.attachment_url && message.attachment_type === "document" ? (
                   <a

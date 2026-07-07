@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 export function pickVoiceRecorderMimeType(): string {
   const candidates = ["audio/ogg;codecs=opus", "audio/ogg", "audio/mp4", ""];
   for (const type of candidates) {
@@ -63,4 +65,21 @@ export function formatRecordingDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+export function canRecordVoiceForWhatsApp(): boolean {
+  if (Capacitor.isNativePlatform()) {
+    return true;
+  }
+  if (typeof MediaRecorder === "undefined") {
+    return false;
+  }
+  const preferred = pickVoiceRecorderMimeType();
+  if (preferred && !preferred.includes("webm")) {
+    return true;
+  }
+  if (!preferred && MediaRecorder.isTypeSupported("audio/webm")) {
+    return false;
+  }
+  return Boolean(preferred);
 }

@@ -289,7 +289,9 @@ export async function sendMetaTextMessage(
   return typeof first?.id === "string" ? first.id : null;
 }
 
-export type MetaFileSendResult = { messageId: string } | { error: string; code: string };
+export type MetaFileSendResult =
+  | { messageId: string; mediaId: string }
+  | { error: string; code: string; mediaId?: string };
 
 export function resolveMetaUploadMimeType(fileName: string, mimeHint = ""): string | null {
   const lower = fileName.toLowerCase();
@@ -417,7 +419,7 @@ export async function sendMetaFileMessage(
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Meta WhatsApp file send failed: ${response.status} ${errorText}`);
-    return { error: "meta_message_send_failed", code: "meta_message_send_failed" };
+    return { error: "meta_message_send_failed", code: "meta_message_send_failed", mediaId };
   }
 
   const payload = (await response.json()) as JsonRecord;
@@ -425,9 +427,38 @@ export async function sendMetaFileMessage(
   const first = messages[0] as JsonRecord | undefined;
   const messageId = typeof first?.id === "string" ? first.id : null;
   if (!messageId) {
-    return { error: "meta_message_send_failed", code: "meta_message_send_failed" };
+    return { error: "meta_message_send_failed", code: "meta_message_send_failed", mediaId };
   }
-  return { messageId };
+  return { messageId, mediaId };
+}
+
+export async function downloadMetaMediaBuffer(
+  mediaId: string,
+  configOverride?: MetaCloudConfig | null
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const media = await resolveMetaMediaUrl(mediaId, configOverride);
+  if (!media) {
+    return null;
+  }
+
+  const config = configOverride ?? getMetaCloudConfig();
+  if (!config) {
+    return null;
+  }
+
+  const response = await fetch(media.url, {
+    headers: {
+      Authorization: `Bearer ${config.accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    console.error(`Meta WhatsApp media download failed: ${response.status}`);
+    return null;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return { buffer, mimeType: media.mimeType };
 }
 
 export async function resolveMetaMediaUrl(

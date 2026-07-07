@@ -14,6 +14,7 @@ import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import {
+  canRecordVoiceForWhatsApp,
   extensionForRecordedAudio,
   formatRecordingDuration,
   isAudioFile,
@@ -246,6 +247,8 @@ const UI = {
   emojis: "\u0421\u043c\u0430\u0439\u043b\u0438\u043a\u0438",
   attachFile: "\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u0444\u0430\u0439\u043b",
   recordAudio: "\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u043e\u0435",
+  voiceRecordingAppOnly:
+    "\u0413\u043e\u043b\u043e\u0441\u043e\u0432\u044b\u0435 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u043c\u043e\u0431\u0438\u043b\u044c\u043d\u043e\u043c \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0438 Light CRM",
   recordingAudio: "\u0417\u0430\u043f\u0438\u0441\u044c...",
   sendVoice: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441",
   cancelRecording: "\u041e\u0442\u043c\u0435\u043d\u0430",
@@ -562,6 +565,7 @@ export function App(): JSX.Element {
       attachmentUrl?: string | null;
       attachmentType?: "image" | "video" | "audio" | "document" | null;
       attachmentName?: string | null;
+      metaMediaId?: string | null;
       createdAt?: string;
     }) => {
       void loadConversations(token, search, filters, setConversations);
@@ -582,6 +586,7 @@ export function App(): JSX.Element {
               attachment_url: payload.attachmentUrl || null,
               attachment_type: payload.attachmentType || null,
               attachment_name: payload.attachmentName || null,
+              meta_media_id: payload.metaMediaId || null,
               created_at: payload.createdAt || new Date().toISOString()
             }
           ];
@@ -1247,6 +1252,11 @@ export function App(): JSX.Element {
 
     recordingStartingRef.current = true;
     setMediaUploadError("");
+    if (!canRecordVoiceForWhatsApp()) {
+      setMediaUploadError(UI.whatsappAudioFormatUnsupported);
+      recordingStartingRef.current = false;
+      return;
+    }
     try {
       const permission = await ensureMicrophonePermission();
       if (permission === "denied") {
@@ -2252,6 +2262,7 @@ export function App(): JSX.Element {
               typeMessage: UI.typeMessage,
               attachFile: UI.attachFile,
               recordAudio: UI.recordAudio,
+              voiceRecordingAppOnly: UI.voiceRecordingAppOnly,
               recordingAudio: UI.recordingAudio,
               sendVoice: UI.sendVoice,
               cancelRecording: UI.cancelRecording,
@@ -2284,6 +2295,8 @@ export function App(): JSX.Element {
             emojiOptions={EMOJI_OPTIONS}
             emojiButtonIcon={EMOJI_BUTTON_ICON}
             getMediaUrl={getMediaUrl}
+            token={token}
+            voiceRecordingAvailable={canRecordVoiceForWhatsApp()}
             onSetPriority={(conversationId, priority) => void updateConversationPriority(conversationId, priority)}
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
             onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}

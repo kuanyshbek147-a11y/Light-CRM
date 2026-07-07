@@ -135,6 +135,7 @@ export async function ensureUserLoginSchema(): Promise<void> {
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT`);
+  await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta_media_id TEXT`);
   await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS is_group BOOLEAN NOT NULL DEFAULT false`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pipeline_stages (

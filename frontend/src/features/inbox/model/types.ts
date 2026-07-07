@@ -30,6 +30,7 @@ export type Message = {
   attachment_url?: string | null;
   attachment_type?: "image" | "video" | "audio" | "document" | null;
   attachment_name?: string | null;
+  meta_media_id?: string | null;
   created_at: string;
 };
 

@@ -45,6 +45,7 @@ type NormalizedIncomingMessage = {
   attachmentUrl: string | null;
   attachmentType: "image" | "video" | "audio" | "document" | null;
   attachmentName: string | null;
+  metaMediaId: string | null;
 };
 
 const CHATAPP_API_BASE_URL = (process.env.CHATAPP_API_BASE_URL || "https://api.chatapp.online").replace(/\/+$/, "");
@@ -476,7 +477,7 @@ export async function sendWhatsAppFileForConversation(
   fileName: string,
   caption = "",
   mimeHint = ""
-): Promise<{ messageId: string | null; deliveryError?: string }> {
+): Promise<{ messageId: string | null; mediaId?: string | null; deliveryError?: string }> {
   const rows = await query<{ channel: string; external_id: string | null; phone: string }>(
     `SELECT c.channel, ct.external_id, ct.phone
      FROM conversations c
@@ -498,9 +499,9 @@ export async function sendWhatsAppFileForConversation(
       const metaConfig = await getMetaCloudConfigForWorkspace(workspaceId);
       const result = await sendMetaFileMessage(to, filePath, fileName, caption, metaConfig, mimeHint);
       if ("messageId" in result) {
-        return { messageId: result.messageId };
+        return { messageId: result.messageId, mediaId: result.mediaId };
       }
-      return { messageId: null, deliveryError: result.code };
+      return { messageId: null, mediaId: result.mediaId || null, deliveryError: result.code };
     } catch (error) {
       console.error("Meta WhatsApp file send failed with exception", error);
       return { messageId: null, deliveryError: "meta_message_send_failed" };
@@ -603,6 +604,7 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
     if (message.externalMessageId) {
       const mediaMeta = mediaMetaByMessage[message.externalMessageId];
       if (mediaMeta?.mediaId) {
+        message.metaMediaId = mediaMeta.mediaId;
         const stored = await downloadMetaMediaToUploads(mediaMeta.mediaId, metaConfig, mediaMeta.messageType);
         if (stored) {
           message.attachmentUrl = stored.url;
@@ -703,9 +705,9 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
 
     const inserted = await query<{ id: string; created_at: string }>(
       `INSERT INTO messages (
-         conversation_id, workspace_id, direction, body, external_message_id, attachment_url, attachment_type, attachment_name
+         conversation_id, workspace_id, direction, body, external_message_id, attachment_url, attachment_type, attachment_name, meta_media_id
        )
-       VALUES ($1, $2, 'incoming', $3, $4, $5, $6, $7)
+       VALUES ($1, $2, 'incoming', $3, $4, $5, $6, $7, $8)
        RETURNING id, created_at`,
       [
         conversationId,
@@ -714,7 +716,8 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
         message.externalMessageId,
         message.attachmentUrl,
         message.attachmentType,
-        message.attachmentName
+        message.attachmentName,
+        message.metaMediaId
       ]
     );
 
@@ -734,6 +737,7 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       attachmentUrl: message.attachmentUrl,
       attachmentType: message.attachmentType,
       attachmentName: message.attachmentName,
+      metaMediaId: message.metaMediaId,
       createdAt: inserted[0].created_at
     });
   }
@@ -951,7 +955,8 @@ function normalizeIncomingMessage(
     isGroup: Boolean(groupId),
     attachmentUrl: fileLink || null,
     attachmentType,
-    attachmentName: fileName || null
+    attachmentName: fileName || null,
+    metaMediaId: null
   };
 }
 
