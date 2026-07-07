@@ -186,8 +186,8 @@ const UI = {
   signIn: "\u0412\u043e\u0439\u0442\u0438",
   loginFailed: "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c",
   demoOperatorHint: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440: \u043b\u043e\u0433\u0438\u043d operator, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
-  demoAdminHint:
-    "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123. \u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
+  demoAdminHint: "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
+  demoSuperAdminHint: "\u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
   sessionRestoring: "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...",
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
@@ -1789,36 +1789,59 @@ export function App(): JSX.Element {
 
   if (!token) {
     return (
-      <main className="landingPage">
+      <main className="landingPage landingPageModern">
         <section className="landingHero">
           <div className="landingBadge">{UI.landingBadge}</div>
           <h1 className="landingTitle">{UI.landingTitle}</h1>
           <p className="landingSubtitle">{UI.landingSubtitle}</p>
 
           <div className="landingHighlights">
-            <div className="landingHighlightCard">
-              <strong>{UI.unifiedInbox}</strong>
-              <span>{UI.unifiedInboxHint}</span>
+            <div className="landingFeatureCard">
+              <div className="landingFeatureIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 6h16v12H4V6z" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="landingFeatureText">
+                <strong>{UI.unifiedInbox}</strong>
+                <span>{UI.unifiedInboxHint}</span>
+              </div>
             </div>
-            <div className="landingHighlightCard">
-              <strong>{UI.smartCohorts}</strong>
-              <span>{UI.smartCohortsHint}</span>
+            <div className="landingFeatureCard">
+              <div className="landingFeatureIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 6h6l2 3h8v9H4V6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div className="landingFeatureText">
+                <strong>{UI.smartCohorts}</strong>
+                <span>{UI.smartCohortsHint}</span>
+              </div>
             </div>
-            <div className="landingHighlightCard">
-              <strong>{UI.fastReplies}</strong>
-              <span>{UI.fastRepliesHint}</span>
+            <div className="landingFeatureCard">
+              <div className="landingFeatureIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M6 8h12v8H6V8z" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M9 12h6M9 15h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="landingFeatureText">
+                <strong>{UI.fastReplies}</strong>
+                <span>{UI.fastRepliesHint}</span>
+              </div>
             </div>
           </div>
         </section>
 
-        <aside className="loginCard">
-          <div className="loginCardTop">
-            <div className="brand">
-              <div className="brandMark" />
-              <div className="brandText">
-                <div className="brandTitle">{UI.brandTitle}</div>
-                <div className="brandSubtitle">{UI.demoAccess}</div>
-              </div>
+        <aside className="loginCard loginCardModern">
+          <div className="loginCardBrandRow">
+            <div className="loginBrandMark" aria-hidden="true">
+              ⚡
+            </div>
+            <div className="loginBrandText">
+              <div className="loginBrandTitle">{UI.brandTitle}</div>
+              <div className="loginBrandSubtitle">{UI.demoAccess}</div>
             </div>
           </div>
 
@@ -1830,7 +1853,7 @@ export function App(): JSX.Element {
                 <span className="loginFieldLabel">{UI.loginLabel}</span>
                 <input
                   ref={loginInputRef}
-                  className="loginInput"
+                  className="loginInput loginInputModern"
                   type="text"
                   autoComplete="username"
                   value={loginInput}
@@ -1842,7 +1865,7 @@ export function App(): JSX.Element {
                 <span className="loginFieldLabel">{UI.password}</span>
                 <input
                   ref={passwordInputRef}
-                  className="loginInput"
+                  className="loginInput loginInputModern"
                   type="password"
                   autoComplete="current-password"
                   value={passwordInput}
@@ -1856,18 +1879,21 @@ export function App(): JSX.Element {
                 />
               </label>
               {loginError ? <p className="loginError">{loginError}</p> : null}
-              <button
-                className="landingButton"
-                type="button"
-                onClick={() => void login()}
-              >
+              <button className="landingButton landingButtonModern" type="button" onClick={() => void login()}>
                 {UI.signIn}
               </button>
             </div>
 
-            <div className="demoCredentials">
-              <span>{UI.demoOperatorHint}</span>
-              <span>{UI.demoAdminHint}</span>
+            <div className="demoCredentials demoCredentialsModern">
+              <p>
+                <strong>Оператор:</strong> логин operator, пароль demo123
+              </p>
+              <p>
+                <strong>Админ:</strong> логин admin или admin@demo.local, пароль demo123
+              </p>
+              <p>
+                <strong>Супер-админ:</strong> superadmin / superadmin123
+              </p>
             </div>
           </div>
         </aside>
