@@ -423,42 +423,59 @@ button {
   color: #64748b;
   padding: 0 4px;
   white-space: nowrap;
-  overflow: hidden;
-  transition: opacity 0.15s ease, max-width 0.2s ease;
-  max-width: 140px;
 }
 
-.appShell.leftMenuCollapsed .leftMenuTitle {
-  opacity: 0;
-  max-width: 0;
-  padding: 0;
-  pointer-events: none;
+.leftMenuTitleButton {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+  min-height: 32px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.leftMenuTitleButton:hover {
+  color: #4338ca;
+  background: #f3f5ff;
 }
 
 .appShell.leftMenuCollapsed .leftMenuHeader {
   justify-content: center;
 }
 
-.leftMenuCollapseBtn {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid #e5e9f5;
-  background: #fff;
+.leftMenuBurgerBtn {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
   color: #5b628f;
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.leftMenuCollapseBtn:hover {
+.leftMenuBurgerBtn:hover {
   background: #f3f5ff;
-  border-color: #cfd6ff;
-  color: #4338ca;
+  border-color: #dfe3ff;
+}
+
+.leftMenuBurgerIcon {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 18px;
+}
+
+.leftMenuBurgerIcon span {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
 }
 
 .leftMenuButton {

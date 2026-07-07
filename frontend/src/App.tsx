@@ -2204,17 +2204,33 @@ export function App(): JSX.Element {
       <main className="workspaceLayout">
         <aside className="leftMenu card">
           <div className="leftMenuHeader">
-            <div className="leftMenuTitle">{UI.workspaceMenu}</div>
-            <button
-              type="button"
-              className="leftMenuCollapseBtn"
-              onClick={() => setLeftMenuCollapsed((collapsed) => !collapsed)}
-              title={leftMenuCollapsedEffective ? UI.expandMenu : UI.collapseMenu}
-              aria-label={leftMenuCollapsedEffective ? UI.expandMenu : UI.collapseMenu}
-              aria-expanded={!leftMenuCollapsedEffective}
-            >
-              {leftMenuCollapsedEffective ? "\u00BB" : "\u00AB"}
-            </button>
+            {leftMenuCollapsedEffective ? (
+              <button
+                type="button"
+                className="leftMenuBurgerBtn"
+                onClick={() => setLeftMenuCollapsed(false)}
+                title={UI.expandMenu}
+                aria-label={UI.expandMenu}
+                aria-expanded={false}
+              >
+                <span className="leftMenuBurgerIcon" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="leftMenuTitle leftMenuTitleButton"
+                onClick={() => setLeftMenuCollapsed(true)}
+                title={UI.collapseMenu}
+                aria-label={UI.collapseMenu}
+                aria-expanded
+              >
+                {UI.workspaceMenu}
+              </button>
+            )}
           </div>
           {isSuperAdminUser(sessionUser) ? (
             <button
