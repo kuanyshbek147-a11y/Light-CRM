@@ -163,7 +163,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     const heldMs = Date.now() - micHoldStartedAtRef.current;
-    if (heldMs >= 500) {
+    if (heldMs >= 400) {
       onStopAndSendAudioRecording();
     }
   }

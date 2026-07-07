@@ -608,7 +608,19 @@ conversationsRouter.patch("/:id/contact", async (req: AuthRequest, res) => {
   res.json(rows[0] || null);
 });
 
-conversationsRouter.post("/:id/messages", upload.single("file"), async (req: AuthRequest, res) => {
+conversationsRouter.post("/:id/messages", (req, res, next) => {
+  upload.single("file")(req, res, (error) => {
+    if (error) {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        res.status(400).json({ error: "file_too_large" });
+        return;
+      }
+      res.status(400).json({ error: "invalid_file" });
+      return;
+    }
+    next();
+  });
+}, async (req: AuthRequest, res) => {
   const body = typeof req.body?.body === "string" ? req.body.body : "";
   const file = req.file;
   const uploadMimeType = file ? resolveUploadMimeType(file) : "";
@@ -625,6 +637,11 @@ conversationsRouter.post("/:id/messages", upload.single("file"), async (req: Aut
   }
 
   const workspaceId = req.user?.workspaceId || "";
+  const conversationRows = await query<{ channel: string }>(
+    `SELECT channel FROM conversations WHERE id = $1 AND workspace_id = $2`,
+    [req.params.id, workspaceId]
+  );
+  const conversationChannel = conversationRows[0]?.channel || "";
   const whatsappTextMessageId = body.trim() && !file
     ? await sendWhatsAppMessageForConversation(req.params.id, workspaceId, body)
     : null;
@@ -664,7 +681,13 @@ conversationsRouter.post("/:id/messages", upload.single("file"), async (req: Aut
     ]
   );
 
-  res.status(201).json(inserted[0]);
+  const whatsappDeliveryFailed =
+    conversationChannel === "whatsapp" && Boolean(file) && !whatsappFileMessageId && !whatsappTextMessageId;
+
+  res.status(201).json({
+    ...inserted[0],
+    whatsappDeliveryFailed
+  });
 });
 
 async function createSlaFollowUpTaskIfNeeded(

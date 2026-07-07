@@ -260,6 +260,10 @@ const UI = {
     "\u041c\u043e\u0436\u043d\u043e \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0438, \u0432\u0438\u0434\u0435\u043e \u0438 \u0430\u0443\u0434\u0438\u043e.",
   mediaFileTooLarge: "\u0424\u0430\u0439\u043b \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u043e\u0439. \u041c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 20 \u041c\u0411.",
   mediaUploadFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b.",
+  recordingStartFailed:
+    "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043d\u0430\u0447\u0430\u0442\u044c \u0437\u0430\u043f\u0438\u0441\u044c. \u0423\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0439\u0442\u0435 \u043c\u0438\u043a\u0440\u043e\u0444\u043e\u043d \u0447\u0443\u0442\u044c \u0434\u043e\u043b\u044c\u0448\u0435.",
+  whatsappDeliveryFailed:
+    "\u0424\u0430\u0439\u043b \u0441\u043e\u0445\u0440\u0430\u043d\u0451\u043d \u0432 CRM, \u043d\u043e \u043d\u0435 \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d \u0432 WhatsApp.",
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
   send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
   selectChatHint: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0432 \u0441\u043f\u0438\u0441\u043a\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432, \u0447\u0442\u043e\u0431\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443.",
@@ -376,6 +380,42 @@ function isSuperAdminUser(user: SessionUser | null | undefined): boolean {
   return user?.role === "superadmin";
 }
 
+const MIN_VOICE_RECORDING_MS = 900;
+const RECORDING_READY_TIMEOUT_MS = 5000;
+
+async function waitUntilRecordingActive(
+  nativeRecordingRef: { current: boolean },
+  mediaRecorderRef: { current: MediaRecorder | null },
+  timeoutMs: number
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (nativeRecordingRef.current) {
+      return true;
+    }
+    const state = mediaRecorderRef.current?.state;
+    if (state === "recording" || state === "paused") {
+      return true;
+    }
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 50);
+    });
+  }
+  return nativeRecordingRef.current || mediaRecorderRef.current?.state === "recording";
+}
+
+async function waitMinimumRecordingDuration(startedAt: number | null, minMs: number): Promise<void> {
+  if (!startedAt) {
+    return;
+  }
+  const elapsed = Date.now() - startedAt;
+  if (elapsed < minMs) {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, minMs - elapsed);
+    });
+  }
+}
+
 export function App(): JSX.Element {
   const initialSession = readStoredSession();
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -403,6 +443,9 @@ export function App(): JSX.Element {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
   const nativeRecordingRef = useRef<boolean>(false);
+  const recordingStartingRef = useRef<boolean>(false);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const stopAndSendInProgressRef = useRef<boolean>(false);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
@@ -1114,7 +1157,16 @@ export function App(): JSX.Element {
 
     const payload = new FormData();
     payload.append("body", messageBody.trim());
-    payload.append("file", normalizedFile, normalizedFile.name);
+    if (isNativeApp()) {
+      const arrayBuffer = await normalizedFile.arrayBuffer();
+      payload.append(
+        "file",
+        new Blob([arrayBuffer], { type: normalizedFile.type || "application/octet-stream" }),
+        normalizedFile.name
+      );
+    } else {
+      payload.append("file", normalizedFile, normalizedFile.name);
+    }
     setUploadingMedia(true);
 
     try {
@@ -1125,10 +1177,17 @@ export function App(): JSX.Element {
       });
       if (!response.ok) {
         const errorPayload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setMediaUploadError(errorPayload?.error === "body_or_file_required" ? UI.mediaUploadFailed : UI.mediaUploadFailed);
+        if (errorPayload?.error === "file_too_large") {
+          setMediaUploadError(UI.mediaFileTooLarge);
+        } else if (errorPayload?.error === "invalid_file") {
+          setMediaUploadError(UI.unsupportedMediaFormat);
+        } else {
+          setMediaUploadError(UI.mediaUploadFailed);
+        }
         return;
       }
 
+      const result = (await response.json()) as { whatsappDeliveryFailed?: boolean };
       setMessageBody("");
       setEmojiPickerOpen(false);
       await refreshAfterMessage({
@@ -1142,6 +1201,9 @@ export function App(): JSX.Element {
         setMetrics,
         loadMetrics
       });
+      if (result.whatsappDeliveryFailed) {
+        setMediaUploadError(UI.whatsappDeliveryFailed);
+      }
     } catch {
       setMediaUploadError(UI.mediaUploadFailed);
     } finally {
@@ -1161,30 +1223,65 @@ export function App(): JSX.Element {
     setRecordingAudio(false);
     setRecordingSeconds(0);
     audioChunksRef.current = [];
+    recordingStartedAtRef.current = null;
   }
 
   async function startAudioRecording(): Promise<void> {
-    if (!selectedConversation || uploadingMedia || recordingAudio) {
+    if (!selectedConversation || uploadingMedia || recordingAudio || recordingStartingRef.current) {
       return;
     }
 
+    recordingStartingRef.current = true;
     setMediaUploadError("");
-    const permission = await ensureMicrophonePermission();
-    if (permission === "denied") {
-      setMediaUploadError(UI.microphonePermissionDenied);
-      return;
-    }
-    if (permission === "unavailable" && !isNativeApp()) {
+    try {
+      const permission = await ensureMicrophonePermission();
+      if (permission === "denied") {
+        setMediaUploadError(UI.microphonePermissionDenied);
+        return;
+      }
+      if (permission === "unavailable" && !isNativeApp()) {
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+          setMediaUploadError(UI.microphoneUnavailable);
+          return;
+        }
+      }
+
+      if (isNativeApp()) {
+        try {
+          await startNativeVoiceRecording();
+          nativeRecordingRef.current = true;
+          recordingStartedAtRef.current = Date.now();
+          setRecordingAudio(true);
+          setRecordingSeconds(0);
+          recordingTimerRef.current = window.setInterval(() => {
+            setRecordingSeconds((prev) => prev + 1);
+          }, 1000);
+        } catch {
+          stopRecordingStream();
+          setMediaUploadError(UI.microphoneUnavailable);
+        }
+        return;
+      }
+
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         setMediaUploadError(UI.microphoneUnavailable);
         return;
       }
-    }
 
-    if (isNativeApp()) {
       try {
-        await startNativeVoiceRecording();
-        nativeRecordingRef.current = true;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = pickVoiceRecorderMimeType();
+        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+        recorder.start();
+        mediaRecorderRef.current = recorder;
+        recordingStreamRef.current = stream;
+        recordingStartedAtRef.current = Date.now();
         setRecordingAudio(true);
         setRecordingSeconds(0);
         recordingTimerRef.current = window.setInterval(() => {
@@ -1194,35 +1291,8 @@ export function App(): JSX.Element {
         stopRecordingStream();
         setMediaUploadError(UI.microphoneUnavailable);
       }
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setMediaUploadError(UI.microphoneUnavailable);
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = pickVoiceRecorderMimeType();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      recordingStreamRef.current = stream;
-      setRecordingAudio(true);
-      setRecordingSeconds(0);
-      recordingTimerRef.current = window.setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
-    } catch {
-      stopRecordingStream();
-      setMediaUploadError(UI.microphoneUnavailable);
+    } finally {
+      recordingStartingRef.current = false;
     }
   }
 
@@ -1250,44 +1320,67 @@ export function App(): JSX.Element {
   }
 
   async function stopAndSendAudioRecording(): Promise<void> {
-    if (nativeRecordingRef.current) {
-      try {
-        const file = await stopNativeVoiceRecording();
+    if (stopAndSendInProgressRef.current) {
+      return;
+    }
+    stopAndSendInProgressRef.current = true;
+    try {
+      const ready = await waitUntilRecordingActive(
+        nativeRecordingRef,
+        mediaRecorderRef,
+        RECORDING_READY_TIMEOUT_MS
+      );
+      if (!ready) {
+        setMediaUploadError(UI.recordingStartFailed);
         stopRecordingStream();
-        if (file.size < 1) {
-          setMediaUploadError(UI.mediaUploadFailed);
-          return;
-        }
-        await sendMediaFile(file);
-      } catch {
-        stopRecordingStream();
-        setMediaUploadError(UI.mediaUploadFailed);
+        return;
       }
-      return;
+
+      await waitMinimumRecordingDuration(recordingStartedAtRef.current, MIN_VOICE_RECORDING_MS);
+
+      if (nativeRecordingRef.current) {
+        try {
+          const file = await stopNativeVoiceRecording();
+          stopRecordingStream();
+          if (file.size < 1) {
+            setMediaUploadError(UI.mediaUploadFailed);
+            return;
+          }
+          await sendMediaFile(file);
+        } catch {
+          stopRecordingStream();
+          setMediaUploadError(UI.mediaUploadFailed);
+        }
+        return;
+      }
+
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === "inactive") {
+        setMediaUploadError(UI.mediaUploadFailed);
+        stopRecordingStream();
+        return;
+      }
+
+      await new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve();
+        recorder.stop();
+      });
+
+      const mimeType = recorder.mimeType || "audio/webm";
+      const blob = new Blob(audioChunksRef.current, { type: mimeType });
+      const extension = extensionForRecordedAudio(mimeType);
+      const file = normalizeVoiceFile(new File([blob], `voice-${Date.now()}.${extension}`, { type: mimeType }));
+      stopRecordingStream();
+
+      if (file.size < 1) {
+        setMediaUploadError(UI.mediaUploadFailed);
+        return;
+      }
+
+      await sendMediaFile(file);
+    } finally {
+      stopAndSendInProgressRef.current = false;
     }
-
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === "inactive") {
-      return;
-    }
-
-    await new Promise<void>((resolve) => {
-      recorder.onstop = () => resolve();
-      recorder.stop();
-    });
-
-    const mimeType = recorder.mimeType || "audio/webm";
-    const blob = new Blob(audioChunksRef.current, { type: mimeType });
-    const extension = extensionForRecordedAudio(mimeType);
-    const file = normalizeVoiceFile(new File([blob], `voice-${Date.now()}.${extension}`, { type: mimeType }));
-    stopRecordingStream();
-
-    if (file.size < 1) {
-      setMediaUploadError(UI.mediaUploadFailed);
-      return;
-    }
-
-    await sendMediaFile(file);
   }
 
   useEffect(() => {

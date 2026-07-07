@@ -38,6 +38,9 @@ export function isAudioFile(file: File): boolean {
 
 export function normalizeVoiceFile(file: File): File {
   const type = file.type.toLowerCase();
+  if (type === "audio/aac" || type === "audio/x-m4a") {
+    return new File([file], file.name, { type: "audio/mp4", lastModified: file.lastModified });
+  }
   if (type.startsWith("audio/") && type !== "application/octet-stream") {
     return file;
   }

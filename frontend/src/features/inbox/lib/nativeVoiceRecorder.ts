@@ -24,7 +24,7 @@ export async function stopNativeVoiceRecording(): Promise<File> {
   }
   const { Microphone } = await import("@mozartec/capacitor-microphone");
   const recording = await Microphone.stopRecording();
-  const extension = recording.format || "m4a";
+  const extension = (recording.format || "m4a").replace(/^\./, "");
   const mimeType = recording.mimeType || mimeTypeFromAudioFileName(`voice.${extension}`);
   const fileName = `voice-${Date.now()}.${extension}`;
 
