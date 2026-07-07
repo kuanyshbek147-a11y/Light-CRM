@@ -16,6 +16,10 @@ type InboxThreadUi = {
   emojis: string;
   typeMessage: string;
   attachFile: string;
+  recordAudio: string;
+  recordingAudio: string;
+  sendVoice: string;
+  cancelRecording: string;
   uploadingMedia: string;
   send: string;
   selectChatHint: string;
@@ -41,6 +45,8 @@ type InboxThreadProps = {
   selectedScriptId: string;
   messageBody: string;
   uploadingMedia: boolean;
+  recordingAudio: boolean;
+  recordingDurationLabel: string;
   mediaUploadError: string;
   emojiPickerOpen: boolean;
   emojiOptions: readonly string[];
@@ -61,6 +67,9 @@ type InboxThreadProps = {
   onToggleEmojiPicker: () => void;
   onMessageBodyChange: (value: string) => void;
   onPickFile: (file: File) => void;
+  onStartAudioRecording: () => void;
+  onStopAndSendAudioRecording: () => void;
+  onCancelAudioRecording: () => void;
   onSendMessage: () => void;
   onAppendEmoji: (emoji: string) => void;
   onAcknowledgeSlaEscalation: (conversationId: string) => void;
@@ -86,6 +95,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     selectedScriptId,
     messageBody,
     uploadingMedia,
+    recordingAudio,
+    recordingDurationLabel,
     mediaUploadError,
     emojiPickerOpen,
     emojiOptions,
@@ -106,6 +117,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onToggleEmojiPicker,
     onMessageBodyChange,
     onPickFile,
+    onStartAudioRecording,
+    onStopAndSendAudioRecording,
+    onCancelAudioRecording,
     onSendMessage,
     onAppendEmoji,
     onAcknowledgeSlaEscalation,
@@ -217,7 +231,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
           >
             {messages.map((message) => (
               <div key={message.id} className={`bubble ${message.direction}`}>
-                {message.body ? <div className="bubbleBody">{message.body}</div> : null}
+                {message.body && !(message.attachment_type === "audio" && message.body === "[Голосовое сообщение]") ? (
+                  <div className="bubbleBody">{message.body}</div>
+                ) : null}
                 {message.attachment_url && message.attachment_type === "image" ? (
                   <a href={getMediaUrl(message.attachment_url)} target="_blank" rel="noreferrer">
                     <img
@@ -355,7 +371,27 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             ) : null}
           </div>
 
-          <div className="composer">
+          <div className={`composer ${recordingAudio ? "composerRecording" : ""}`}>
+            {recordingAudio ? (
+              <div className="recordingBar">
+                <span className="recordingDot" aria-hidden="true" />
+                <span className="recordingLabel">
+                  {ui.recordingAudio} {recordingDurationLabel}
+                </span>
+                <button type="button" className="secondaryButton recordingCancelButton" onClick={onCancelAudioRecording}>
+                  {ui.cancelRecording}
+                </button>
+                <button
+                  type="button"
+                  className="primaryButton recordingSendButton"
+                  onClick={onStopAndSendAudioRecording}
+                  disabled={uploadingMedia}
+                >
+                  {uploadingMedia ? ui.uploadingMedia : ui.sendVoice}
+                </button>
+              </div>
+            ) : (
+              <>
             <div className="composerInputWrap" ref={emojiPickerRef}>
               <button
                 type="button"
@@ -382,7 +418,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               <input
                     ref={fileInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept="image/*,video/*,audio/*"
                 className="hiddenFileInput"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -414,6 +450,31 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                   </svg>
                 )}
               </button>
+              <button
+                type="button"
+                className="emojiButton micButton"
+                title={ui.recordAudio}
+                aria-label={ui.recordAudio}
+                onClick={onStartAudioRecording}
+                disabled={uploadingMedia}
+              >
+                <svg className="micIcon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 14a3 3 0 003-3V6a3 3 0 10-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-10 0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M5 11a7 7 0 0014 0M12 18v3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
               {emojiPickerOpen ? (
                 <div className="emojiPicker">
                   {emojiOptions.map((emoji) => (
@@ -429,9 +490,11 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 </div>
               ) : null}
             </div>
-            <button className="primaryButton" onClick={onSendMessage} disabled={uploadingMedia}>
+            <button className="primaryButton" onClick={onSendMessage} disabled={uploadingMedia || !messageBody.trim()}>
               {uploadingMedia ? ui.uploadingMedia : ui.send}
             </button>
+              </>
+            )}
             {mediaUploadError ? <div className="composerError">{mediaUploadError}</div> : null}
           </div>
         </>

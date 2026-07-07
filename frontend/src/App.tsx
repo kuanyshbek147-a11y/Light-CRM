@@ -13,6 +13,11 @@ import {
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
 import {
+  extensionForRecordedAudio,
+  formatRecordingDuration,
+  pickVoiceRecorderMimeType
+} from "./features/inbox/lib/voiceRecorder";
+import {
   assignConversationManager as apiAssignConversationManager,
   acknowledgeSlaEscalation as apiAcknowledgeSlaEscalation,
   createConversationTask,
@@ -224,9 +229,15 @@ const UI = {
   typeMessage: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435...",
   emojis: "\u0421\u043c\u0430\u0439\u043b\u0438\u043a\u0438",
   attachFile: "\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u0444\u0430\u0439\u043b",
+  recordAudio: "\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u043e\u0435",
+  recordingAudio: "\u0417\u0430\u043f\u0438\u0441\u044c...",
+  sendVoice: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0433\u043e\u043b\u043e\u0441",
+  cancelRecording: "\u041e\u0442\u043c\u0435\u043d\u0430",
+  microphoneUnavailable: "\u041c\u0438\u043a\u0440\u043e\u0444\u043e\u043d \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d. \u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0434\u043e\u0441\u0442\u0443\u043f \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u0438\u043b\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f.",
   dropMediaHint: "\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0443 \u0438\u043b\u0438 \u0432\u0438\u0434\u0435\u043e \u0441\u044e\u0434\u0430",
   uploadingMedia: "\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430...",
-  unsupportedMediaFormat: "\u041c\u043e\u0436\u043d\u043e \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0438 \u0438 \u0432\u0438\u0434\u0435\u043e.",
+  unsupportedMediaFormat:
+    "\u041c\u043e\u0436\u043d\u043e \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u043a\u0430\u0440\u0442\u0438\u043d\u043a\u0438, \u0432\u0438\u0434\u0435\u043e \u0438 \u0430\u0443\u0434\u0438\u043e.",
   mediaFileTooLarge: "\u0424\u0430\u0439\u043b \u0441\u043b\u0438\u0448\u043a\u043e\u043c \u0431\u043e\u043b\u044c\u0448\u043e\u0439. \u041c\u0430\u043a\u0441\u0438\u043c\u0443\u043c 20 \u041c\u0411.",
   mediaUploadFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0444\u0430\u0439\u043b.",
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
@@ -365,6 +376,12 @@ export function App(): JSX.Element {
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>(false);
   const [isDragOverMessages, setIsDragOverMessages] = useState<boolean>(false);
   const [uploadingMedia, setUploadingMedia] = useState<boolean>(false);
+  const [recordingAudio, setRecordingAudio] = useState<boolean>(false);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
@@ -1011,7 +1028,7 @@ export function App(): JSX.Element {
   }
 
   async function sendMessage(): Promise<void> {
-    if (!messageBody.trim() || !selectedConversation || !token || uploadingMedia) {
+    if (!messageBody.trim() || !selectedConversation || !token || uploadingMedia || recordingAudio) {
       return;
     }
 
@@ -1053,7 +1070,10 @@ export function App(): JSX.Element {
       return;
     }
     setMediaUploadError("");
-    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+    const isAudio = file.type.startsWith("audio/");
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isAudio && !isImage && !isVideo) {
       setMediaUploadError(UI.unsupportedMediaFormat);
       return;
     }
@@ -1097,6 +1117,101 @@ export function App(): JSX.Element {
       setUploadingMedia(false);
     }
   }
+
+  function stopRecordingStream(): void {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    mediaRecorderRef.current = null;
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setRecordingAudio(false);
+    setRecordingSeconds(0);
+    audioChunksRef.current = [];
+  }
+
+  async function startAudioRecording(): Promise<void> {
+    if (!selectedConversation || uploadingMedia || recordingAudio) {
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMediaUploadError(UI.microphoneUnavailable);
+      return;
+    }
+
+    setMediaUploadError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = pickVoiceRecorderMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      recordingStreamRef.current = stream;
+      setRecordingAudio(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      stopRecordingStream();
+      setMediaUploadError(UI.microphoneUnavailable);
+    }
+  }
+
+  function cancelAudioRecording(): void {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = () => stopRecordingStream();
+      recorder.stop();
+      return;
+    }
+    stopRecordingStream();
+  }
+
+  async function stopAndSendAudioRecording(): Promise<void> {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+      recorder.stop();
+    });
+
+    const mimeType = recorder.mimeType || "audio/webm";
+    const blob = new Blob(audioChunksRef.current, { type: mimeType });
+    const extension = extensionForRecordedAudio(mimeType);
+    const file = new File([blob], `voice-${Date.now()}.${extension}`, { type: mimeType });
+    stopRecordingStream();
+
+    if (file.size < 1) {
+      setMediaUploadError(UI.mediaUploadFailed);
+      return;
+    }
+
+    await sendMediaFile(file);
+  }
+
+  useEffect(() => {
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (recordingTimerRef.current) {
+        window.clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, [selectedConversation]);
 
   function getMediaUrl(attachmentUrl: string): string {
     if (attachmentUrl.startsWith("http://") || attachmentUrl.startsWith("https://")) {
@@ -1882,6 +1997,10 @@ export function App(): JSX.Element {
               emojis: UI.emojis,
               typeMessage: UI.typeMessage,
               attachFile: UI.attachFile,
+              recordAudio: UI.recordAudio,
+              recordingAudio: UI.recordingAudio,
+              sendVoice: UI.sendVoice,
+              cancelRecording: UI.cancelRecording,
               uploadingMedia: UI.uploadingMedia,
               send: UI.send,
               selectChatHint: UI.selectChatHint,
@@ -1904,6 +2023,8 @@ export function App(): JSX.Element {
             selectedScriptId={selectedScriptId}
             messageBody={messageBody}
             uploadingMedia={uploadingMedia}
+            recordingAudio={recordingAudio}
+            recordingDurationLabel={formatRecordingDuration(recordingSeconds)}
             mediaUploadError={mediaUploadError}
             emojiPickerOpen={emojiPickerOpen}
             emojiOptions={EMOJI_OPTIONS}
@@ -1966,6 +2087,9 @@ export function App(): JSX.Element {
             onPickFile={(file) => {
               void sendMediaFile(file);
             }}
+            onStartAudioRecording={() => void startAudioRecording()}
+            onStopAndSendAudioRecording={() => void stopAndSendAudioRecording()}
+            onCancelAudioRecording={() => cancelAudioRecording()}
             onSendMessage={() => void sendMessage()}
             onAppendEmoji={(emoji) => {
               setMessageBody((prev) => `${prev}${emoji}`);

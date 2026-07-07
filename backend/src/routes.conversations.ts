@@ -20,8 +20,28 @@ const allowedMimeTypes = new Set([
   "image/gif",
   "video/mp4",
   "video/webm",
-  "video/quicktime"
+  "video/quicktime",
+  "audio/ogg",
+  "audio/ogg; codecs=opus",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/aac",
+  "audio/webm",
+  "audio/amr"
 ]);
+
+function resolveAttachmentType(mimeType: string): "image" | "video" | "audio" | null {
+  if (mimeType.startsWith("video/")) {
+    return "video";
+  }
+  if (mimeType.startsWith("image/")) {
+    return "image";
+  }
+  if (mimeType.startsWith("audio/")) {
+    return "audio";
+  }
+  return null;
+}
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -34,7 +54,13 @@ const upload = multer({
   }),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    cb(null, allowedMimeTypes.has(file.mimetype));
+    const mime = file.mimetype.toLowerCase();
+    const allowed =
+      allowedMimeTypes.has(mime) ||
+      mime.startsWith("audio/") ||
+      mime.startsWith("image/") ||
+      mime.startsWith("video/");
+    cb(null, allowed);
   }
 });
 
@@ -549,11 +575,14 @@ conversationsRouter.patch("/:id/contact", async (req: AuthRequest, res) => {
 conversationsRouter.post("/:id/messages", upload.single("file"), async (req: AuthRequest, res) => {
   const body = typeof req.body?.body === "string" ? req.body.body : "";
   const file = req.file;
-  const attachmentType = file?.mimetype?.startsWith("video/") ? "video" : file?.mimetype?.startsWith("image/") ? "image" : null;
+  const attachmentType = file ? resolveAttachmentType(file.mimetype) : null;
   const attachmentUrl = file ? `/uploads/${file.filename}` : null;
   const attachmentName = file?.originalname || null;
+  const storedBody =
+    body.trim() ||
+    (attachmentType === "audio" ? "[Голосовое сообщение]" : attachmentType ? "[Медиа]" : "");
 
-  if (!body.trim() && !file) {
+  if (!storedBody.trim() && !file) {
     res.status(400).json({ error: "body_or_file_required" });
     return;
   }
@@ -576,7 +605,7 @@ conversationsRouter.post("/:id/messages", upload.single("file"), async (req: Aut
     )
      VALUES ($1, $2, 'outgoing', $3, $4, $5, $6, $7, $8)
      RETURNING id, created_at`,
-    [req.params.id, req.user?.workspaceId, body, req.user?.id, externalMessageId, attachmentUrl, attachmentType, attachmentName]
+    [req.params.id, req.user?.workspaceId, storedBody, req.user?.id, externalMessageId, attachmentUrl, attachmentType, attachmentName]
   );
 
   await query(

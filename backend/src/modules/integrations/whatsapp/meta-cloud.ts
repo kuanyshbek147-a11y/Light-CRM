@@ -302,8 +302,8 @@ export async function sendMetaFileMessage(
   }
 
   const fileBuffer = await readFile(filePath);
-  const mimeType = guessMimeType(fileName);
-  const mediaType = mimeType.startsWith("video/") ? "video" : "image";
+  const mimeType = guessMimeType(fileName, filePath);
+  const mediaType = resolveMetaOutboundMediaType(mimeType);
   const uploadForm = new FormData();
   uploadForm.append("messaging_product", "whatsapp");
   uploadForm.append("type", mimeType);
@@ -334,10 +334,13 @@ export async function sendMetaFileMessage(
     recipient_type: "individual",
     to: normalizeWhatsAppRecipient(to),
     type: mediaType,
-    [mediaType]: {
-      id: mediaId,
-      ...(caption.trim() ? { caption: caption.trim() } : {})
-    }
+    [mediaType]:
+      mediaType === "audio"
+        ? { id: mediaId }
+        : {
+            id: mediaId,
+            ...(caption.trim() ? { caption: caption.trim() } : {})
+          }
   };
 
   const response = await fetch(metaMessagesUrl(config), {
@@ -619,8 +622,23 @@ function normalizeWhatsAppRecipient(value: string): string {
   return value.replace(/\D/g, "");
 }
 
-function guessMimeType(fileName: string): string {
+function guessMimeType(fileName: string, filePath = ""): string {
   const lower = fileName.toLowerCase();
+  if (lower.endsWith(".ogg")) {
+    return "audio/ogg";
+  }
+  if (lower.endsWith(".opus")) {
+    return "audio/ogg; codecs=opus";
+  }
+  if (lower.endsWith(".mp3")) {
+    return "audio/mpeg";
+  }
+  if (lower.endsWith(".m4a") || lower.endsWith(".aac")) {
+    return "audio/mp4";
+  }
+  if (lower.endsWith(".webm") && filePath.toLowerCase().includes("voice")) {
+    return "audio/webm";
+  }
   if (lower.endsWith(".png")) {
     return "image/png";
   }
@@ -636,5 +654,19 @@ function guessMimeType(fileName: string): string {
   if (lower.endsWith(".mov")) {
     return "video/quicktime";
   }
+  if (lower.endsWith(".webm")) {
+    return "video/webm";
+  }
   return "image/jpeg";
+}
+
+function resolveMetaOutboundMediaType(mimeType: string): "image" | "video" | "audio" {
+  const mime = mimeType.toLowerCase();
+  if (mime.startsWith("audio/")) {
+    return "audio";
+  }
+  if (mime.startsWith("video/")) {
+    return "video";
+  }
+  return "image";
 }
