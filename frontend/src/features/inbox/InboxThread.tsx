@@ -142,9 +142,58 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
   }
 
+  const hasComposerText = messageBody.trim().length > 0;
+
+  const attachIcon = uploadingMedia ? (
+    <span className="attachSpinner" aria-hidden="true" />
+  ) : (
+    <svg className="composerWaIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M21.44 11.05l-9.19 9.19a5.5 5.5 0 01-7.78-7.78l9.2-9.2a3.5 3.5 0 114.95 4.95l-9.2 9.19a2 2 0 11-2.83-2.83l8.49-8.48"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const micIcon = (
+    <svg className="composerWaIcon composerWaIconMic" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 15a3 3 0 003-3V7a3 3 0 10-6 0v5a3 3 0 003 3z"
+        fill="currentColor"
+      />
+      <path
+        d="M19 11a7 7 0 01-14 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 18v3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
+  const sendIcon = (
+    <svg className="composerWaIcon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M5 12l14-7-4 14-4-5-6-2z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+
   const composerControls = (
-    <>
-      <div className="composerModernField" ref={emojiPickerRef}>
+    <div className="composerWaRow">
+      <div className="composerWaField" ref={emojiPickerRef}>
         <button type="button" className="composerInlineBtn" title={ui.emojis} aria-label={ui.emojis} onClick={onToggleEmojiPicker}>
           {emojiButtonIcon}
         </button>
@@ -175,7 +224,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
         />
         <button
           type="button"
-          className="composerInlineBtn"
+          className="composerInlineBtn composerAttachBtn"
           title={ui.attachFile}
           aria-label={ui.attachFile}
           onClick={() => {
@@ -191,17 +240,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
           }}
           disabled={uploadingMedia}
         >
-          {uploadingMedia ? <span className="attachSpinner" aria-hidden="true" /> : "📎"}
-        </button>
-        <button
-          type="button"
-          className="composerInlineBtn mic"
-          title={ui.recordAudio}
-          aria-label={ui.recordAudio}
-          onClick={onStartAudioRecording}
-          disabled={uploadingMedia}
-        >
-          🎤
+          {attachIcon}
         </button>
         {emojiPickerOpen ? (
           <div className="emojiPicker">
@@ -213,10 +252,29 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
           </div>
         ) : null}
       </div>
-      <button className="sendFab" onClick={onSendMessage} disabled={uploadingMedia || !messageBody.trim()} aria-label={ui.send}>
-        {uploadingMedia ? "…" : "➤"}
-      </button>
-    </>
+      {hasComposerText ? (
+        <button
+          className="sendFab"
+          onClick={onSendMessage}
+          disabled={uploadingMedia}
+          aria-label={ui.send}
+          type="button"
+        >
+          {uploadingMedia ? "…" : sendIcon}
+        </button>
+      ) : (
+        <button
+          className="micFab"
+          onClick={onStartAudioRecording}
+          disabled={uploadingMedia}
+          title={ui.recordAudio}
+          aria-label={ui.recordAudio}
+          type="button"
+        >
+          {micIcon}
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -513,7 +571,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             ) : null}
           </div>
 
-          <div className={`composerModern ${recordingAudio ? "composerRecording" : ""}`}>
+          <div className={`composer composerWa ${recordingAudio ? "composerRecording" : ""}`}>
             {recordingAudio ? (
               <div className="recordingBar">
                 <span className="recordingDot" aria-hidden="true" />
@@ -533,144 +591,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 </button>
               </div>
             ) : (
-              <div className="composerModernRow">{composerControls}</div>
-            )}
-            {mediaUploadError ? <div className="composerError">{mediaUploadError}</div> : null}
-          </div>
-
-          <div className={`composer ${recordingAudio ? "composerRecording" : ""}`}>
-            {recordingAudio ? (
-              <div className="recordingBar">
-                <span className="recordingDot" aria-hidden="true" />
-                <span className="recordingLabel">
-                  {ui.recordingAudio} {recordingDurationLabel}
-                </span>
-                <button type="button" className="secondaryButton recordingCancelButton" onClick={onCancelAudioRecording}>
-                  {ui.cancelRecording}
-                </button>
-                <button
-                  type="button"
-                  className="primaryButton recordingSendButton"
-                  onClick={onStopAndSendAudioRecording}
-                  disabled={uploadingMedia}
-                >
-                  {uploadingMedia ? ui.uploadingMedia : ui.sendVoice}
-                </button>
-              </div>
-            ) : (
-              <>
-            <div className="composerInputWrap" ref={emojiPickerRef}>
-              <button
-                type="button"
-                className="emojiButton"
-                title={ui.emojis}
-                aria-label={ui.emojis}
-                onClick={onToggleEmojiPicker}
-              >
-                {emojiButtonIcon}
-              </button>
-              <textarea
-                className="composerInput composerTextarea"
-                value={messageBody}
-                onChange={(event) => onMessageBodyChange(event.target.value)}
-                placeholder={ui.typeMessage}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.ctrlKey && !event.shiftKey) {
-                    event.preventDefault();
-                    onSendMessage();
-                  }
-                }}
-                rows={1}
-              />
-              <input
-                    ref={fileInputRef}
-                type="file"
-                accept="image/*,video/*,audio/*"
-                className="hiddenFileInput"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                        onPickFile(file);
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="emojiButton attachButton"
-                title={ui.attachFile}
-                aria-label={ui.attachFile}
-                onClick={() => {
-                  void (async () => {
-                    if (onPrepareAttach) {
-                      const allowed = await onPrepareAttach();
-                      if (!allowed) {
-                        return;
-                      }
-                    }
-                    fileInputRef.current?.click();
-                  })();
-                }}
-                disabled={uploadingMedia}
-              >
-                {uploadingMedia ? (
-                  <span className="attachSpinner" aria-hidden="true" />
-                ) : (
-                  <svg className="attachIcon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M21 11.5L12.9 19.6a5 5 0 11-7.1-7.1l9.2-9.2a3.5 3.5 0 114.9 5l-9.2 9.2a2 2 0 11-2.8-2.8l8.5-8.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </button>
-              <button
-                type="button"
-                className="emojiButton micButton"
-                title={ui.recordAudio}
-                aria-label={ui.recordAudio}
-                onClick={onStartAudioRecording}
-                disabled={uploadingMedia}
-              >
-                <svg className="micIcon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M12 14a3 3 0 003-3V6a3 3 0 10-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-10 0"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M5 11a7 7 0 0014 0M12 18v3"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-              {emojiPickerOpen ? (
-                <div className="emojiPicker">
-                  {emojiOptions.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      className="emojiOption"
-                      onClick={() => onAppendEmoji(emoji)}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <button className="primaryButton" onClick={onSendMessage} disabled={uploadingMedia || !messageBody.trim()}>
-              {uploadingMedia ? ui.uploadingMedia : ui.send}
-            </button>
-              </>
+              composerControls
             )}
             {mediaUploadError ? <div className="composerError">{mediaUploadError}</div> : null}
           </div>
