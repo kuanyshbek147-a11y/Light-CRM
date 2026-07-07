@@ -1,11 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
-import type {
-  Conversation,
-  InboxFilters,
-  QuickActionManager,
-  SavedInboxFilterPreset
-} from "./model/types";
+import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
 type ChannelFilter = "all" | "whatsapp" | "telegram";
 
@@ -38,56 +33,17 @@ type InboxSidebarUi = {
   clientType: string;
   category: string;
   noMessages: string;
-  closeCard: string;
-  reopenCard: string;
 };
 
 type ConversationListItemProps = {
   conversation: Conversation;
   isActive: boolean;
-  ui: Pick<InboxSidebarUi, "noMessages" | "closeCard" | "reopenCard">;
-  quickManagers: QuickActionManager[];
-  quickManagerByConversation: Record<string, string>;
-  quickStageByConversation: Record<string, string>;
-  quickTaskByConversation: Record<string, string>;
-  quickDeferMinutesByConversation: Record<string, number>;
-  availableStageNames: string[];
-  getStageLabel: (stageName: string) => string;
+  noMessages: string;
   onSelectConversation: (conversationId: string) => void;
-  onQuickManagerChange: (conversationId: string, managerId: string) => void;
-  onQuickStageChange: (conversationId: string, stage: string) => void;
-  onQuickTaskChange: (conversationId: string, title: string) => void;
-  onQuickDeferMinutesChange: (conversationId: string, minutes: number) => void;
-  onCreateQuickTask: (conversationId: string) => void;
-  onToggleConversationStatus: (conversationId: string, currentStatus: "open" | "closed") => void;
-  onMarkSlaFollowUpDone: (conversationId: string) => void;
-  onAcknowledgeSlaEscalation: (conversationId: string) => void;
-  onDeferSlaEscalation: (conversationId: string, minutes: number) => void;
 };
 
 function ConversationListItem(props: ConversationListItemProps): JSX.Element {
-  const {
-    conversation,
-    isActive,
-    ui,
-    quickManagers,
-    quickManagerByConversation,
-    quickStageByConversation,
-    quickTaskByConversation,
-    quickDeferMinutesByConversation,
-    availableStageNames,
-    getStageLabel,
-    onSelectConversation,
-    onQuickManagerChange,
-    onQuickStageChange,
-    onQuickTaskChange,
-    onQuickDeferMinutesChange,
-    onCreateQuickTask,
-    onToggleConversationStatus,
-    onMarkSlaFollowUpDone,
-    onAcknowledgeSlaEscalation,
-    onDeferSlaEscalation
-  } = props;
+  const { conversation, isActive, noMessages, onSelectConversation } = props;
 
   const openConversation = useTapWithoutScroll(() => onSelectConversation(conversation.id));
   const initial = (conversation.contact_name || "?").trim().slice(0, 1).toUpperCase();
@@ -125,122 +81,12 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                 </span>
                 <span className="chatPhone">{conversation.is_group ? "group" : conversation.phone}</span>
               </span>
-              <span className="dialogCardBadges chatMetaRow">
-                <span className={`priorityBadge ${conversation.priority || "normal"}`}>
-                  {(conversation.priority || "normal").toUpperCase()}
-                </span>
-                {conversation.unread_count ? (
-                  <span className="attentionBadge unread">UNREAD: {conversation.unread_count}</span>
-                ) : null}
-                {conversation.sla_overdue ? <span className="attentionBadge overdue">SLA EXPIRED</span> : null}
-                {conversation.sla_escalated ? <span className="attentionBadge escalated">ESCALATION SLA</span> : null}
-              </span>
               <span className="dialogCardSnippet chatSnippet">
-                {formatSnippet(conversation, ui.noMessages)}
+                {formatSnippet(conversation, noMessages)}
               </span>
             </span>
           </div>
         </div>
-        <div className="dialogCardActions">
-          <button
-            type="button"
-            className="dialogActionBtn"
-            onClick={() => onCreateQuickTask(conversation.id)}
-          >
-            New Task
-          </button>
-          <button
-            type="button"
-            className="dialogActionBtn primary"
-            onClick={() => onSelectConversation(conversation.id)}
-          >
-            Take Deal
-          </button>
-        </div>
-      </div>
-      <div className="chatQuickActions">
-        <select
-          className="filterInput chatQuickControl"
-          value={quickManagerByConversation[conversation.id] ?? conversation.assigned_manager_id ?? ""}
-          aria-label="Назначить менеджера"
-          onChange={(event) => onQuickManagerChange(conversation.id, event.target.value)}
-        >
-          <option value="">Ответственный</option>
-          {quickManagers.map((manager) => (
-            <option key={manager.id} value={manager.id}>
-              {manager.full_name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="filterInput chatQuickControl"
-          value={quickStageByConversation[conversation.id] ?? conversation.stage ?? ""}
-          aria-label="Сменить этап сделки"
-          onChange={(event) => onQuickStageChange(conversation.id, event.target.value)}
-        >
-          <option value="">Этап сделки</option>
-          {availableStageNames.map((stageName) => (
-            <option key={stageName} value={stageName}>
-              {getStageLabel(stageName)}
-            </option>
-          ))}
-        </select>
-        <input
-          className="filterInput chatQuickControl"
-          placeholder="Новая задача"
-          aria-label="Создать задачу"
-          value={quickTaskByConversation[conversation.id] || ""}
-          onChange={(event) => onQuickTaskChange(conversation.id, event.target.value)}
-        />
-        <button type="button" className="secondaryButton chatQuickButton" onClick={() => onCreateQuickTask(conversation.id)}>
-          + задача
-        </button>
-        <button
-          type="button"
-          className={`secondaryButton chatQuickButton ${conversation.status === "closed" ? "statusReopenButton" : "statusCloseButton"}`}
-          onClick={() => onToggleConversationStatus(conversation.id, conversation.status)}
-        >
-          {conversation.status === "open" ? ui.closeCard : ui.reopenCard}
-        </button>
-        {conversation.has_sla_follow_up ? (
-          <button
-            type="button"
-            className="secondaryButton chatQuickButton followupDoneButton"
-            onClick={() => onMarkSlaFollowUpDone(conversation.id)}
-          >
-            Закрыть SLA-контроль
-          </button>
-        ) : null}
-        {conversation.sla_escalated ? (
-          <button
-            type="button"
-            className="secondaryButton chatQuickButton escalationAckButton"
-            onClick={() => onAcknowledgeSlaEscalation(conversation.id)}
-          >
-            Взять в работу
-          </button>
-        ) : null}
-        {conversation.sla_escalated ? (
-          <>
-            <select
-              className="filterInput chatQuickControl"
-              value={quickDeferMinutesByConversation[conversation.id] ?? 30}
-              aria-label="Отложить SLA эскалацию"
-              onChange={(event) => onQuickDeferMinutesChange(conversation.id, Number(event.target.value))}
-            >
-              <option value={15}>15 мин</option>
-              <option value={30}>30 мин</option>
-              <option value={60}>60 мин</option>
-            </select>
-            <button
-              type="button"
-              className="secondaryButton chatQuickButton"
-              onClick={() => onDeferSlaEscalation(conversation.id, quickDeferMinutesByConversation[conversation.id] ?? 30)}
-            >
-              Отложить
-            </button>
-          </>
-        ) : null}
       </div>
     </li>
   );
@@ -254,13 +100,6 @@ type InboxSidebarProps = {
   search: string;
   filters: InboxFilters;
   savedFilterPresets: SavedInboxFilterPreset[];
-  quickManagers: QuickActionManager[];
-  quickManagerByConversation: Record<string, string>;
-  quickStageByConversation: Record<string, string>;
-  quickTaskByConversation: Record<string, string>;
-  quickDeferMinutesByConversation: Record<string, number>;
-  availableStageNames: string[];
-  getStageLabel: (stageName: string) => string;
   onToggleSearchPanel: () => void;
   onSearchChange: (value: string) => void;
   onFiltersChange: (next: InboxFilters) => void;
@@ -270,15 +109,6 @@ type InboxSidebarProps = {
   onApplyFilterPreset: (preset: SavedInboxFilterPreset) => void;
   onRemoveFilterPreset: (presetId: string) => void;
   onSelectConversation: (conversationId: string) => void;
-  onQuickManagerChange: (conversationId: string, managerId: string) => void;
-  onQuickStageChange: (conversationId: string, stage: string) => void;
-  onQuickTaskChange: (conversationId: string, title: string) => void;
-  onQuickDeferMinutesChange: (conversationId: string, minutes: number) => void;
-  onCreateQuickTask: (conversationId: string) => void;
-  onToggleConversationStatus: (conversationId: string, currentStatus: "open" | "closed") => void;
-  onMarkSlaFollowUpDone: (conversationId: string) => void;
-  onAcknowledgeSlaEscalation: (conversationId: string) => void;
-  onDeferSlaEscalation: (conversationId: string, minutes: number) => void;
 };
 
 export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
@@ -290,13 +120,6 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     search,
     filters,
     savedFilterPresets,
-    quickManagers,
-    quickManagerByConversation,
-    quickStageByConversation,
-    quickTaskByConversation,
-    quickDeferMinutesByConversation,
-    availableStageNames,
-    getStageLabel,
     onToggleSearchPanel,
     onSearchChange,
     onFiltersChange,
@@ -305,16 +128,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onResetFilters,
     onApplyFilterPreset,
     onRemoveFilterPreset,
-    onSelectConversation,
-    onQuickManagerChange,
-    onQuickStageChange,
-    onQuickTaskChange,
-    onQuickDeferMinutesChange,
-    onCreateQuickTask,
-    onToggleConversationStatus,
-    onMarkSlaFollowUpDone,
-    onAcknowledgeSlaEscalation,
-    onDeferSlaEscalation
+    onSelectConversation
   } = props;
 
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
@@ -487,24 +301,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
             key={conversation.id}
             conversation={conversation}
             isActive={conversation.id === selectedConversation}
-            ui={ui}
-            quickManagers={quickManagers}
-            quickManagerByConversation={quickManagerByConversation}
-            quickStageByConversation={quickStageByConversation}
-            quickTaskByConversation={quickTaskByConversation}
-            quickDeferMinutesByConversation={quickDeferMinutesByConversation}
-            availableStageNames={availableStageNames}
-            getStageLabel={getStageLabel}
+            noMessages={ui.noMessages}
             onSelectConversation={onSelectConversation}
-            onQuickManagerChange={onQuickManagerChange}
-            onQuickStageChange={onQuickStageChange}
-            onQuickTaskChange={onQuickTaskChange}
-            onQuickDeferMinutesChange={onQuickDeferMinutesChange}
-            onCreateQuickTask={onCreateQuickTask}
-            onToggleConversationStatus={onToggleConversationStatus}
-            onMarkSlaFollowUpDone={onMarkSlaFollowUpDone}
-            onAcknowledgeSlaEscalation={onAcknowledgeSlaEscalation}
-            onDeferSlaEscalation={onDeferSlaEscalation}
           />
         ))}
       </ul>

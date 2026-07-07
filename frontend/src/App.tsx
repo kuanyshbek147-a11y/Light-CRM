@@ -2337,9 +2337,7 @@ export function App(): JSX.Element {
               reason: UI.reason,
               clientType: UI.clientType,
               category: UI.category,
-              noMessages: UI.noMessages,
-              closeCard: UI.closeCard,
-              reopenCard: UI.reopenCard
+              noMessages: UI.noMessages
             }}
             conversations={conversations}
             selectedConversation={selectedConversation}
@@ -2347,13 +2345,6 @@ export function App(): JSX.Element {
             search={search}
             filters={filters}
             savedFilterPresets={savedFilterPresets}
-            quickManagers={quickManagers}
-            quickManagerByConversation={quickManagerByConversation}
-            quickStageByConversation={quickStageByConversation}
-            quickTaskByConversation={quickTaskByConversation}
-            quickDeferMinutesByConversation={quickDeferMinutesByConversation}
-            availableStageNames={availableStageNames}
-            getStageLabel={(stageName) => formatStageLabel(stageName, UI)}
             onToggleSearchPanel={() => setSearchPanelOpen((prev) => !prev)}
             onSearchChange={(next) => {
               setSearch(next);
@@ -2369,29 +2360,6 @@ export function App(): JSX.Element {
             onApplyFilterPreset={(preset) => void applyFilterPreset(preset)}
             onRemoveFilterPreset={removeFilterPreset}
             onSelectConversation={(id) => void onSelectConversation(id)}
-            onQuickManagerChange={(conversationId, value) => {
-              setQuickManagerByConversation((prev) => ({ ...prev, [conversationId]: value }));
-              void assignConversationManager(conversationId, value);
-            }}
-            onQuickStageChange={(conversationId, value) => {
-              setQuickStageByConversation((prev) => ({ ...prev, [conversationId]: value }));
-              if (value) {
-                void moveConversationStage(conversationId, value);
-              }
-            }}
-            onQuickTaskChange={(conversationId, value) =>
-              setQuickTaskByConversation((prev) => ({ ...prev, [conversationId]: value }))
-            }
-            onQuickDeferMinutesChange={(conversationId, minutes) =>
-              setQuickDeferMinutesByConversation((prev) => ({ ...prev, [conversationId]: minutes }))
-            }
-            onCreateQuickTask={(conversationId) => void createQuickTask(conversationId)}
-            onToggleConversationStatus={(conversationId, status) =>
-              void toggleConversationStatus(conversationId, status)
-            }
-            onMarkSlaFollowUpDone={(conversationId) => void markSlaFollowUpDone(conversationId)}
-            onAcknowledgeSlaEscalation={(conversationId) => void acknowledgeSlaEscalation(conversationId)}
-            onDeferSlaEscalation={(conversationId, minutes) => void deferSlaEscalation(conversationId, minutes)}
           />
 
           <InboxThread
