@@ -69,6 +69,7 @@ import {
 } from "./features/inbox/model/actions";
 import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
+import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
 
 type Deal = {
   id: string;
@@ -201,6 +202,9 @@ const UI = {
   workspaceMenu: "\u041c\u0435\u043d\u044e",
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
+  menuFunnelKpi: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u0438 KPI",
+  funnelKpiTab: "KPI \u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
+  funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
   menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
   menuProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
   sectionDialogsCenter: "Dialogs Center",
@@ -497,6 +501,8 @@ export function App(): JSX.Element {
   const [editingStageId, setEditingStageId] = useState<string>("");
   const [editingStageName, setEditingStageName] = useState<string>("");
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
+  const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
+  const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(true);
   const [draggingConversationId, setDraggingConversationId] = useState<string>("");
   const [dragOverStageKey, setDragOverStageKey] = useState<string>("");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -2074,7 +2080,9 @@ export function App(): JSX.Element {
     currentSection === "dialogs"
       ? UI.sectionDialogsCenter
       : currentSection === "pipeline"
-        ? UI.landingBadge
+        ? pipelineSubview === "kpi"
+          ? UI.salesOverview
+          : UI.pipelineBoardHint
         : currentSection === "tasks"
           ? UI.sectionTasks
           : currentSection === "profile"
@@ -2090,8 +2098,27 @@ export function App(): JSX.Element {
           ? "profile"
           : "dialogs";
 
+  function toggleFunnelKpiPanel(): void {
+    if (currentSection !== "dialogs") {
+      setCurrentSection("dialogs");
+      setFunnelKpiPanelOpen(true);
+      return;
+    }
+    setFunnelKpiPanelOpen((open) => !open);
+  }
+
+  function openPipelineSection(subview: "kpi" | "board" = "kpi"): void {
+    setPipelineSubview(subview);
+    setMobileThreadOpen(false);
+    setCurrentSection("pipeline");
+  }
+
   function handleBottomNavChange(section: MobileNavSection): void {
     setMobileThreadOpen(false);
+    if (section === "pipeline") {
+      openPipelineSection("kpi");
+      return;
+    }
     setCurrentSection(section);
   }
 
@@ -2176,8 +2203,19 @@ export function App(): JSX.Element {
           </button>
           <button
             type="button"
+            className={`leftMenuButton ${currentSection === "dialogs" && funnelKpiPanelOpen ? "active" : ""}`}
+            onClick={toggleFunnelKpiPanel}
+            aria-pressed={funnelKpiPanelOpen}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25C8"}
+            </span>
+            <span>{UI.menuFunnelKpi}</span>
+          </button>
+          <button
+            type="button"
             className={`leftMenuButton ${currentSection === "pipeline" ? "active" : ""}`}
-            onClick={() => setCurrentSection("pipeline")}
+            onClick={() => openPipelineSection("board")}
           >
             <span className="leftMenuButtonIcon" aria-hidden="true">
               {"\u29D2"}
@@ -2223,7 +2261,11 @@ export function App(): JSX.Element {
         {currentSection === "platform" ? (
           token ? <PlatformPanel authToken={token} /> : null
         ) : currentSection === "dialogs" ? (
-        <div className={`appGrid ${isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : ""}`}>
+        <div
+          className={`appGrid ${isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : ""}${
+            !funnelKpiPanelOpen ? " appGridNoRightRail" : ""
+          }`}
+        >
           <InboxSidebar
             ui={{
               inboxTitle: UI.inboxTitle,
@@ -2426,63 +2468,29 @@ export function App(): JSX.Element {
             onDeferSlaEscalation={(conversationId, minutes) => void deferSlaEscalation(conversationId, minutes)}
           />
 
+          {funnelKpiPanelOpen ? (
           <aside className="rightRail card">
-          <div className="railHeader">
-            <div>
-              <div className="sidebarTitle">{UI.pipelineAndKpi}</div>
-              <div className="sidebarHint">{UI.salesOverview}</div>
-            </div>
-          </div>
-
-          <div className="kpiGrid">
-            <div className="kpiCard">
-              <div className="kpiValue">{metrics?.firstResponseMinutes ?? 0} {UI.min}</div>
-              <div className="kpiLabel">{UI.firstResponse}</div>
-            </div>
-            <div className="kpiCard">
-              <div className="kpiValue">{metrics?.handledConversations7d ?? 0}</div>
-              <div className="kpiLabel">{UI.chats7d}</div>
-            </div>
-            <div className="kpiCard">
-              <div className="kpiValue">{metrics?.sentMessages7d ?? 0}</div>
-              <div className="kpiLabel">{UI.outgoing7d}</div>
-            </div>
-          </div>
-
-          <div className="tableSection">
-            <div className="tableTitle">{UI.deals}</div>
-            <table className="dealTable">
-              <thead>
-                <tr>
-                  <th>{UI.client}</th>
-                  <th>{UI.amount}</th>
-                  <th>{UI.stage}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deals.map((deal) => (
-                  <tr key={deal.id}>
-                    <td>{deal.contact_name}</td>
-                    <td>{deal.amount}</td>
-                    <td>
-                      <select
-                        className="stageSelect"
-                        value={deal.stage}
-                        onChange={(event) => void updateDealStage(deal.id, event.target.value)}
-                      >
-                        {availableStageNames.map((stageName) => (
-                          <option key={stageName} value={stageName}>
-                            {formatStageLabel(stageName, UI)}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            <FunnelKpiPanel
+              metrics={metrics}
+              deals={deals}
+              availableStageNames={availableStageNames}
+              labels={{
+                pipelineAndKpi: UI.pipelineAndKpi,
+                salesOverview: UI.salesOverview,
+                min: UI.min,
+                firstResponse: UI.firstResponse,
+                chats7d: UI.chats7d,
+                outgoing7d: UI.outgoing7d,
+                deals: UI.deals,
+                client: UI.client,
+                amount: UI.amount,
+                stage: UI.stage
+              }}
+              formatStageLabel={(stage) => formatStageLabel(stage, UI)}
+              onDealStageChange={(dealId, stage) => void updateDealStage(dealId, stage)}
+            />
           </aside>
+          ) : null}
         </div>
         ) : currentSection === "knowledge" ? (
           <section className="knowledgePage card">
@@ -2898,11 +2906,55 @@ export function App(): JSX.Element {
           <section className="pipelinePage card">
             <div className="mobilePageHeader">
               <div className="mobilePageHeaderText">
-                <div className="mobilePageTitle">{UI.sectionFunnel}</div>
-                <div className="mobilePageSubtitle">{UI.pipelineBoardHint}</div>
+                <div className="mobilePageTitle">
+                  {pipelineSubview === "kpi" ? UI.pipelineAndKpi : UI.sectionFunnel}
+                </div>
+                <div className="mobilePageSubtitle">
+                  {pipelineSubview === "kpi" ? UI.salesOverview : UI.pipelineBoardHint}
+                </div>
               </div>
             </div>
             <div className="pipelineSectionToggle">
+              <button
+                type="button"
+                className={`pipelineToggleBtn ${pipelineSubview === "kpi" ? "active" : ""}`}
+                onClick={() => setPipelineSubview("kpi")}
+              >
+                {UI.funnelKpiTab}
+              </button>
+              <button
+                type="button"
+                className={`pipelineToggleBtn ${pipelineSubview === "board" ? "active" : ""}`}
+                onClick={() => setPipelineSubview("board")}
+              >
+                {UI.funnelBoardTab}
+              </button>
+            </div>
+            {pipelineSubview === "kpi" ? (
+              <FunnelKpiPanel
+                className="pipelineKpiPanel"
+                showHeader={false}
+                metrics={metrics}
+                deals={deals}
+                availableStageNames={availableStageNames}
+                labels={{
+                  pipelineAndKpi: UI.pipelineAndKpi,
+                  salesOverview: UI.salesOverview,
+                  min: UI.min,
+                  firstResponse: UI.firstResponse,
+                  chats7d: UI.chats7d,
+                  outgoing7d: UI.outgoing7d,
+                  deals: UI.deals,
+                  client: UI.client,
+                  amount: UI.amount,
+                  stage: UI.stage
+                }}
+                formatStageLabel={(stage) => formatStageLabel(stage, UI)}
+                onDealStageChange={(dealId, stage) => void updateDealStage(dealId, stage)}
+              />
+            ) : (
+              <>
+            <div className="pipelineSectionToggle pipelineStatusToggle">
               <button
                 type="button"
                 className={`pipelineToggleBtn ${pipelineStatusFilter === "open" ? "active" : ""}`}
@@ -3026,6 +3078,8 @@ export function App(): JSX.Element {
                 );
               })}
             </div>
+              </>
+            )}
           </section>
         ) : null}
       </main>

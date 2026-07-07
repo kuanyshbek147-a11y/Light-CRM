@@ -451,6 +451,10 @@ button {
   min-width: 0;
 }
 
+.appGrid.appGridNoRightRail {
+  grid-template-columns: 360px 1fr;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--line);

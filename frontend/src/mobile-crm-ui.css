@@ -971,6 +971,18 @@
   color: #4338ca;
 }
 
+.pipelineKpiPanel .tableSection {
+  overflow-x: auto;
+}
+
+.pipelineStatusToggle {
+  margin-top: 0;
+}
+
+.pipelinePage .pipelineKpiPanel .kpiGrid {
+  margin-bottom: 16px;
+}
+
 .pipelineBoardCard {
   border-radius: 16px !important;
   box-shadow: 0 6px 18px rgba(40, 52, 111, 0.07) !important;
