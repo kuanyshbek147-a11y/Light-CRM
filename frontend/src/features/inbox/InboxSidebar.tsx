@@ -1,9 +1,31 @@
+import { useMemo, useState } from "react";
 import type {
   Conversation,
   InboxFilters,
   QuickActionManager,
   SavedInboxFilterPreset
 } from "./model/types";
+
+type ChannelFilter = "all" | "whatsapp" | "telegram";
+
+function formatDialogTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatSnippet(conversation: Conversation, fallback: string): string {
+  const body = conversation.last_message_body || fallback;
+  if (body.includes("[Голосовое") || body.toLowerCase().includes("voice")) {
+    return "🎤 [Голосовое сообщение]";
+  }
+  if (body.startsWith("http") && body.includes("image")) {
+    return "🖼 [Отправлено изображение]";
+  }
+  return body;
+}
 
 type InboxSidebarUi = {
   inboxTitle: string;
@@ -90,8 +112,60 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onDeferSlaEscalation
   } = props;
 
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
+
+  const visibleConversations = useMemo(() => {
+    if (channelFilter === "all") {
+      return conversations;
+    }
+    return conversations.filter((conversation) => conversation.channel === channelFilter);
+  }, [channelFilter, conversations]);
+
   return (
     <aside className="sidebar card">
+      <div className="mobilePageHeader">
+        <div className="mobilePageHeaderText">
+          <div className="mobilePageTitle">Dialogs Center</div>
+          <div className="mobilePageSubtitle">
+            {visibleConversations.length} active
+          </div>
+        </div>
+        <div className="mobilePageActions">
+          <button
+            type="button"
+            className="threadIconBtn"
+            title={ui.openSearchFilters}
+            aria-label={ui.openSearchFilters}
+            aria-expanded={searchPanelOpen}
+            onClick={onToggleSearchPanel}
+          >
+            🔍
+          </button>
+          <button type="button" className="threadIconBtn" title="Notifications" aria-label="Notifications">
+            🔔
+          </button>
+        </div>
+      </div>
+
+      <div className="channelFilters" role="tablist" aria-label="Channel filters">
+        {([
+          ["all", "All Channels"],
+          ["whatsapp", "WhatsApp"],
+          ["telegram", "Telegram"]
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={channelFilter === value}
+            className={`channelChip ${channelFilter === value ? "active" : ""}`}
+            onClick={() => setChannelFilter(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="sidebarHeader">
         <div>
           <div className="sidebarTitle">{ui.inboxTitle}</div>
@@ -203,7 +277,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
       ) : null}
 
       <ul className="chatList">
-        {conversations.map((conversation) => {
+        {visibleConversations.map((conversation) => {
           const isActive = conversation.id === selectedConversation;
           const initial = (conversation.contact_name || "?").trim().slice(0, 1).toUpperCase();
 
@@ -215,34 +289,63 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
             >
               <button
                 type="button"
-                className={`chatItem ${isActive ? "active" : ""}`}
+                className={`chatItem dialogCard ${isActive ? "active" : ""}`}
               >
-                <span className="chatAvatar" aria-hidden="true">
-                  {initial}
-                </span>
-                <span className="chatBody">
-                  <span className="chatTopLine">
-                    <span className="chatName">
-                      {conversation.contact_name}
-                      {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
+                <div className="dialogCardTop">
+                  <span className="dialogCardAvatar chatAvatar" aria-hidden="true">
+                    {initial}
+                  </span>
+                  <span className="dialogCardMain chatBody">
+                    <span className="dialogCardNameRow chatTopLine">
+                      <span className="dialogCardName chatName">
+                        {conversation.contact_name}
+                        {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
+                      </span>
+                      <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
                     </span>
-                    <span className="chatPhone">{conversation.is_group ? "whatsapp group" : conversation.channel}</span>
-                  </span>
-                  <span className="chatMetaRow">
-                    <span className={`priorityBadge ${conversation.priority || "normal"}`}>
-                      {conversation.priority || "normal"}
+                    <span className="dialogCardChannelRow">
+                      <span className={`channelBadge ${conversation.channel}`}>
+                        {conversation.channel === "whatsapp" ? "WhatsApp" : "Telegram"}
+                      </span>
+                      <span className="chatPhone">{conversation.is_group ? "group" : conversation.phone}</span>
                     </span>
-                    {conversation.unread_count ? (
-                      <span className="attentionBadge unread">Непрочитано: {conversation.unread_count}</span>
-                    ) : null}
-                    {conversation.sla_overdue ? <span className="attentionBadge overdue">SLA просрочен</span> : null}
-                    {conversation.sla_escalated ? <span className="attentionBadge escalated">Эскалация SLA</span> : null}
-                    {conversation.has_sla_follow_up ? <span className="attentionBadge followup">Есть SLA-контроль</span> : null}
+                    <span className="dialogCardBadges chatMetaRow">
+                      <span className={`priorityBadge ${conversation.priority || "normal"}`}>
+                        {(conversation.priority || "normal").toUpperCase()}
+                      </span>
+                      {conversation.unread_count ? (
+                        <span className="attentionBadge unread">UNREAD: {conversation.unread_count}</span>
+                      ) : null}
+                      {conversation.sla_overdue ? <span className="attentionBadge overdue">SLA EXPIRED</span> : null}
+                      {conversation.sla_escalated ? <span className="attentionBadge escalated">ESCALATION SLA</span> : null}
+                    </span>
+                    <span className="dialogCardSnippet chatSnippet">
+                      {formatSnippet(conversation, ui.noMessages)}
+                    </span>
                   </span>
-                  <span className="chatSnippet">
-                    {conversation.last_message_body || ui.noMessages}
-                  </span>
-                </span>
+                </div>
+                <div className="dialogCardActions">
+                  <button
+                    type="button"
+                    className="dialogActionBtn"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCreateQuickTask(conversation.id);
+                    }}
+                  >
+                    New Task
+                  </button>
+                  <button
+                    type="button"
+                    className="dialogActionBtn primary"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectConversation(conversation.id);
+                    }}
+                  >
+                    Take Deal
+                  </button>
+                </div>
               </button>
               <div className="chatQuickActions" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
                 <select

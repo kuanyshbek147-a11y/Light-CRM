@@ -132,10 +132,125 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [deferMinutes, setDeferMinutes] = useState<number>(30);
 
+  const contactInitial = (selectedConversationData?.contact_name || "?").trim().slice(0, 1).toUpperCase();
+
+  function formatMessageTime(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  const composerControls = (
+    <>
+      <div className="composerModernField" ref={emojiPickerRef}>
+        <button type="button" className="composerInlineBtn" title={ui.emojis} aria-label={ui.emojis} onClick={onToggleEmojiPicker}>
+          {emojiButtonIcon}
+        </button>
+        <textarea
+          className="composerInput composerTextarea"
+          value={messageBody}
+          onChange={(event) => onMessageBodyChange(event.target.value)}
+          placeholder={ui.typeMessage}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.ctrlKey && !event.shiftKey) {
+              event.preventDefault();
+              onSendMessage();
+            }
+          }}
+          rows={1}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*,audio/*"
+          className="hiddenFileInput"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              onPickFile(file);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="composerInlineBtn"
+          title={ui.attachFile}
+          aria-label={ui.attachFile}
+          onClick={() => {
+            void (async () => {
+              if (onPrepareAttach) {
+                const allowed = await onPrepareAttach();
+                if (!allowed) {
+                  return;
+                }
+              }
+              fileInputRef.current?.click();
+            })();
+          }}
+          disabled={uploadingMedia}
+        >
+          {uploadingMedia ? <span className="attachSpinner" aria-hidden="true" /> : "📎"}
+        </button>
+        <button
+          type="button"
+          className="composerInlineBtn mic"
+          title={ui.recordAudio}
+          aria-label={ui.recordAudio}
+          onClick={onStartAudioRecording}
+          disabled={uploadingMedia}
+        >
+          🎤
+        </button>
+        {emojiPickerOpen ? (
+          <div className="emojiPicker">
+            {emojiOptions.map((emoji) => (
+              <button key={emoji} type="button" className="emojiOption" onClick={() => onAppendEmoji(emoji)}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <button className="sendFab" onClick={onSendMessage} disabled={uploadingMedia || !messageBody.trim()} aria-label={ui.send}>
+        {uploadingMedia ? "…" : "➤"}
+      </button>
+    </>
+  );
+
   return (
     <section className="thread card">
       {selectedConversationData ? (
         <>
+          <div className="threadHeaderModern">
+            {onBack ? (
+              <button type="button" className="threadBackBtn" onClick={onBack} aria-label={backLabel || "Back"}>
+                ‹
+              </button>
+            ) : null}
+            <span className="threadAvatar" aria-hidden="true">
+              {contactInitial}
+            </span>
+            <div className="threadContactInfo">
+              <div className="threadContactName">
+                {selectedConversationData.contact_name}
+                {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
+              </div>
+              <div className="threadContactPhone">
+                {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
+              </div>
+            </div>
+            <div className="threadHeaderActions">
+              <button type="button" className="threadIconBtn" title="Search" aria-label="Search">
+                🔍
+              </button>
+              <button type="button" className="threadIconBtn" onClick={onOpenCustomerCard} title={ui.customerCard} aria-label={ui.customerCard}>
+                ⋮
+              </button>
+            </div>
+          </div>
+
           <div className="threadHeader">
             {onBack ? (
               <button type="button" className="mobileBackButton" onClick={onBack}>
@@ -231,6 +346,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             onDragLeave={onMessagesDragLeave}
             onDrop={onMessagesDrop}
           >
+            {messages.length ? <div className="messagesDateDivider"><span>Today</span></div> : null}
             {messages.map((message) => (
               <div key={message.id} className={`bubble ${message.direction}`}>
                 {message.body && !(message.attachment_type === "audio" && message.body === "[Голосовое сообщение]") ? (
@@ -266,9 +382,33 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                     {message.attachment_name || "Скачать документ"}
                   </a>
                 ) : null}
+                <span className="bubbleTime">
+                  {formatMessageTime(message.created_at)}
+                  {message.direction === "outgoing" ? <span className="bubbleReadMark"> ✓✓</span> : null}
+                </span>
               </div>
             ))}
             {isDragOverMessages ? <div className="dropHint">Перетащите картинку или видео сюда</div> : null}
+          </div>
+
+          <div className="quickActionChips">
+            <button
+              type="button"
+              className={`quickChip ${scriptPanelOpen ? "active" : ""}`}
+              onClick={onToggleScriptPanel}
+            >
+              {ui.replyScripts}
+            </button>
+            <button
+              type="button"
+              className={`quickChip outline ${knowledgeQuickOpen ? "active" : ""}`}
+              onClick={onToggleKnowledgeQuick}
+            >
+              {ui.knowledgeBase}
+            </button>
+            <button type="button" className="quickChip outline" onClick={onToggleScriptPanel}>
+              Template
+            </button>
           </div>
 
           <div className="scriptPanel">
@@ -371,6 +511,31 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 )}
               </div>
             ) : null}
+          </div>
+
+          <div className={`composerModern ${recordingAudio ? "composerRecording" : ""}`}>
+            {recordingAudio ? (
+              <div className="recordingBar">
+                <span className="recordingDot" aria-hidden="true" />
+                <span className="recordingLabel">
+                  {ui.recordingAudio} {recordingDurationLabel}
+                </span>
+                <button type="button" className="secondaryButton recordingCancelButton" onClick={onCancelAudioRecording}>
+                  {ui.cancelRecording}
+                </button>
+                <button
+                  type="button"
+                  className="primaryButton recordingSendButton"
+                  onClick={onStopAndSendAudioRecording}
+                  disabled={uploadingMedia}
+                >
+                  {uploadingMedia ? ui.uploadingMedia : ui.sendVoice}
+                </button>
+              </div>
+            ) : (
+              <div className="composerModernRow">{composerControls}</div>
+            )}
+            {mediaUploadError ? <div className="composerError">{mediaUploadError}</div> : null}
           </div>
 
           <div className={`composer ${recordingAudio ? "composerRecording" : ""}`}>

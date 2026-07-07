@@ -1,0 +1,941 @@
+/* Light CRM — mobile-first redesign */
+
+:root {
+  --bubble-outgoing: linear-gradient(135deg, #7c6cf0 0%, #5b5ce9 55%, #4f46e5 100%);
+  --bubble-incoming: #ffffff;
+  --nav-height: 68px;
+  --fab-size: 56px;
+}
+
+/* ── Bottom navigation ── */
+.bottomNav {
+  display: none;
+}
+
+.fabButton {
+  display: none;
+}
+
+/* ── Page headers ── */
+.mobilePageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mobilePageHeaderText {
+  min-width: 0;
+}
+
+.mobilePageTitle {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.mobilePageSubtitle {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.mobilePageActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Channel filter chips ── */
+.channelFilters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 14px;
+  scrollbar-width: none;
+}
+
+.channelFilters::-webkit-scrollbar {
+  display: none;
+}
+
+.channelChip {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f7;
+  background: #fff;
+  color: #4b556f;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(40, 52, 111, 0.05);
+}
+
+.channelChip.active {
+  background: linear-gradient(135deg, #eef0ff, #f7f8ff);
+  border-color: #cfd6ff;
+  color: #4338ca;
+}
+
+/* ── Dialog cards ── */
+.dialogCard {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid #edf0fa;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(40, 52, 111, 0.06);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.dialogCard:hover {
+  border-color: #d8def8;
+}
+
+.dialogCard.active {
+  border-color: #b8c0ff;
+  box-shadow: 0 10px 28px rgba(79, 70, 229, 0.12);
+}
+
+.dialogCardTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dialogCardAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: grid;
+  place-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #4f46e5;
+  background: linear-gradient(135deg, #eef0ff, #f8f9ff);
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.12);
+  flex-shrink: 0;
+}
+
+.dialogCardMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialogCardNameRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dialogCardName {
+  font-size: 16px;
+  font-weight: 800;
+  color: #151a2d;
+  letter-spacing: -0.02em;
+}
+
+.dialogCardTime {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.dialogCardChannelRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.channelBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.channelBadge.whatsapp {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.channelBadge.telegram {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.dialogCardBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dialogCardSnippet {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dialogCardActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialogActionBtn {
+  flex: 1;
+  min-width: 120px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid #e5e9f7;
+  background: #f8f9ff;
+  color: #36405f;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dialogActionBtn.primary {
+  background: linear-gradient(135deg, #eef0ff, #f5f6ff);
+  border-color: #cfd6ff;
+  color: #4338ca;
+}
+
+/* ── Chat bubbles ── */
+.bubble.incoming {
+  background: var(--bubble-incoming);
+  border: 1px solid #edf0fa;
+  color: #1e293b;
+  border-bottom-left-radius: 4px;
+}
+
+.bubble.outgoing {
+  margin-left: auto;
+  background: var(--bubble-outgoing);
+  border: none;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.bubble.outgoing .bubbleBody {
+  color: #fff;
+}
+
+.bubbleTime {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.72;
+  text-align: right;
+}
+
+.bubble.outgoing .bubbleTime {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.bubble.incoming .bubbleTime {
+  color: #94a3b8;
+}
+
+.bubbleReadMark {
+  margin-left: 4px;
+  color: #93c5fd;
+}
+
+.messagesDateDivider {
+  text-align: center;
+  margin: 16px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.messagesDateDivider span {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* ── Modern thread header ── */
+.threadHeaderModern {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.threadBackBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e8ebf7;
+  background: #fff;
+  color: #4f46e5;
+  font-size: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.threadAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: grid;
+  place-content: center;
+  font-weight: 800;
+  color: #4f46e5;
+  background: linear-gradient(135deg, #eef0ff, #f8f9ff);
+  flex-shrink: 0;
+}
+
+.threadContactInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.threadContactName {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.threadContactPhone {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.threadHeaderActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.threadIconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e8ebf7;
+  background: #fff;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ── Quick action chips in chat ── */
+.quickActionChips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 14px 0;
+  scrollbar-width: none;
+}
+
+.quickActionChips::-webkit-scrollbar {
+  display: none;
+}
+
+.quickChip {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f7;
+  background: #fff;
+  color: #4b556f;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quickChip.active {
+  background: linear-gradient(135deg, #ede9fe, #f5f3ff);
+  border-color: #c4b5fd;
+  color: #6d28d9;
+}
+
+.quickChip.outline {
+  background: #fff;
+  border-color: #93c5fd;
+  color: #2563eb;
+}
+
+/* ── Modern composer ── */
+.composerModern {
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.composerModernRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.composerModernField {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: 24px;
+  border: 1px solid #e8ebf7;
+  background: #f4f6fb;
+}
+
+.composerModernField .composerTextarea {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  resize: none;
+  min-height: 24px;
+  max-height: 120px;
+  padding: 6px 4px;
+  font-size: 14px;
+  outline: none;
+}
+
+.composerInlineBtn {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 18px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.composerInlineBtn.mic {
+  color: #dc2626;
+}
+
+.sendFab {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+  flex-shrink: 0;
+}
+
+.sendFab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Client card modal ── */
+.clientCardModal {
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(92vh, 900px);
+  overflow: auto;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+}
+
+.clientCardModalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.clientCardModalBrand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clientCardModalBrand .brandMark {
+  width: 36px;
+  height: 36px;
+}
+
+.clientCardModalTitle {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.clientCardModalSubtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.clientCardCloseBtn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clientCardModalBody {
+  padding: 16px 20px 20px;
+}
+
+.clientCardHeroTitle {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 4px;
+}
+
+.clientCardHeroHint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.clientCardField {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.clientCardField label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.clientCardInput {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 48px;
+  border-radius: 14px;
+  border: 1px solid #e8ebf7;
+  background: #f8f9ff;
+}
+
+.clientCardInput input,
+.clientCardInput select {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  outline: none;
+  min-width: 0;
+}
+
+.clientCardInputIcon {
+  color: #94a3b8;
+  font-size: 16px;
+}
+
+.clientCardActions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.clientCardSaveBtn {
+  height: 50px;
+  border-radius: 16px;
+  border: 0;
+  background: linear-gradient(135deg, #7c6cf0, #5b5ce9);
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(91, 92, 233, 0.3);
+}
+
+.clientCardSendBtn {
+  height: 50px;
+  border-radius: 16px;
+  border: 1px solid #ddd6fe;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* ── Profile & Tasks pages ── */
+.simpleMobilePage {
+  display: grid;
+  gap: 14px;
+}
+
+.profileCard {
+  padding: 20px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #edf0fa;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 12px;
+}
+
+.profileAvatarLarge {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  display: grid;
+  place-content: center;
+  font-size: 24px;
+  font-weight: 800;
+  color: #4f46e5;
+  background: linear-gradient(135deg, #eef0ff, #f8f9ff);
+}
+
+.profileMenuBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid #e8ebf7;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.taskCard {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #edf0fa;
+  box-shadow: 0 4px 14px rgba(40, 52, 111, 0.05);
+}
+
+.taskCardTitle {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.taskCardMeta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Pipeline mobile ── */
+.pipelineSectionToggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.pipelineToggleBtn {
+  flex: 1;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e8ebf7;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pipelineToggleBtn.active {
+  background: linear-gradient(135deg, #eef0ff, #f7f8ff);
+  border-color: #cfd6ff;
+  color: #4338ca;
+}
+
+.pipelineBoardCard {
+  border-radius: 16px !important;
+  box-shadow: 0 6px 18px rgba(40, 52, 111, 0.07) !important;
+}
+
+/* ── Mobile layout overrides ── */
+@media (max-width: 768px) {
+  .bottomNav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid #e8ebf7;
+    backdrop-filter: blur(12px);
+  }
+
+  .bottomNavItem {
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    border: 0;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .bottomNavItem.active {
+    color: #5b5ce9;
+  }
+
+  .bottomNavIcon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .fabButton {
+    display: grid;
+    place-content: center;
+    position: fixed;
+    right: 18px;
+    bottom: calc(var(--nav-height) + 16px + env(safe-area-inset-bottom, 0px));
+    z-index: 39;
+    width: var(--fab-size);
+    height: var(--fab-size);
+    border-radius: 999px;
+    border: 0;
+    background: linear-gradient(135deg, #7c6cf0, #5b5ce9);
+    color: #fff;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(91, 92, 233, 0.4);
+  }
+
+  .appShell.hasBottomNav {
+    padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .appShell.hasBottomNav .workspaceLayout {
+    padding: 12px 12px 0;
+  }
+
+  .appShell.hasBottomNav .leftMenu {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .topbar {
+    padding: 12px 14px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #edf0fa;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .appShell.hasBottomNav .topbarSearch {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .userChip {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .topbarIconGroup {
+    display: flex;
+  }
+
+  .appShell.hasBottomNav .brandSubtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .appShell.hasBottomNav .sidebar.card {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .appShell.hasBottomNav .sidebarHeader {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .chatList {
+    display: grid;
+    gap: 12px;
+    padding: 0 0 80px;
+  }
+
+  .appShell.hasBottomNav .chatList > li {
+    list-style: none;
+  }
+
+  .appShell.hasBottomNav .chatQuickActions {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard:hover,
+  .appShell.hasBottomNav .chatItem.dialogCard.active {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  .appShell.hasBottomNav .rightRail {
+    display: none !important;
+  }
+
+  .appShell.hasBottomNav .pipelinePage.card {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0 0 80px;
+  }
+
+  .appShell.mobileChatOpen .bottomNav,
+  .appShell.mobileChatOpen .fabButton {
+    display: none;
+  }
+
+  .appShell.mobileChatOpen {
+    padding-bottom: 0;
+  }
+
+  .drawerOverlay:has(.clientCardModal) {
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .customerDrawer {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .thread .composer:not(.composerModern) {
+    display: none;
+  }
+
+  .thread .scriptPanelTop {
+    display: none;
+  }
+
+  .appShell.mobileChatOpen .messages {
+    background: linear-gradient(180deg, #eef2f8 0%, #f4f6fb 100%);
+  }
+
+  .appShell.mobileChatOpen .threadHeader {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .pipelinePage .railHeader {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .pipelinePage .pipelineFilterButtons {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .pipelinePage .pipelineSectionToggle {
+    display: flex;
+  }
+}
+
+@media (min-width: 769px) {
+  .drawerOverlay:has(.clientCardModal) {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 0;
+  }
+
+  .clientCardModal {
+    width: min(480px, 42vw);
+    max-height: 100vh;
+    border-radius: 24px 0 0 24px;
+    margin: 0;
+  }
+
+  .pipelineSectionToggle {
+    display: none;
+  }
+
+  .threadHeaderModern {
+    display: none;
+  }
+
+  .quickActionChips {
+    display: none;
+  }
+
+  .composerModern {
+    display: none;
+  }
+
+  .channelFilters,
+  .mobilePageHeader {
+    display: none;
+  }
+
+  .dialogCardActions,
+  .dialogCardChannelRow,
+  .dialogCardTime {
+    display: none;
+  }
+
+  .dialogCardTop {
+    display: contents;
+  }
+
+  .dialogCardMain {
+    display: contents;
+  }
+
+  .dialogCardNameRow {
+    display: contents;
+  }
+
+  .dialogCardBadges .priorityBadge {
+    text-transform: lowercase;
+  }
+}

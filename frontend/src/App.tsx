@@ -12,6 +12,7 @@ import {
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
+import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import {
   extensionForRecordedAudio,
   formatRecordingDuration,
@@ -193,6 +194,13 @@ const UI = {
   workspaceMenu: "\u041c\u0435\u043d\u044e",
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
+  menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+  menuProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
+  sectionDialogsCenter: "Dialogs Center",
+  sectionFunnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
+  sectionTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+  sectionProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
+  sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
   menuAnalytics: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
   backToChats: "\u041a \u0447\u0430\u0442\u0430\u043c",
@@ -397,7 +405,7 @@ export function App(): JSX.Element {
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<
-    "dialogs" | "pipeline" | "analytics" | "knowledge" | "integrations" | "platform"
+    "dialogs" | "pipeline" | "tasks" | "profile" | "analytics" | "knowledge" | "integrations" | "platform"
   >("dialogs");
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
@@ -1868,15 +1876,43 @@ export function App(): JSX.Element {
   }
 
   const mobileChatOpen = isMobileLayout && mobileThreadOpen && currentSection === "dialogs";
+  const showBottomNav = isMobileLayout && !mobileChatOpen && !isSuperAdminUser(sessionUser);
+
+  const mobileSectionSubtitle =
+    currentSection === "dialogs"
+      ? UI.sectionDialogsCenter
+      : currentSection === "pipeline"
+        ? UI.landingBadge
+        : currentSection === "tasks"
+          ? UI.sectionTasks
+          : currentSection === "profile"
+            ? UI.sectionProfile
+            : UI.landingBadge;
+
+  const bottomNavActive: MobileNavSection =
+    currentSection === "pipeline"
+      ? "pipeline"
+      : currentSection === "tasks"
+        ? "tasks"
+        : currentSection === "profile"
+          ? "profile"
+          : "dialogs";
+
+  function handleBottomNavChange(section: MobileNavSection): void {
+    setMobileThreadOpen(false);
+    setCurrentSection(section);
+  }
+
+  const openConversationsWithFollowUp = conversations.filter((conversation) => conversation.has_sla_follow_up);
 
   return (
-    <div className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}`}>
+    <div className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}${showBottomNav ? " hasBottomNav" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <div className="brandMark" />
           <div className="brandText">
             <div className="brandTitle">{UI.brandTitle}</div>
-            <div className="brandSubtitle">{UI.landingBadge}</div>
+            <div className="brandSubtitle">{isMobileLayout ? mobileSectionSubtitle : UI.landingBadge}</div>
           </div>
         </div>
 
@@ -2601,8 +2637,89 @@ export function App(): JSX.Element {
               </div>
             </div>
           </section>
-        ) : (
+        ) : currentSection === "tasks" ? (
+          <section className="simpleMobilePage card">
+            <div className="mobilePageHeader">
+              <div className="mobilePageHeaderText">
+                <div className="mobilePageTitle">{UI.sectionTasks}</div>
+                <div className="mobilePageSubtitle">{openConversationsWithFollowUp.length} active</div>
+              </div>
+            </div>
+            {openConversationsWithFollowUp.length ? (
+              openConversationsWithFollowUp.map((conversation) => (
+                <div key={conversation.id} className="taskCard">
+                  <div className="taskCardTitle">SLA follow-up: {conversation.contact_name}</div>
+                  <div className="taskCardMeta">{conversation.phone || conversation.channel}</div>
+                  <button
+                    type="button"
+                    className="dialogActionBtn primary"
+                    style={{ marginTop: 10 }}
+                    onClick={() => {
+                      setCurrentSection("dialogs");
+                      void onSelectConversation(conversation.id);
+                    }}
+                  >
+                    Open chat
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="emptyScriptState">No active tasks. Create one from a dialog card.</div>
+            )}
+          </section>
+        ) : currentSection === "profile" ? (
+          <section className="simpleMobilePage card">
+            <div className="profileCard">
+              <div className="profileAvatarLarge" aria-hidden="true">
+                {(sessionUser?.fullName || sessionUser?.email || "?").trim().slice(0, 1).toUpperCase()}
+              </div>
+              <div>
+                <div className="mobilePageTitle">{sessionUser?.fullName || "Operator"}</div>
+                <div className="mobilePageSubtitle">{sessionUser?.login || sessionUser?.email}</div>
+              </div>
+              <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("knowledge")}>
+                <span>{UI.menuKnowledgeBase}</span>
+                <span>›</span>
+              </button>
+              <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("analytics")}>
+                <span>{UI.menuAnalytics}</span>
+                <span>›</span>
+              </button>
+              {sessionUser?.role === "admin" ? (
+                <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("integrations")}>
+                  <span>{UI.menuIntegrations}</span>
+                  <span>›</span>
+                </button>
+              ) : null}
+              <button type="button" className="clientCardSaveBtn" onClick={logout}>
+                {UI.signOut}
+              </button>
+            </div>
+          </section>
+        ) : currentSection === "pipeline" ? (
           <section className="pipelinePage card">
+            <div className="mobilePageHeader">
+              <div className="mobilePageHeaderText">
+                <div className="mobilePageTitle">{UI.sectionFunnel}</div>
+                <div className="mobilePageSubtitle">{UI.pipelineBoardHint}</div>
+              </div>
+            </div>
+            <div className="pipelineSectionToggle">
+              <button
+                type="button"
+                className={`pipelineToggleBtn ${pipelineStatusFilter === "open" ? "active" : ""}`}
+                onClick={() => setPipelineStatusFilter("open")}
+              >
+                {UI.openCards}
+              </button>
+              <button
+                type="button"
+                className={`pipelineToggleBtn ${pipelineStatusFilter === "closed" ? "active" : ""}`}
+                onClick={() => setPipelineStatusFilter("closed")}
+              >
+                {UI.closedCards}
+              </button>
+            </div>
             <div className="railHeader">
               <div>
                 <div className="sidebarTitle">{UI.pipelineBoardTitle}</div>
@@ -2712,97 +2829,155 @@ export function App(): JSX.Element {
               })}
             </div>
           </section>
-        )}
+        ) : null}
       </main>
+
+      {showBottomNav ? (
+        <>
+          <button
+            type="button"
+            className="fabButton"
+            aria-label="Create"
+            onClick={() => {
+              if (currentSection === "pipeline") {
+                setPipelineManagerOpen(true);
+              } else {
+                setSearchPanelOpen(true);
+              }
+            }}
+          >
+            +
+          </button>
+          <BottomNav
+            active={bottomNavActive}
+            onChange={handleBottomNavChange}
+            labels={{
+              dialogs: UI.menuDialogs,
+              funnel: UI.menuPipeline,
+              tasks: UI.menuTasks,
+              profile: UI.menuProfile
+            }}
+          />
+        </>
+      ) : null}
 
       {customerCardOpen && contactCard ? (
         <div className="drawerOverlay" onClick={() => setCustomerCardOpen(false)}>
-          <aside className="customerDrawer" onClick={(event) => event.stopPropagation()}>
-            <div className="drawerHeader">
-              <div>
-                <div className="sidebarTitle">{UI.customerCardTitle}</div>
-                <div className="sidebarHint">{UI.customerCardHint}</div>
+          <div className="clientCardModal" onClick={(event) => event.stopPropagation()}>
+            <div className="clientCardModalHeader">
+              <div className="clientCardModalBrand">
+                <div className="brandMark" />
+                <div>
+                  <div className="clientCardModalTitle">{UI.brandTitle}</div>
+                  <div className="clientCardModalSubtitle">{UI.customerCardTitle}</div>
+                </div>
               </div>
-              <button type="button" className="drawerClose" onClick={() => setCustomerCardOpen(false)}>
+              <button type="button" className="clientCardCloseBtn" onClick={() => setCustomerCardOpen(false)}>
                 {UI.close}
               </button>
             </div>
 
-            <div className="drawerForm">
-              <label className="fieldLabel">
-                {UI.name}
-                <input
-                  className="filterInput"
-                  value={contactCard.name}
-                  onChange={(event) => setContactCard((prev) => (prev ? { ...prev, name: event.target.value } : prev))}
-                />
-              </label>
-              <label className="fieldLabel">
-                {UI.phone}
-                <input
-                  className="filterInput"
-                  value={contactCard.phone}
-                  onChange={(event) => setContactCard((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
-                />
-              </label>
-              <label className="fieldLabel">
-                {UI.city}
-                <input
-                  className="filterInput"
-                  value={contactCard.city || ""}
-                  onChange={(event) => setContactCard((prev) => (prev ? { ...prev, city: event.target.value } : prev))}
-                />
-              </label>
-              <label className="fieldLabel">
-                {UI.inquiryReason}
-                <input
-                  className="filterInput"
-                  value={contactCard.inquiry_reason || ""}
-                  onChange={(event) =>
-                    setContactCard((prev) => (prev ? { ...prev, inquiry_reason: event.target.value } : prev))
-                  }
-                />
-              </label>
-              <label className="fieldLabel">
-                {UI.clientType}
-                <input
-                  className="filterInput"
-                  value={contactCard.client_type || ""}
-                  onChange={(event) =>
-                    setContactCard((prev) => (prev ? { ...prev, client_type: event.target.value } : prev))
-                  }
-                />
-              </label>
-              <label className="fieldLabel">
-                {UI.category}
-                <input
-                  className="filterInput"
-                  value={contactCard.category || ""}
-                  onChange={(event) =>
-                    setContactCard((prev) => (prev ? { ...prev, category: event.target.value } : prev))
-                  }
-                />
-              </label>
-              <label className="fieldLabel">
-                {UI.funnel}
-                <select
-                  className="stageSelect"
-                  value={customerDealStage}
-                  onChange={(event) => {
-                    setCustomerDealStage(event.target.value);
-                    if (dealStageError) {
-                      setDealStageError("");
+            <div className="clientCardModalBody">
+              <h2 className="clientCardHeroTitle">{contactCard.name}</h2>
+              <p className="clientCardHeroHint">{UI.customerCardHint}</p>
+
+              <div className="clientCardField">
+                <label>{UI.name}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">👤</span>
+                  <input
+                    value={contactCard.name}
+                    onChange={(event) => setContactCard((prev) => (prev ? { ...prev, name: event.target.value } : prev))}
+                  />
+                </div>
+              </div>
+              <div className="clientCardField">
+                <label>{UI.phone}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">📞</span>
+                  <input
+                    value={contactCard.phone}
+                    onChange={(event) => setContactCard((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
+                  />
+                </div>
+              </div>
+              <div className="clientCardField">
+                <label>{UI.city}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">📍</span>
+                  <input
+                    placeholder="Укажите город"
+                    value={contactCard.city || ""}
+                    onChange={(event) => setContactCard((prev) => (prev ? { ...prev, city: event.target.value } : prev))}
+                  />
+                </div>
+              </div>
+              <div className="clientCardField">
+                <label>{UI.inquiryReason}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">ℹ️</span>
+                  <input
+                    placeholder="Напр. покупка квартиры"
+                    value={contactCard.inquiry_reason || ""}
+                    onChange={(event) =>
+                      setContactCard((prev) => (prev ? { ...prev, inquiry_reason: event.target.value } : prev))
                     }
-                  }}
-                >
-                  <option value="">{UI.notSelected}</option>
-                  {availableStageNames.map((stageName) => (
-                    <option key={stageName} value={stageName}>
-                      {formatStageLabel(stageName, UI)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  />
+                </div>
+              </div>
+              <div className="clientCardField">
+                <label>{UI.clientType}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">🏷</span>
+                  <select
+                    value={contactCard.client_type || "B2C"}
+                    onChange={(event) =>
+                      setContactCard((prev) => (prev ? { ...prev, client_type: event.target.value } : prev))
+                    }
+                  >
+                    <option value="B2C">B2C</option>
+                    <option value="B2B">B2B</option>
+                  </select>
+                </div>
+              </div>
+              <div className="clientCardField">
+                <label>{UI.category}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">📂</span>
+                  <select
+                    value={contactCard.category || "Новый"}
+                    onChange={(event) =>
+                      setContactCard((prev) => (prev ? { ...prev, category: event.target.value } : prev))
+                    }
+                  >
+                    <option value="Новый">Новый</option>
+                    <option value="Повторный">Повторный</option>
+                    <option value="VIP">VIP</option>
+                  </select>
+                </div>
+              </div>
+              <div className="clientCardField">
+                <label>{UI.funnel}</label>
+                <div className="clientCardInput">
+                  <span className="clientCardInputIcon" aria-hidden="true">🔽</span>
+                  <select
+                    value={customerDealStage}
+                    onChange={(event) => {
+                      setCustomerDealStage(event.target.value);
+                      if (dealStageError) {
+                        setDealStageError("");
+                      }
+                    }}
+                  >
+                    <option value="">{UI.notSelected}</option>
+                    {availableStageNames.map((stageName) => (
+                      <option key={stageName} value={stageName}>
+                        {formatStageLabel(stageName, UI)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <button
                 type="button"
                 className="secondaryButton"
@@ -2813,13 +2988,23 @@ export function App(): JSX.Element {
               >
                 {UI.manageFunnel}
               </button>
-              <div className="drawerActions">
-                <button type="button" className="primaryButton" onClick={() => void saveContactCard()}>
-                  {UI.save}
+              <div className="clientCardActions">
+                <button type="button" className="clientCardSaveBtn" onClick={() => void saveContactCard()}>
+                  💾 {UI.save}
+                </button>
+                <button
+                  type="button"
+                  className="clientCardSendBtn"
+                  onClick={() => {
+                    void saveContactCard();
+                    setCustomerCardOpen(false);
+                  }}
+                >
+                  ✈ {UI.sendToMessenger}
                 </button>
               </div>
             </div>
-          </aside>
+          </div>
         </div>
       ) : null}
 
