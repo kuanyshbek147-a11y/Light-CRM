@@ -360,14 +360,20 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 ‹
               </button>
             ) : null}
-            <span className="threadAvatar" aria-hidden="true">
+            <button
+              type="button"
+              className="threadAvatar clientCardTrigger"
+              onClick={onOpenCustomerCard}
+              title={ui.customerCard}
+              aria-label={ui.customerCard}
+            >
               {contactInitial}
-            </span>
+            </button>
             <div className="threadContactInfo">
-              <div className="threadContactName">
+              <button type="button" className="threadContactName clientCardTrigger" onClick={onOpenCustomerCard}>
                 {selectedConversationData.contact_name}
                 {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
-              </div>
+              </button>
               <div className="threadContactPhone">
                 {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
               </div>
@@ -390,10 +396,10 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             ) : null}
             <div className="threadTitle">
               <div className="threadLabel">{ui.replyBox}</div>
-              <div className="threadName">
+              <button type="button" className="threadName clientCardTrigger" onClick={onOpenCustomerCard}>
                 {selectedConversationData.contact_name}
                 {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
-              </div>
+              </button>
               <div className="threadMeta">
                 {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
               </div>

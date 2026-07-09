@@ -894,6 +894,13 @@ button {
   font-weight: 900;
   letter-spacing: -0.02em;
   font-size: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .threadLabel {

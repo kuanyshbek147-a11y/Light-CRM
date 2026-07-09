@@ -1055,6 +1055,11 @@ export function App(): JSX.Element {
     await loadContactCard(token, id, setContactCard);
   }
 
+  async function onOpenCustomerCardFromList(id: string): Promise<void> {
+    await onSelectConversation(id);
+    setCustomerCardOpen(true);
+  }
+
   async function updateConversationPriority(conversationId: string, priority: InboxFilters["priority"]): Promise<void> {
     if (!token || !priority) {
       return;
@@ -2335,7 +2340,8 @@ export function App(): JSX.Element {
               reason: UI.reason,
               clientType: UI.clientType,
               category: UI.category,
-              noMessages: UI.noMessages
+              noMessages: UI.noMessages,
+              customerCard: UI.customerCard
             }}
             conversations={conversations}
             selectedConversation={selectedConversation}
@@ -2358,6 +2364,7 @@ export function App(): JSX.Element {
             onApplyFilterPreset={(preset) => void applyFilterPreset(preset)}
             onRemoveFilterPreset={removeFilterPreset}
             onSelectConversation={(id) => void onSelectConversation(id)}
+            onOpenCustomerCard={(id) => void onOpenCustomerCardFromList(id)}
           />
 
           <InboxThread

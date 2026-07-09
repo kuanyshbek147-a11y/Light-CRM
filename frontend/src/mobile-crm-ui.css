@@ -363,6 +363,9 @@
   border: 1px solid #e8ebff;
   box-shadow: none;
   flex-shrink: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .dialogCardMain {
@@ -389,6 +392,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.clientCardTrigger:hover {
+  opacity: 0.88;
+}
+
+.clientCardTrigger:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
 }
 
 .dialogCardTime {
@@ -574,6 +592,10 @@
   color: #4f46e5;
   background: linear-gradient(135deg, #eef0ff, #f8f9ff);
   flex-shrink: 0;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .threadContactInfo {
@@ -582,12 +604,21 @@
 }
 
 .threadContactName {
+  display: block;
+  width: 100%;
   font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .threadContactPhone {

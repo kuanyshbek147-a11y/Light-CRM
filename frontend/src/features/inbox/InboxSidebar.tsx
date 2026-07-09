@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { MouseEvent, PointerEvent } from "react";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
@@ -33,20 +34,36 @@ type InboxSidebarUi = {
   clientType: string;
   category: string;
   noMessages: string;
+  customerCard: string;
 };
 
 type ConversationListItemProps = {
   conversation: Conversation;
   isActive: boolean;
   noMessages: string;
+  customerCardLabel: string;
   onSelectConversation: (conversationId: string) => void;
+  onOpenCustomerCard: (conversationId: string) => void;
 };
 
 function ConversationListItem(props: ConversationListItemProps): JSX.Element {
-  const { conversation, isActive, noMessages, onSelectConversation } = props;
+  const {
+    conversation,
+    isActive,
+    noMessages,
+    customerCardLabel,
+    onSelectConversation,
+    onOpenCustomerCard
+  } = props;
 
   const openConversation = useTapWithoutScroll(() => onSelectConversation(conversation.id));
   const initial = (conversation.contact_name || "?").trim().slice(0, 1).toUpperCase();
+
+  function openCustomerCard(event: MouseEvent | PointerEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    onOpenCustomerCard(conversation.id);
+  }
 
   return (
     <li>
@@ -64,15 +81,30 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
           {...openConversation}
         >
           <div className="dialogCardTop">
-            <span className="dialogCardAvatar chatAvatar" aria-hidden="true">
+            <button
+              type="button"
+              className="dialogCardAvatar chatAvatar clientCardTrigger"
+              title={customerCardLabel}
+              aria-label={customerCardLabel}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={openCustomerCard}
+            >
               {initial}
-            </span>
+            </button>
             <span className="dialogCardMain chatBody">
               <span className="dialogCardNameRow chatTopLine">
-                <span className="dialogCardName chatName">
+                <button
+                  type="button"
+                  className="dialogCardName chatName clientCardTrigger"
+                  title={customerCardLabel}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onPointerUp={(event) => event.stopPropagation()}
+                  onClick={openCustomerCard}
+                >
                   {conversation.contact_name}
                   {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
-                </span>
+                </button>
                 <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
               </span>
               <span className="dialogCardChannelRow">
@@ -115,6 +147,7 @@ type InboxSidebarProps = {
   onApplyFilterPreset: (preset: SavedInboxFilterPreset) => void;
   onRemoveFilterPreset: (presetId: string) => void;
   onSelectConversation: (conversationId: string) => void;
+  onOpenCustomerCard: (conversationId: string) => void;
 };
 
 export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
@@ -134,7 +167,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onResetFilters,
     onApplyFilterPreset,
     onRemoveFilterPreset,
-    onSelectConversation
+    onSelectConversation,
+    onOpenCustomerCard
   } = props;
 
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
@@ -310,7 +344,9 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
             conversation={conversation}
             isActive={conversation.id === selectedConversation}
             noMessages={ui.noMessages}
+            customerCardLabel={ui.customerCard}
             onSelectConversation={onSelectConversation}
+            onOpenCustomerCard={onOpenCustomerCard}
           />
         ))}
       </ul>
