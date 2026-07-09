@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/web-DSwdGHPV.js","assets/index-DpUPmCCt.js","assets/index-lk2onSUH.css"])))=>i.map(i=>d[i]);
+import{r as e,_ as i}from"./index-DpUPmCCt.js";var r;(function(t){t.prompt="prompt",t.promptWithRationale="prompt-with-rationale",t.granted="granted",t.denied="denied",t.limited="limited"})(r||(r={}));const p=e("Microphone",{web:()=>i(()=>import("./web-DSwdGHPV.js"),__vite__mapDeps([0,1,2])).then(t=>new t.MicrophoneWeb)});export{p as Microphone,r as MicrophonePermissionStateValue};

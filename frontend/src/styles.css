@@ -378,6 +378,7 @@ button {
 
 .workspaceLayout {
   flex: 1;
+  min-height: 0;
   padding: 14px;
   display: grid;
   grid-template-columns: 210px 1fr;
@@ -2707,6 +2708,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .integrationsPanelHeader {
@@ -2882,6 +2888,11 @@ button {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .platformLayout {

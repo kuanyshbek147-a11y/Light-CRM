@@ -9,3 +9,6 @@ infra/.env
 infra/meta.secrets.env
 infra/platform.secrets.env
 npm-debug.log*
+
+# Local Netlify folder
+.netlify
