@@ -459,6 +459,9 @@ async function run(): Promise<void> {
     ]
   );
 
+  const { ensureDemoLandingWebChat } = await import("./modules/integrations/webchat/credentials");
+  await ensureDemoLandingWebChat();
+
   console.log("Seed complete");
   await pool.end();
 }

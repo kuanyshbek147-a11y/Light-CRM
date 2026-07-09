@@ -41,6 +41,28 @@ export function createWebChatWidgetId(): string {
   return `wc_${randomBytes(12).toString("hex")}`;
 }
 
+/** Stable widget id for the public Light CRM landing page demo chat. */
+export const DEMO_LANDING_WIDGET_ID = "wc_lightcrm_landing_demo";
+
+export async function ensureDemoLandingWebChat(): Promise<void> {
+  const workspace = await query<{ id: string }>(
+    `SELECT id FROM workspaces WHERE name = 'Demo Workspace' LIMIT 1`
+  );
+  const workspaceId = workspace[0]?.id;
+  if (!workspaceId) {
+    return;
+  }
+
+  const current = await getWorkspaceWebChatSettings(workspaceId);
+  await saveWorkspaceWebChatSettings(workspaceId, {
+    widgetId: DEMO_LANDING_WIDGET_ID,
+    enabled: true,
+    title: current?.title || "Light CRM",
+    greeting: current?.greeting || "Здравствуйте! Напишите нам — ответим в ближайшее время.",
+    primaryColor: current?.primaryColor || "#5b5ce9"
+  });
+}
+
 export function createWebChatVisitorToken(): string {
   return `vis_${randomBytes(18).toString("hex")}`;
 }

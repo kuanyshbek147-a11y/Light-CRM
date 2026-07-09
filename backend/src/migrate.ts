@@ -1,5 +1,6 @@
 import { pool } from "./db";
 import bcrypt from "bcryptjs";
+import { ensureDemoLandingWebChat } from "./modules/integrations/webchat/credentials";
 
 /** Гарантирует колонку login и индекс (старые БД без полного прогона сида). */
 export async function ensureUserLoginSchema(): Promise<void> {
@@ -270,4 +271,12 @@ export async function ensureSuperAdminUser(): Promise<void> {
      VALUES (NULL, $1, $2, $3, 'superadmin', $4, true)`,
     [fullName, email, login, passwordHash]
   );
+}
+
+export async function ensureDemoIntegrations(): Promise<void> {
+  try {
+    await ensureDemoLandingWebChat();
+  } catch (error) {
+    console.error("Failed to ensure demo landing webchat:", error);
+  }
 }

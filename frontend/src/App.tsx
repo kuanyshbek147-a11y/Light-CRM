@@ -13,6 +13,7 @@ import {
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
+import { LandingWebChat } from "./features/landing/LandingWebChat";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import {
   canRecordVoiceForWhatsApp,
@@ -2142,6 +2143,7 @@ export function App(): JSX.Element {
             </div>
           </div>
         </aside>
+        <LandingWebChat />
       </main>
     );
   }

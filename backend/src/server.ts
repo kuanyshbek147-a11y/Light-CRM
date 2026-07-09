@@ -18,7 +18,7 @@ import {
 import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
 import { platformRouter } from "./modules/platform";
 import { startSimulator } from "./simulator";
-import { ensureUserLoginSchema } from "./migrate";
+import { ensureUserLoginSchema, ensureDemoIntegrations } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
 import { setRealtimeServer } from "./realtime";
 
@@ -99,8 +99,9 @@ server.listen(port, () => {
 });
 
 void ensureUserLoginSchema()
-  .then(() => {
+  .then(async () => {
     console.log("Database schema ready");
+    await ensureDemoIntegrations();
   })
   .catch((error) => {
     console.error("Migration failed (will retry on requests):", error);
