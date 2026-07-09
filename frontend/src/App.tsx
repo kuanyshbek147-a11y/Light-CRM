@@ -2029,9 +2029,7 @@ export function App(): JSX.Element {
 
         <aside className="loginCard loginCardModern">
           <div className="loginCardBrandRow">
-            <div className="loginBrandMark" aria-hidden="true">
-              ⚡
-            </div>
+            <div className="loginBrandMark" aria-hidden="true" />
             <div className="loginBrandText">
               <div className="loginBrandTitle">{UI.brandTitle}</div>
               <div className="loginBrandSubtitle">{UI.demoAccess}</div>

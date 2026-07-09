@@ -269,11 +269,12 @@ button {
 }
 
 .brandMark {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #5b5ce9 0%, #8472ff 45%, #37c6ff 100%);
-  box-shadow: 0 0 0 6px rgba(91, 92, 233, 0.12);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #fff url("/logo-mark.png") center / contain no-repeat;
+  box-shadow: 0 0 0 1px rgba(91, 92, 233, 0.12);
+  flex-shrink: 0;
 }
 
 .brandTitle {
