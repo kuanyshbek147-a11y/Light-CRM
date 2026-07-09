@@ -224,6 +224,9 @@
   touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
 }
 
 .dialogCardTapArea:focus-visible {
@@ -295,16 +298,16 @@
 
 .channelChip {
   flex-shrink: 0;
-  height: 36px;
-  padding: 0 16px;
+  height: 32px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid #e2e8f7;
   background: #fff;
   color: #4b556f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(40, 52, 111, 0.05);
+  box-shadow: none;
 }
 
 .channelChip.active {
@@ -316,51 +319,57 @@
 /* ── Dialog cards ── */
 .dialogCard {
   display: grid;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 0;
   width: 100%;
-  padding: 14px;
-  border-radius: 18px;
-  border: 1px solid #edf0fa;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #e8ecf6;
   background: #fff;
-  box-shadow: 0 8px 24px rgba(40, 52, 111, 0.06);
+  box-shadow: 0 1px 3px rgba(40, 52, 111, 0.04);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
 .dialogCard:hover {
-  border-color: #d8def8;
+  border-color: #d4daf3;
 }
 
 .dialogCard.active {
-  border-color: #b8c0ff;
-  box-shadow: 0 10px 28px rgba(79, 70, 229, 0.12);
+  border-color: #c7cffc;
+  background: linear-gradient(135deg, rgba(91, 92, 233, 0.06), rgba(112, 149, 255, 0.04));
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
 }
 
 .dialogCardTop {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .dialogCardAvatar {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   display: grid;
   place-content: center;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   color: #4f46e5;
   background: linear-gradient(135deg, #eef0ff, #f8f9ff);
-  border: 2px solid #fff;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.12);
+  border: 1px solid #e8ebff;
+  box-shadow: none;
   flex-shrink: 0;
 }
 
 .dialogCardMain {
   flex: 1;
   min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
 .dialogCardNameRow {
@@ -368,17 +377,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .dialogCardName {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   color: #151a2d;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .dialogCardTime {
-  font-size: 12px;
+  font-size: 11px;
   color: #94a3b8;
   font-weight: 600;
   flex-shrink: 0;
@@ -387,18 +401,28 @@
 .dialogCardChannelRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 0;
+  min-width: 0;
+}
+
+.dialogCardChannelRow .chatPhone {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .channelBadge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 3px;
+  padding: 1px 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .channelBadge.whatsapp {
@@ -429,13 +453,12 @@
 }
 
 .dialogCardSnippet {
-  font-size: 13px;
+  font-size: 12px;
   color: #64748b;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.35;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dialogCardActions {
@@ -1110,18 +1133,40 @@
     display: none;
   }
 
+  .appShell.hasBottomNav .channelFilters {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .appShell.hasBottomNav .channelChip {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 12px;
+    box-shadow: none;
+  }
+
+  .appShell.hasBottomNav .mobilePageHeader {
+    margin-bottom: 10px;
+  }
+
+  .appShell.hasBottomNav .mobilePageTitle {
+    font-size: 20px;
+  }
+
   .appShell.hasBottomNav .chatList {
     display: grid;
-    gap: 12px;
-    padding: 0 0 80px;
+    gap: 8px;
+    padding: 0 2px 80px 0;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .appShell.hasBottomNav .chatList > li {
     list-style: none;
+    min-width: 0;
   }
 
   .appShell.hasBottomNav .chatQuickActions {
@@ -1132,16 +1177,64 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    border-radius: 0;
+    padding: 10px 12px;
+    border: 1px solid #e8ecf6;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(40, 52, 111, 0.04);
   }
 
-  .appShell.hasBottomNav .chatItem.dialogCard:hover,
+  .appShell.hasBottomNav .chatItem.dialogCard:hover {
+    background: #fff;
+    border-color: #d4daf3;
+  }
+
   .appShell.hasBottomNav .chatItem.dialogCard.active {
-    background: transparent;
-    border-color: transparent;
+    background: linear-gradient(135deg, rgba(91, 92, 233, 0.06), rgba(112, 149, 255, 0.04));
+    border-color: #c7cffc;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
+  }
+
+  .appShell.hasBottomNav .dialogCardTop {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .appShell.hasBottomNav .dialogCardMain,
+  .appShell.hasBottomNav .dialogCardMain.chatBody {
+    display: grid !important;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .appShell.hasBottomNav .dialogCardNameRow,
+  .appShell.hasBottomNav .dialogCardNameRow.chatTopLine {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .appShell.hasBottomNav .dialogCardChannelRow {
+    display: none;
+  }
+
+  .appShell.hasBottomNav .dialogCardAvatar.chatAvatar {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+
+  .appShell.hasBottomNav .dialogCardSnippet.chatSnippet {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    -webkit-line-clamp: unset;
   }
 
   .appShell.hasBottomNav .rightRail {
@@ -1236,16 +1329,53 @@
     display: none;
   }
 
+  .dialogCard {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .dialogCard:hover {
+    background: #f7f8ff;
+    border-color: #e5e8fa;
+  }
+
+  .dialogCard.active {
+    background: linear-gradient(135deg, rgba(91, 92, 233, 0.08), rgba(112, 149, 255, 0.08));
+    border-color: rgba(91, 92, 233, 0.25);
+    box-shadow: none;
+  }
+
   .dialogCardTop {
-    display: contents;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
   }
 
   .dialogCardMain {
-    display: contents;
+    display: grid;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
   }
 
   .dialogCardNameRow {
-    display: contents;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .dialogCardAvatar {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
   }
 
   .dialogCardBadges .priorityBadge {

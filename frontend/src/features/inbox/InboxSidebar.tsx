@@ -150,9 +150,9 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     <aside className="sidebar card">
       <div className="mobilePageHeader">
         <div className="mobilePageHeaderText">
-          <div className="mobilePageTitle">Dialogs Center</div>
+          <div className="mobilePageTitle">{ui.inboxTitle}</div>
           <div className="mobilePageSubtitle">
-            {visibleConversations.length} active
+            {visibleConversations.length} {ui.chatsSuffix}
           </div>
         </div>
         <div className="mobilePageActions">
