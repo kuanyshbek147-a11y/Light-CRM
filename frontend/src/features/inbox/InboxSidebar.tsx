@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
-type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram";
+type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web";
 
 function formatDialogTime(value: string): string {
   const date = new Date(value);
@@ -81,7 +81,9 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                     ? "WhatsApp"
                     : conversation.channel === "instagram"
                       ? "Instagram"
-                      : "Telegram"}
+                      : conversation.channel === "web"
+                        ? "Сайт"
+                        : "Telegram"}
                 </span>
                 <span className="chatPhone">{conversation.is_group ? "group" : conversation.phone}</span>
               </span>
@@ -175,7 +177,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
           ["all", "All Channels"],
           ["whatsapp", "WhatsApp"],
           ["telegram", "Telegram"],
-          ["instagram", "Instagram"]
+          ["instagram", "Instagram"],
+          ["web", "Сайт"]
         ] as const).map(([value, label]) => (
           <button
             key={value}

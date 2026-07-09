@@ -11,6 +11,10 @@ import { conversationsRouter } from "./modules/conversations";
 import { dealsRouter } from "./modules/deals";
 import { createInstagramRouter } from "./modules/integrations/instagram";
 import { createTelegramRouter, startTelegramPolling } from "./modules/integrations/telegram";
+import {
+  attachWebChatSocketHandlers,
+  createWebChatRouter
+} from "./modules/integrations/webchat";
 import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
 import { platformRouter } from "./modules/platform";
 import { startSimulator } from "./simulator";
@@ -34,6 +38,7 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 setRealtimeServer(io);
+attachWebChatSocketHandlers(io);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
@@ -44,6 +49,7 @@ app.use("/api/platform", authMiddleware, platformRouter);
 app.use("/api/integrations/telegram", createTelegramRouter(io));
 app.use("/api/integrations/whatsapp", createWhatsAppRouter(io));
 app.use("/api/integrations/instagram", createInstagramRouter(io));
+app.use("/api/integrations/webchat", createWebChatRouter(io));
 app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conversationsRouter);
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRouter);
@@ -52,10 +58,33 @@ startTelegramPolling(io);
 
 const publicDir = path.join(process.cwd(), "public");
 const publicIndex = path.join(publicDir, "index.html");
+const widgetSourceCandidates = [
+  path.join(process.cwd(), "src", "modules", "integrations", "webchat", "widget.js"),
+  path.join(__dirname, "modules", "integrations", "webchat", "widget.js"),
+  path.join(publicDir, "widget.js")
+];
+
+app.get("/widget.js", (_req, res) => {
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const widgetPath = widgetSourceCandidates.find((candidate) => fs.existsSync(candidate));
+  if (widgetPath) {
+    res.sendFile(widgetPath);
+    return;
+  }
+  res.status(404).type("text/plain").send("widget.js not found");
+});
+
 if (fs.existsSync(publicIndex)) {
   app.use(express.static(publicDir, { index: false, maxAge: "1h" }));
   app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api") || req.path.startsWith("/uploads") || req.path === "/health") {
+    if (
+      req.path.startsWith("/api") ||
+      req.path.startsWith("/uploads") ||
+      req.path === "/health" ||
+      req.path === "/widget.js"
+    ) {
       next();
       return;
     }

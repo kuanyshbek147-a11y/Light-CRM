@@ -2959,6 +2959,20 @@ button {
   gap: 8px;
 }
 
+.webchatEmbedBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.webchatEmbedCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  background: #f8fafc;
+}
+
 .platformUserRow {
   display: flex;
   align-items: center;

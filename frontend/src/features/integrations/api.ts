@@ -286,3 +286,66 @@ export async function disconnectTelegram(token: string): Promise<{ ok: boolean; 
   }
   return data;
 }
+
+export type WebChatStatus = {
+  connected: boolean;
+  enabled: boolean;
+  widgetId: string | null;
+  title: string;
+  greeting: string;
+  primaryColor: string;
+  connectedAt: string | null;
+  publicBaseUrl: string;
+  widgetScriptUrl: string;
+  embedSnippet: string | null;
+};
+
+export type WebChatConnectResult = {
+  ok: boolean;
+  connected?: boolean;
+  widgetId?: string;
+  title?: string;
+  greeting?: string;
+  primaryColor?: string;
+  embedSnippet?: string;
+  widgetScriptUrl?: string;
+  error?: string;
+};
+
+export async function loadWebChatStatus(token: string): Promise<WebChatStatus> {
+  const response = await fetch(`${API_BASE_URL}/integrations/webchat/status`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить статус виджета чата");
+  }
+  return (await response.json()) as WebChatStatus;
+}
+
+export async function connectWebChat(
+  token: string,
+  payload?: { title?: string; greeting?: string; primaryColor?: string }
+): Promise<WebChatConnectResult> {
+  const response = await fetch(`${API_BASE_URL}/integrations/webchat/connect`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload || {})
+  });
+  const data = (await response.json()) as WebChatConnectResult;
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось включить виджет чата");
+  }
+  return data;
+}
+
+export async function disconnectWebChat(token: string): Promise<{ ok: boolean; connected: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/integrations/webchat/disconnect`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  const data = (await response.json()) as { ok: boolean; connected: boolean; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось отключить виджет чата");
+  }
+  return data;
+}

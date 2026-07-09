@@ -419,6 +419,11 @@
   color: #be185d;
 }
 
+.channelBadge.web {
+  background: rgba(91, 92, 233, 0.12);
+  color: #3730a3;
+}
+
 .dialogCardBadges {
   display: flex;
   flex-wrap: wrap;

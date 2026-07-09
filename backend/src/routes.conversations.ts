@@ -5,6 +5,7 @@ import path from "path";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
 import { sendInstagramMessageForConversation } from "./modules/integrations/instagram";
+import { sendWebChatMessageForConversation } from "./modules/integrations/webchat";
 import { sendTelegramMessageForConversation } from "./telegram";
 import { sendWhatsAppFileForConversation, sendWhatsAppMessageForConversation } from "./whatsapp";
 import { downloadMetaMediaBuffer, getMetaCloudConfigForWorkspace } from "./modules/integrations/whatsapp/meta-cloud";
@@ -715,6 +716,7 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
     workspaceId,
     channel: conversationChannel,
     body,
+    createdAt,
     file: file
       ? {
           path: path.join(uploadsDir, file.filename),
@@ -731,9 +733,10 @@ async function deliverOutboundMessage(params: {
   workspaceId: string;
   channel: string;
   body: string;
+  createdAt: string;
   file: { path: string; originalname: string; uploadMimeType: string } | null;
 }): Promise<void> {
-  const { messageId, conversationId, workspaceId, channel, body, file } = params;
+  const { messageId, conversationId, workspaceId, channel, body, createdAt, file } = params;
   let externalMessageId: string | null = null;
   let metaMediaId: string | null = null;
   let deliveryError: string | undefined;
@@ -765,6 +768,14 @@ async function deliverOutboundMessage(params: {
       if (!externalMessageId) {
         deliveryError = "instagram_message_send_failed";
       }
+    } else if (channel === "web" && body.trim() && !file) {
+      externalMessageId = await sendWebChatMessageForConversation(
+        conversationId,
+        workspaceId,
+        body,
+        messageId,
+        createdAt
+      );
     }
   } catch (error) {
     console.error("Outbound message delivery failed", error);
