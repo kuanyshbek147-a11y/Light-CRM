@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
+import { sendInstagramMessageForConversation } from "./modules/integrations/instagram";
 import { sendTelegramMessageForConversation } from "./telegram";
 import { sendWhatsAppFileForConversation, sendWhatsAppMessageForConversation } from "./whatsapp";
 import { downloadMetaMediaBuffer, getMetaCloudConfigForWorkspace } from "./modules/integrations/whatsapp/meta-cloud";
@@ -757,8 +758,13 @@ async function deliverOutboundMessage(params: {
           deliveryError = "meta_message_send_failed";
         }
       }
-    } else if (body.trim() && !file) {
+    } else if (channel === "telegram" && body.trim() && !file) {
       externalMessageId = await sendTelegramMessageForConversation(conversationId, workspaceId, body);
+    } else if (channel === "instagram" && body.trim() && !file) {
+      externalMessageId = await sendInstagramMessageForConversation(conversationId, workspaceId, body);
+      if (!externalMessageId) {
+        deliveryError = "instagram_message_send_failed";
+      }
     }
   } catch (error) {
     console.error("Outbound message delivery failed", error);

@@ -47,6 +47,14 @@ services:
         sync: false
       - key: PUBLIC_BASE_URL
         value: https://light-crm-backend.onrender.com
+      - key: INSTAGRAM_PAGE_ID
+        sync: false
+      - key: INSTAGRAM_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: INSTAGRAM_IG_USER_ID
+        sync: false
+      - key: INSTAGRAM_API_VERSION
+        value: v21.0
       - key: DB_HOST
         fromDatabase:
           name: light-crm-db

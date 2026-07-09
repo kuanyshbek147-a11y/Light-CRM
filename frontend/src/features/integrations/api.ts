@@ -127,3 +127,63 @@ export async function completeWhatsAppConnect(
   }
   return data;
 }
+
+export type InstagramStatus = {
+  enabled: boolean;
+  missing: string[];
+  connected: boolean;
+  pageId: string | null;
+  igUserId: string | null;
+  connectedAt: string | null;
+  source: "workspace" | "env" | null;
+  webhookPath: string;
+  verifyToken: string | null;
+};
+
+export type InstagramConnectResult = {
+  ok: boolean;
+  connected?: boolean;
+  pageId?: string;
+  pageName?: string | null;
+  igUserId?: string | null;
+  igUsername?: string | null;
+  error?: string;
+};
+
+export async function loadInstagramStatus(token: string): Promise<InstagramStatus> {
+  const response = await fetch(`${API_BASE_URL}/integrations/instagram/status`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить статус Instagram");
+  }
+  return (await response.json()) as InstagramStatus;
+}
+
+export async function connectInstagram(
+  token: string,
+  payload: { pageId: string; pageAccessToken: string; igUserId?: string }
+): Promise<InstagramConnectResult> {
+  const response = await fetch(`${API_BASE_URL}/integrations/instagram/connect`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = (await response.json()) as InstagramConnectResult;
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось подключить Instagram");
+  }
+  return data;
+}
+
+export async function disconnectInstagram(token: string): Promise<{ ok: boolean; connected: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/integrations/instagram/disconnect`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  const data = (await response.json()) as { ok: boolean; connected: boolean; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось отключить Instagram");
+  }
+  return data;
+}

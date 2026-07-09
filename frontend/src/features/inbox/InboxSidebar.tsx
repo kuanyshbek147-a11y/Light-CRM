@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
-type ChannelFilter = "all" | "whatsapp" | "telegram";
+type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram";
 
 function formatDialogTime(value: string): string {
   const date = new Date(value);
@@ -77,7 +77,11 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
               </span>
               <span className="dialogCardChannelRow">
                 <span className={`channelBadge ${conversation.channel}`}>
-                  {conversation.channel === "whatsapp" ? "WhatsApp" : "Telegram"}
+                  {conversation.channel === "whatsapp"
+                    ? "WhatsApp"
+                    : conversation.channel === "instagram"
+                      ? "Instagram"
+                      : "Telegram"}
                 </span>
                 <span className="chatPhone">{conversation.is_group ? "group" : conversation.phone}</span>
               </span>
@@ -170,7 +174,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         {([
           ["all", "All Channels"],
           ["whatsapp", "WhatsApp"],
-          ["telegram", "Telegram"]
+          ["telegram", "Telegram"],
+          ["instagram", "Instagram"]
         ] as const).map(([value, label]) => (
           <button
             key={value}

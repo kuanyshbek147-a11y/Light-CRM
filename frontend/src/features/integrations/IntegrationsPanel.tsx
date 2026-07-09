@@ -1,3 +1,4 @@
+import { InstagramConnect } from "./InstagramConnect";
 import { WhatsAppEmbeddedSignup } from "./WhatsAppEmbeddedSignup";
 
 type Props = {
@@ -11,11 +12,12 @@ export function IntegrationsPanel({ authToken }: Props) {
         <div>
           <h2 className="integrationsPanelTitle">Интеграции</h2>
           <p className="integrationsHint">
-            Подключите официальный WhatsApp Cloud API (полная миграция, без приложения на телефоне).
+            Подключите WhatsApp Cloud API и Instagram Direct в одном рабочем пространстве.
           </p>
         </div>
       </div>
       <WhatsAppEmbeddedSignup authToken={authToken} />
+      <InstagramConnect authToken={authToken} />
     </section>
   );
 }

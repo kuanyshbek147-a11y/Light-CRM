@@ -7,7 +7,7 @@ export type Conversation = {
   inquiry_reason?: string | null;
   client_type?: string | null;
   category?: string | null;
-  channel: "whatsapp" | "telegram";
+  channel: "whatsapp" | "telegram" | "instagram";
   status: "open" | "closed";
   priority?: "low" | "normal" | "high" | "urgent";
   first_response_due_at?: string | null;
@@ -59,7 +59,7 @@ export type ContactCard = {
   inquiry_reason: string | null;
   client_type: string | null;
   category: string | null;
-  channel: "whatsapp" | "telegram";
+  channel: "whatsapp" | "telegram" | "instagram";
   external_id: string | null;
 };
 

@@ -414,6 +414,11 @@
   color: #1d4ed8;
 }
 
+.channelBadge.instagram {
+  background: rgba(236, 72, 153, 0.12);
+  color: #be185d;
+}
+
 .dialogCardBadges {
   display: flex;
   flex-wrap: wrap;
