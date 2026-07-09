@@ -1,6 +1,7 @@
 import "./load-env";
 import cors from "cors";
 import express from "express";
+import fs from "fs";
 import http from "http";
 import path from "path";
 import { Server } from "socket.io";
@@ -50,18 +51,17 @@ startSimulator(io);
 startTelegramPolling(io);
 
 const publicDir = path.join(process.cwd(), "public");
-app.use(express.static(publicDir, { index: false }));
-app.get("*", (req, res, next) => {
-  if (req.path.startsWith("/api") || req.path.startsWith("/uploads") || req.path === "/health") {
-    next();
-    return;
-  }
-  res.sendFile(path.join(publicDir, "index.html"), (error) => {
-    if (error) {
+const publicIndex = path.join(publicDir, "index.html");
+if (fs.existsSync(publicIndex)) {
+  app.use(express.static(publicDir, { index: false, maxAge: "1h" }));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads") || req.path === "/health") {
       next();
+      return;
     }
+    res.sendFile(publicIndex);
   });
-});
+}
 
 const port = Number(process.env.PORT || 4000);
 
