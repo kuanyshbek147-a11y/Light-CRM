@@ -221,3 +221,67 @@ export async function disconnectInstagram(token: string): Promise<{ ok: boolean;
   }
   return data;
 }
+
+export type TelegramStatus = {
+  enabled: boolean;
+  missing: string[];
+  connected: boolean;
+  mode: string;
+  botUsername: string | null;
+  botId: string | null;
+  source: "workspace" | "env" | null;
+  webhookPath: string | null;
+  webhookUrl: string | null;
+  pendingUpdates: number;
+  lastError: string | null;
+  publicBaseUrl: string;
+};
+
+export type TelegramConnectResult = {
+  ok: boolean;
+  connected?: boolean;
+  botUsername?: string | null;
+  botId?: string;
+  webhookSet?: boolean;
+  webhookUrl?: string | null;
+  webhookPath?: string;
+  error?: string;
+};
+
+export async function loadTelegramStatus(token: string): Promise<TelegramStatus> {
+  const response = await fetch(`${API_BASE_URL}/integrations/telegram/status`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить статус Telegram");
+  }
+  return (await response.json()) as TelegramStatus;
+}
+
+export async function connectTelegram(
+  token: string,
+  payload: { botToken: string; webhookSecret?: string }
+): Promise<TelegramConnectResult> {
+  const response = await fetch(`${API_BASE_URL}/integrations/telegram/connect`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = (await response.json()) as TelegramConnectResult;
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось подключить Telegram");
+  }
+  return data;
+}
+
+export async function disconnectTelegram(token: string): Promise<{ ok: boolean; connected: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/integrations/telegram/disconnect`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  const data = (await response.json()) as { ok: boolean; connected: boolean; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось отключить Telegram");
+  }
+  return data;
+}

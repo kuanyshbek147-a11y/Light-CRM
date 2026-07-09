@@ -55,6 +55,12 @@ services:
         sync: false
       - key: INSTAGRAM_API_VERSION
         value: v21.0
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        value: telegram-dev-secret
+      - key: TELEGRAM_DELIVERY_MODE
+        value: webhook
       - key: DB_HOST
         fromDatabase:
           name: light-crm-db

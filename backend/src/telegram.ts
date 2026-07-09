@@ -2,6 +2,23 @@ import { Router } from "express";
 import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
+import { authMiddleware, type AuthRequest } from "./modules/auth";
+import {
+  clearWorkspaceTelegramCredentials,
+  createTelegramWebhookSecret,
+  findWorkspaceIdByTelegramWebhookSecret,
+  getEnvTelegramCredentials,
+  getTelegramCredentialsForWorkspace,
+  getWorkspaceTelegramCredentials,
+  saveWorkspaceTelegramCredentials
+} from "./modules/integrations/telegram/credentials";
+import {
+  deleteTelegramWebhook,
+  getTelegramBotProfile,
+  getTelegramWebhookInfo,
+  sendTelegramTextMessage,
+  setTelegramWebhook
+} from "./modules/integrations/telegram/api";
 
 type TelegramUser = {
   id: number;
@@ -25,19 +42,29 @@ type TelegramUpdate = {
   message?: TelegramMessage;
 };
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || "telegram-dev-secret";
 const TELEGRAM_DELIVERY_MODE = process.env.TELEGRAM_DELIVERY_MODE || "webhook";
 let telegramOffset = 0;
+
+function publicBaseUrl(): string {
+  return (process.env.PUBLIC_BASE_URL || "https://light-crm-backend.onrender.com").replace(/\/+$/, "");
+}
 
 export function createTelegramRouter(io: Server): Router {
   const router = Router();
 
-  router.post(`/webhook/${TELEGRAM_WEBHOOK_SECRET}`, async (req, res) => {
+  router.post("/webhook/:secret", async (req, res) => {
+    const secret = typeof req.params.secret === "string" ? req.params.secret : "";
     const update = req.body as TelegramUpdate;
 
     try {
-      await processTelegramUpdate(update, io);
+      const workspaceId =
+        (await findWorkspaceIdByTelegramWebhookSecret(secret)) ||
+        (await resolveDefaultWorkspaceIdForSecret(secret));
+      if (!workspaceId) {
+        res.status(403).json({ ok: false, error: "forbidden" });
+        return;
+      }
+      await processTelegramUpdate(update, io, workspaceId);
       res.json({ ok: true });
     } catch (error) {
       console.error("Telegram webhook failed", error);
@@ -45,12 +72,132 @@ export function createTelegramRouter(io: Server): Router {
     }
   });
 
-  router.get("/status", (_req, res) => {
+  router.get("/status", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const workspaceCreds = await getWorkspaceTelegramCredentials(req.user.workspaceId);
+    const envCreds = getEnvTelegramCredentials();
+    const credentials = workspaceCreds || envCreds;
+    const missing: string[] = [];
+    if (!credentials?.botToken) {
+      missing.push("TELEGRAM_BOT_TOKEN");
+    }
+
+    let botUsername = credentials?.botUsername || null;
+    let webhookUrl: string | null = null;
+    let pendingUpdates = 0;
+    let lastError: string | null = null;
+
+    if (credentials?.botToken) {
+      try {
+        const [profile, webhook] = await Promise.all([
+          getTelegramBotProfile(credentials.botToken),
+          getTelegramWebhookInfo(credentials.botToken)
+        ]);
+        botUsername = profile.username || botUsername;
+        webhookUrl = webhook.url || null;
+        pendingUpdates = webhook.pending_update_count || 0;
+        lastError = webhook.last_error_message || null;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "Telegram status check failed";
+      }
+    }
+
     res.json({
-      enabled: Boolean(TELEGRAM_BOT_TOKEN),
+      enabled: missing.length === 0,
+      missing,
+      connected: Boolean(credentials?.botToken),
       mode: TELEGRAM_DELIVERY_MODE,
-      webhookPath: `/api/integrations/telegram/webhook/${TELEGRAM_WEBHOOK_SECRET}`
+      botUsername,
+      botId: credentials?.botId || null,
+      source: workspaceCreds ? "workspace" : envCreds ? "env" : null,
+      webhookPath: credentials
+        ? `/api/integrations/telegram/webhook/${credentials.webhookSecret}`
+        : null,
+      webhookUrl,
+      pendingUpdates,
+      lastError,
+      publicBaseUrl: publicBaseUrl()
     });
+  });
+
+  router.post("/connect", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const botToken = typeof req.body?.botToken === "string" ? req.body.botToken.trim() : "";
+    if (!botToken) {
+      res.status(400).json({ error: "botToken is required" });
+      return;
+    }
+
+    try {
+      const profile = await getTelegramBotProfile(botToken);
+      const webhookSecret =
+        (typeof req.body?.webhookSecret === "string" && req.body.webhookSecret.trim()) ||
+        createTelegramWebhookSecret();
+
+      await saveWorkspaceTelegramCredentials(req.user.workspaceId, {
+        botToken,
+        webhookSecret,
+        botUsername: profile.username || "",
+        botId: String(profile.id)
+      });
+
+      let webhookSet = false;
+      try {
+        webhookSet = await setTelegramWebhook({ botToken, webhookSecret }, publicBaseUrl());
+      } catch (webhookError) {
+        console.error("Telegram setWebhook warning", webhookError);
+      }
+
+      const webhook = await getTelegramWebhookInfo(botToken).catch(() => null);
+
+      res.json({
+        ok: true,
+        connected: true,
+        botUsername: profile.username || null,
+        botId: String(profile.id),
+        webhookSet,
+        webhookUrl: webhook?.url || null,
+        webhookPath: `/api/integrations/telegram/webhook/${webhookSecret}`
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Telegram connect failed";
+      res.status(400).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/disconnect", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const credentials = await getWorkspaceTelegramCredentials(req.user.workspaceId);
+    if (credentials?.botToken) {
+      try {
+        await deleteTelegramWebhook(credentials.botToken);
+      } catch (error) {
+        console.error("Telegram deleteWebhook warning", error);
+      }
+    }
+
+    await clearWorkspaceTelegramCredentials(req.user.workspaceId);
+    res.json({ ok: true, connected: false });
   });
 
   return router;
@@ -70,55 +217,53 @@ export async function sendTelegramMessageForConversation(
   );
 
   const conversation = rows[0];
-  if (!conversation || conversation.channel !== "telegram" || !conversation.external_id || !TELEGRAM_BOT_TOKEN) {
+  if (!conversation || conversation.channel !== "telegram" || !conversation.external_id) {
     return null;
   }
 
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: conversation.external_id,
-      text: body
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Telegram sendMessage failed: ${response.status} ${errorText}`);
+  const credentials = await getTelegramCredentialsForWorkspace(workspaceId);
+  if (!credentials?.botToken) {
+    return null;
   }
 
-  const payload = (await response.json()) as { result?: { message_id?: number } };
-  return payload.result?.message_id ? String(payload.result.message_id) : null;
+  return sendTelegramTextMessage(credentials.botToken, conversation.external_id, body);
 }
 
 export function startTelegramPolling(io: Server): void {
-  if (!TELEGRAM_BOT_TOKEN || TELEGRAM_DELIVERY_MODE !== "polling") {
+  const envCreds = getEnvTelegramCredentials();
+  if (!envCreds?.botToken || TELEGRAM_DELIVERY_MODE !== "polling") {
     return;
   }
 
-  void initializeTelegramPolling();
+  void initializeTelegramPolling(envCreds.botToken);
 
   setInterval(() => {
-    void pollTelegramUpdates(io).catch((error) => {
+    void pollTelegramUpdates(io, envCreds.botToken).catch((error) => {
       console.error("Telegram polling error", error);
     });
   }, 3000);
 }
 
-async function processTelegramUpdate(update: TelegramUpdate, io: Server): Promise<void> {
+async function resolveDefaultWorkspaceIdForSecret(secret: string): Promise<string | null> {
+  const envSecret = process.env.TELEGRAM_WEBHOOK_SECRET || "telegram-dev-secret";
+  if (secret !== envSecret) {
+    return null;
+  }
+  const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
+  return workspaceRows[0]?.id ?? null;
+}
+
+async function processTelegramUpdate(
+  update: TelegramUpdate,
+  io: Server,
+  workspaceId: string
+): Promise<void> {
   const message = update.message;
   if (!message?.text) {
     return;
   }
 
-  const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-  const workspaceId = workspaceRows[0]?.id;
-  if (!workspaceId) {
-    return;
-  }
   const managerId = await resolveAutoAssignedManager(workspaceId);
-
   const contactName = formatTelegramContactName(message.from);
   const chatId = String(message.chat.id);
 
@@ -160,11 +305,20 @@ async function processTelegramUpdate(update: TelegramUpdate, io: Server): Promis
       )
     )[0].id;
 
+  const externalMessageId = String(message.message_id);
+  const existing = await query<{ id: string }>(
+    `SELECT id FROM messages WHERE conversation_id = $1 AND external_message_id = $2 LIMIT 1`,
+    [conversationId, externalMessageId]
+  );
+  if (existing[0]) {
+    return;
+  }
+
   const inserted = await query<{ id: string; created_at: string }>(
     `INSERT INTO messages (conversation_id, workspace_id, direction, body, external_message_id)
      VALUES ($1, $2, 'incoming', $3, $4)
      RETURNING id, created_at`,
-    [conversationId, workspaceId, message.text, String(message.message_id)]
+    [conversationId, workspaceId, message.text, externalMessageId]
   );
 
   await query(
@@ -184,8 +338,8 @@ async function processTelegramUpdate(update: TelegramUpdate, io: Server): Promis
   });
 }
 
-async function pollTelegramUpdates(io: Server): Promise<void> {
-  const url = new URL(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`);
+async function pollTelegramUpdates(io: Server, botToken: string): Promise<void> {
+  const url = new URL(`https://api.telegram.org/bot${botToken}/getUpdates`);
   url.searchParams.set("timeout", "0");
   if (telegramOffset > 0) {
     url.searchParams.set("offset", String(telegramOffset));
@@ -198,26 +352,25 @@ async function pollTelegramUpdates(io: Server): Promise<void> {
   }
 
   const payload = (await response.json()) as { ok: boolean; result?: TelegramUpdate[] };
+  const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
+  const workspaceId = workspaceRows[0]?.id;
+  if (!workspaceId) {
+    return;
+  }
+
   for (const update of payload.result || []) {
     if (typeof update.update_id === "number") {
       telegramOffset = update.update_id + 1;
     }
-    await processTelegramUpdate(update, io);
+    await processTelegramUpdate(update, io, workspaceId);
   }
 }
 
-async function initializeTelegramPolling(): Promise<void> {
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      drop_pending_updates: false
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`Telegram deleteWebhook failed: ${response.status} ${errorText}`);
+async function initializeTelegramPolling(botToken: string): Promise<void> {
+  try {
+    await deleteTelegramWebhook(botToken);
+  } catch (error) {
+    console.error("Telegram deleteWebhook failed", error);
   }
 }
 
