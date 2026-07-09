@@ -49,6 +49,20 @@ app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRoute
 startSimulator(io);
 startTelegramPolling(io);
 
+const publicDir = path.join(process.cwd(), "public");
+app.use(express.static(publicDir, { index: false }));
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api") || req.path.startsWith("/uploads") || req.path === "/health") {
+    next();
+    return;
+  }
+  res.sendFile(path.join(publicDir, "index.html"), (error) => {
+    if (error) {
+      next();
+    }
+  });
+});
+
 const port = Number(process.env.PORT || 4000);
 
 server.listen(port, () => {
