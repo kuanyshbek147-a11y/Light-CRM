@@ -72,7 +72,29 @@ export async function ensureUserLoginSchema(): Promise<void> {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT`);
   await pool.query(`ALTER TABLE managers ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMP`);
+
+  // Stable per-operator colors for assigned dialog cards.
+  await pool.query(`
+    WITH palette AS (
+      SELECT ARRAY[
+        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+        '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16'
+      ]::text[] AS colors
+    ),
+    numbered AS (
+      SELECT u.id,
+             ((ROW_NUMBER() OVER (ORDER BY u.created_at ASC, u.id ASC) - 1) % 10) + 1 AS color_index
+      FROM users u
+      WHERE u.role IN ('manager', 'admin')
+        AND (u.color IS NULL OR TRIM(u.color) = '')
+    )
+    UPDATE users u
+    SET color = (SELECT colors[numbered.color_index] FROM palette)
+    FROM numbered
+    WHERE u.id = numbered.id
+  `);
 
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal'`);
   await pool.query(

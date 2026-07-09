@@ -17,6 +17,8 @@ export type Conversation = {
   has_sla_follow_up?: boolean;
   updated_at: string;
   assigned_manager_id: string;
+  assigned_manager_name?: string | null;
+  assigned_manager_color?: string | null;
   stage: string | null;
   amount: string | null;
   last_message_body: string | null;
@@ -81,4 +83,5 @@ export type SavedInboxFilterPreset = {
 export type QuickActionManager = {
   id: string;
   full_name: string;
+  color?: string | null;
 };

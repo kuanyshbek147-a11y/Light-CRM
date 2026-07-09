@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
+import { operatorDialogCardStyle } from "./lib/operatorColor";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
 type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web";
@@ -67,7 +68,12 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
 
   return (
     <li>
-      <div className={`chatItem dialogCard ${isActive ? "active" : ""}`}>
+      <div
+        className={`chatItem dialogCard ${isActive ? "active" : ""}${
+          conversation.assigned_manager_id ? " assigned" : ""
+        }${conversation.status === "closed" ? " closed" : ""}`}
+        style={operatorDialogCardStyle(conversation.assigned_manager_color)}
+      >
         <div
           className="dialogCardTapArea"
           role="button"
@@ -122,6 +128,11 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
               <span className="dialogCardSnippet chatSnippet">
                 {formatSnippet(conversation, noMessages)}
               </span>
+              {conversation.assigned_manager_name ? (
+                <span className="dialogCardAssignee">
+                  {conversation.assigned_manager_name}
+                </span>
+              ) : null}
             </span>
           </div>
         </div>

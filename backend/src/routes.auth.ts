@@ -34,8 +34,9 @@ authRouter.post("/login", async (req, res) => {
     password_hash: string;
     login: string | null;
     is_active: boolean;
+    color: string | null;
   }>(
-    `SELECT id, workspace_id, full_name, email, role, password_hash, login, is_active
+    `SELECT id, workspace_id, full_name, email, role, password_hash, login, is_active, color
      FROM users
      WHERE is_active = true
        AND (
@@ -81,7 +82,8 @@ authRouter.post("/login", async (req, res) => {
       email: user.email,
       fullName: user.full_name,
       role: user.role,
-      login: user.login
+      login: user.login,
+      color: user.color
     }
   });
 });
@@ -102,8 +104,9 @@ authRouter.get("/me", async (req, res) => {
       full_name: string;
       role: UserRole;
       login: string | null;
+      color: string | null;
     }>(
-      `SELECT id, email, full_name, role, login
+      `SELECT id, email, full_name, role, login, color
        FROM users
        WHERE id = $1 AND is_active = true
        LIMIT 1`,
@@ -120,7 +123,8 @@ authRouter.get("/me", async (req, res) => {
         email: user.email,
         fullName: user.full_name,
         role: user.role,
-        login: user.login
+        login: user.login,
+        color: user.color
       }
     });
   } catch {

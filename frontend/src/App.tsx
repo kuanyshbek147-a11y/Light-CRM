@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL, SOCKET_BASE_URL } from "./shared/config/api";
 import {
@@ -318,6 +319,9 @@ const UI = {
   noCardsInStage: "\u0412 \u044d\u0442\u043e\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a.",
   closeCard: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
+  takeIntoWork: "\u0412\u0437\u044f\u0442\u044c \u0432 \u0440\u0430\u0431\u043e\u0442\u0443",
+  alreadyInWork: "\u0423\u0436\u0435 \u0432 \u0440\u0430\u0431\u043e\u0442\u0435",
+  assignedTo: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440",
   openCards: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   closedCards: "\u0417\u0430\u043a\u0440\u044b\u0442\u044b\u0435",
   analyticsTitle: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u043e\u0442\u0434\u0435\u043b\u0430",
@@ -1074,6 +1078,51 @@ export function App(): JSX.Element {
     }
     await apiAssignConversationManager(token, conversationId, managerId);
     await refreshConversationList({ token, search, filters, setConversations });
+  }
+
+  async function takeConversationIntoWork(conversationId: string): Promise<void> {
+    if (!token || !sessionUser?.id) {
+      showToast("Не удалось определить оператора", "error");
+      return;
+    }
+    try {
+      await apiAssignConversationManager(token, conversationId, sessionUser.id);
+      if (selectedConversationData?.status === "closed") {
+        await apiSetConversationStatus(token, conversationId, "open");
+      }
+      await refreshConversationList({ token, search, filters, setConversations });
+      showToast("Диалог взят в работу", "success");
+      setCustomerCardOpen(false);
+    } catch {
+      showToast("Не удалось взять диалог в работу", "error");
+    }
+  }
+
+  async function closeConversationFromCard(conversationId: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiSetConversationStatus(token, conversationId, "closed");
+      await refreshConversationList({ token, search, filters, setConversations });
+      showToast("Диалог закрыт", "success");
+      setCustomerCardOpen(false);
+    } catch {
+      showToast("Не удалось закрыть диалог", "error");
+    }
+  }
+
+  async function reopenConversationFromCard(conversationId: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiSetConversationStatus(token, conversationId, "open");
+      await refreshConversationList({ token, search, filters, setConversations });
+      showToast("Диалог переоткрыт", "success");
+    } catch {
+      showToast("Не удалось переоткрыть диалог", "error");
+    }
   }
 
   async function moveConversationStage(conversationId: string, stage: string): Promise<void> {
@@ -3271,6 +3320,54 @@ export function App(): JSX.Element {
               >
                 {UI.manageFunnel}
               </button>
+              {selectedConversationData ? (
+                <>
+                  <div className="clientCardWorkActions">
+                    <button
+                      type="button"
+                      className="clientCardTakeBtn"
+                      disabled={
+                        Boolean(sessionUser?.id) &&
+                        selectedConversationData.assigned_manager_id === sessionUser?.id &&
+                        selectedConversationData.status === "open"
+                      }
+                      onClick={() => void takeConversationIntoWork(selectedConversationData.id)}
+                    >
+                      {selectedConversationData.assigned_manager_id === sessionUser?.id &&
+                      selectedConversationData.status === "open"
+                        ? UI.alreadyInWork
+                        : UI.takeIntoWork}
+                    </button>
+                    <button
+                      type="button"
+                      className={`clientCardCloseDialogBtn${
+                        selectedConversationData.status === "closed" ? " reopen" : ""
+                      }`}
+                      onClick={() =>
+                        void (selectedConversationData.status === "closed"
+                          ? reopenConversationFromCard(selectedConversationData.id)
+                          : closeConversationFromCard(selectedConversationData.id))
+                      }
+                    >
+                      {selectedConversationData.status === "closed" ? UI.reopenCard : UI.closeCard}
+                    </button>
+                  </div>
+                  {selectedConversationData.assigned_manager_name ? (
+                    <div
+                      className="clientCardAssigneeHint"
+                      style={
+                        selectedConversationData.assigned_manager_color
+                          ? ({
+                              ["--operator-color" as string]: selectedConversationData.assigned_manager_color
+                            } as CSSProperties)
+                          : undefined
+                      }
+                    >
+                      {UI.assignedTo}: <strong>{selectedConversationData.assigned_manager_name}</strong>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
               <div className="clientCardActions">
                 <button type="button" className="clientCardSaveBtn" onClick={() => void saveContactCard()}>
                   💾 {UI.save}

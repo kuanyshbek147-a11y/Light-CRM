@@ -117,10 +117,10 @@ conversationsRouter.get("/scripts", async (req: AuthRequest, res) => {
 });
 
 conversationsRouter.get("/quick-actions-meta", async (req: AuthRequest, res) => {
-  const managers = await query<{ id: string; full_name: string }>(
-    `SELECT id, full_name
+  const managers = await query<{ id: string; full_name: string; color: string | null }>(
+    `SELECT id, full_name, color
      FROM users
-     WHERE workspace_id = $1 AND role = 'manager' AND is_active = true
+     WHERE workspace_id = $1 AND role IN ('manager', 'admin') AND is_active = true
      ORDER BY full_name ASC`,
     [req.user?.workspaceId]
   );
@@ -285,6 +285,8 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
     `SELECT c.id, c.contact_id, c.assigned_manager_id, c.channel, c.status, c.priority, c.first_response_due_at, c.updated_at,
             ct.name AS contact_name, ct.phone, ct.city, ct.inquiry_reason, ct.client_type, ct.category,
             ct.channel AS contact_channel, ct.external_id AS contact_external_id, ct.is_group,
+            assignee.full_name AS assigned_manager_name,
+            assignee.color AS assigned_manager_color,
             d.id AS deal_id, d.stage, d.amount,
             m.body AS last_message_body, m.direction AS last_message_direction, m.created_at AS last_message_at,
             COALESCE(unread.unread_count, 0) AS unread_count,
@@ -298,6 +300,7 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
             ) AS sla_escalated
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN users assignee ON assignee.id = c.assigned_manager_id
      LEFT JOIN deals d ON d.conversation_id = c.id
      LEFT JOIN LATERAL (
        SELECT body, direction, created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
@@ -445,7 +448,7 @@ conversationsRouter.patch("/:id/assign-manager", async (req: AuthRequest, res) =
        FROM users
        WHERE id = $1
          AND workspace_id = $2
-         AND role = 'manager'
+         AND role IN ('manager', 'admin')
          AND is_active = true
        LIMIT 1`,
       [managerValue, req.user?.workspaceId]
@@ -458,9 +461,11 @@ conversationsRouter.patch("/:id/assign-manager", async (req: AuthRequest, res) =
 
   const rows = await query(
     `UPDATE conversations
-     SET assigned_manager_id = NULLIF($1, '')::uuid, updated_at = now()
+     SET assigned_manager_id = NULLIF($1, '')::uuid,
+         status = CASE WHEN NULLIF($1, '') IS NOT NULL THEN 'open' ELSE status END,
+         updated_at = now()
      WHERE id = $2 AND workspace_id = $3
-     RETURNING id, assigned_manager_id, updated_at`,
+     RETURNING id, assigned_manager_id, status, updated_at`,
     [managerValue, req.params.id, req.user?.workspaceId]
   );
   res.json(rows[0] || null);

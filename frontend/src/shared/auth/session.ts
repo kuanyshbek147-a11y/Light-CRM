@@ -9,6 +9,7 @@ export type SessionUser = {
   fullName: string;
   role: string;
   login: string | null;
+  color?: string | null;
 };
 
 export function readStoredSession(): { token: string; user: SessionUser | null } {

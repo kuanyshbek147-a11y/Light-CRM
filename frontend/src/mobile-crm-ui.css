@@ -479,6 +479,42 @@
   text-overflow: ellipsis;
 }
 
+.dialogCardAssignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--operator-color, #4f46e5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dialogCard.assigned {
+  border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 45%, #e8ecf6);
+  background: color-mix(in srgb, var(--operator-color, #4f46e5) 12%, #ffffff);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--operator-color, #4f46e5) 18%, transparent);
+}
+
+.dialogCard.assigned.active {
+  border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 65%, #c7cffc);
+  background: color-mix(in srgb, var(--operator-color, #4f46e5) 18%, #ffffff);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--operator-color, #4f46e5) 22%, transparent);
+}
+
+.dialogCard.closed {
+  opacity: 0.72;
+}
+
+.dialogCard.assigned .dialogCardAvatar {
+  border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 35%, #e8ebff);
+  color: var(--operator-color, #4f46e5);
+  background: color-mix(in srgb, var(--operator-color, #4f46e5) 14%, #ffffff);
+}
+
 .dialogCardActions {
   display: flex;
   gap: 8px;
@@ -925,6 +961,56 @@
   margin-top: 16px;
 }
 
+.clientCardWorkActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.clientCardTakeBtn,
+.clientCardCloseDialogBtn {
+  height: 46px;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.clientCardTakeBtn {
+  border: 1px solid #bbf7d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.clientCardTakeBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.clientCardCloseDialogBtn {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.clientCardCloseDialogBtn.reopen {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.clientCardAssigneeHint {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.clientCardAssigneeHint strong {
+  color: var(--operator-color, #4f46e5);
+}
+
 .clientCardSaveBtn {
   height: 50px;
   border-radius: 16px;
@@ -1226,6 +1312,23 @@
     box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
   }
 
+  .appShell.hasBottomNav .chatItem.dialogCard.assigned {
+    border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 45%, #e8ecf6);
+    background: color-mix(in srgb, var(--operator-color, #4f46e5) 12%, #ffffff);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--operator-color, #4f46e5) 18%, transparent);
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard.assigned:hover,
+  .appShell.hasBottomNav .chatItem.dialogCard.assigned.active {
+    border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 65%, #c7cffc);
+    background: color-mix(in srgb, var(--operator-color, #4f46e5) 18%, #ffffff);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--operator-color, #4f46e5) 22%, transparent);
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard.closed {
+    opacity: 0.72;
+  }
+
   .appShell.hasBottomNav .dialogCardTop {
     display: flex !important;
     flex-direction: row;
@@ -1266,6 +1369,21 @@
     text-overflow: ellipsis;
     display: block;
     -webkit-line-clamp: unset;
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard.assigned {
+    border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 45%, #e8ecf6);
+    background: color-mix(in srgb, var(--operator-color, #4f46e5) 12%, #ffffff);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--operator-color, #4f46e5) 18%, transparent);
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard.assigned.active {
+    border-color: color-mix(in srgb, var(--operator-color, #4f46e5) 65%, #c7cffc);
+    background: color-mix(in srgb, var(--operator-color, #4f46e5) 18%, #ffffff);
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard.closed {
+    opacity: 0.72;
   }
 
   .appShell.hasBottomNav .rightRail {
