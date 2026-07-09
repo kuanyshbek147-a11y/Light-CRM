@@ -19,8 +19,14 @@ function formatSnippet(conversation: Conversation, fallback: string): string {
   if (body.includes("[Голосовое") || body.toLowerCase().includes("voice")) {
     return "🎤 [Голосовое сообщение]";
   }
-  if (body.startsWith("http") && body.includes("image")) {
-    return "🖼 [Отправлено изображение]";
+  if (body.includes("[Изображение]") || (body.startsWith("http") && body.includes("image"))) {
+    return "🖼 [Изображение]";
+  }
+  if (body.includes("[Видео]")) {
+    return "🎬 [Видео]";
+  }
+  if (body.includes("[Медиа]")) {
+    return "📎 [Медиа]";
   }
   return body;
 }

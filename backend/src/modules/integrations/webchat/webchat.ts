@@ -1,9 +1,16 @@
 import { Router } from "express";
+import multer from "multer";
 import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "../../../auto-assignment";
 import { query } from "../../../db";
 import { getRealtimeServer } from "../../../realtime";
 import { authMiddleware, type AuthRequest } from "../../auth";
+import {
+  mediaUpload,
+  placeholderBodyForAttachment,
+  resolveAttachmentType,
+  resolveUploadMimeType
+} from "../../media/upload";
 import {
   createWebChatVisitorToken,
   createWebChatWidgetId,
@@ -20,6 +27,15 @@ type PublicMessage = {
   direction: "incoming" | "outgoing";
   body: string;
   created_at: string;
+  attachment_url?: string | null;
+  attachment_type?: "image" | "video" | "audio" | "document" | null;
+  attachment_name?: string | null;
+};
+
+type WebChatAttachment = {
+  attachmentUrl?: string | null;
+  attachmentType?: "image" | "video" | "audio" | "document" | null;
+  attachmentName?: string | null;
 };
 
 function publicBaseUrl(): string {
@@ -28,6 +44,25 @@ function publicBaseUrl(): string {
 
 function widgetScriptUrl(): string {
   return `${publicBaseUrl()}/widget.js`;
+}
+
+function absoluteMediaUrl(url: string | null | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+  return `${publicBaseUrl()}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
+function toPublicMessage(row: PublicMessage): PublicMessage {
+  return {
+    ...row,
+    attachment_url: absoluteMediaUrl(row.attachment_url),
+    attachment_type: row.attachment_type || null,
+    attachment_name: row.attachment_name || null
+  };
 }
 
 function sanitizeVisitorName(value: unknown): string {
@@ -102,14 +137,15 @@ async function ensureVisitorConversation(
 }
 
 async function listConversationMessages(conversationId: string): Promise<PublicMessage[]> {
-  return query<PublicMessage>(
-    `SELECT id, direction, body, created_at
+  const rows = await query<PublicMessage>(
+    `SELECT id, direction, body, created_at, attachment_url, attachment_type, attachment_name
      FROM messages
      WHERE conversation_id = $1
      ORDER BY created_at ASC
      LIMIT 200`,
     [conversationId]
   );
+  return rows.map(toPublicMessage);
 }
 
 export function createWebChatRouter(io: Server): Router {
@@ -283,81 +319,113 @@ export function createWebChatRouter(io: Server): Router {
     res.json({ ok: true, conversationId: session.conversationId, messages });
   });
 
-  router.post("/widget/:widgetId/session/:visitorToken/messages", async (req, res) => {
-    const widgetId = String(req.params.widgetId || "");
-    const visitorToken = String(req.params.visitorToken || "");
-    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
-    const visitorName = sanitizeVisitorName(req.body?.visitorName);
-
-    if (!body) {
-      res.status(400).json({ error: "body is required" });
-      return;
-    }
-    if (body.length > 4000) {
-      res.status(400).json({ error: "Message is too long" });
-      return;
-    }
-
-    const config = await getPublicWebChatConfig(widgetId);
-    if (!config) {
-      res.status(404).json({ error: "Widget not found or disabled" });
-      return;
-    }
-
-    try {
-      const session = await ensureVisitorConversation(
-        config.workspaceId,
-        visitorToken,
-        visitorName || undefined
-      );
-
-      const inserted = await query<{ id: string; created_at: string }>(
-        `INSERT INTO messages (conversation_id, workspace_id, direction, body)
-         VALUES ($1, $2, 'incoming', $3)
-         RETURNING id, created_at`,
-        [session.conversationId, config.workspaceId, body]
-      );
-
-      await query(
-        `UPDATE conversations
-         SET updated_at = now(),
-             status = 'open',
-             first_response_due_at = now() + interval '15 minutes'
-         WHERE id = $1`,
-        [session.conversationId]
-      );
-
-      const payload = {
-        conversationId: session.conversationId,
-        messageId: inserted[0].id,
-        direction: "incoming" as const,
-        body,
-        createdAt: inserted[0].created_at,
-        channel: "web"
-      };
-
-      io.emit("message:new", payload);
-      io.to(`webchat:${visitorToken}`).emit("webchat:message", {
-        id: inserted[0].id,
-        direction: "incoming",
-        body,
-        created_at: inserted[0].created_at
+  router.post(
+    "/widget/:widgetId/session/:visitorToken/messages",
+    (req, res, next) => {
+      mediaUpload.single("file")(req, res, (error) => {
+        if (error) {
+          if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+            res.status(400).json({ error: "file_too_large" });
+            return;
+          }
+          res.status(400).json({ error: "invalid_file" });
+          return;
+        }
+        next();
       });
+    },
+    async (req, res) => {
+      const widgetId = String(req.params.widgetId || "");
+      const visitorToken = String(req.params.visitorToken || "");
+      const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+      const visitorName = sanitizeVisitorName(req.body?.visitorName);
+      const file = req.file;
+      const uploadMimeType = file ? resolveUploadMimeType(file) : "";
+      const attachmentType = file ? resolveAttachmentType(uploadMimeType) : null;
+      const attachmentUrl = file ? `/uploads/${file.filename}` : null;
+      const attachmentName = file?.originalname || null;
+      const storedBody = body || (file ? placeholderBodyForAttachment(attachmentType) : "");
 
-      res.status(201).json({
-        ok: true,
-        message: {
+      if (!storedBody && !file) {
+        res.status(400).json({ error: "body_or_file_required" });
+        return;
+      }
+      if (body.length > 4000) {
+        res.status(400).json({ error: "Message is too long" });
+        return;
+      }
+
+      const config = await getPublicWebChatConfig(widgetId);
+      if (!config) {
+        res.status(404).json({ error: "Widget not found or disabled" });
+        return;
+      }
+
+      try {
+        const session = await ensureVisitorConversation(
+          config.workspaceId,
+          visitorToken,
+          visitorName || undefined
+        );
+
+        const inserted = await query<{ id: string; created_at: string }>(
+          `INSERT INTO messages (
+            conversation_id, workspace_id, direction, body, attachment_url, attachment_type, attachment_name
+          )
+           VALUES ($1, $2, 'incoming', $3, $4, $5, $6)
+           RETURNING id, created_at`,
+          [
+            session.conversationId,
+            config.workspaceId,
+            storedBody,
+            attachmentUrl,
+            attachmentType,
+            attachmentName
+          ]
+        );
+
+        await query(
+          `UPDATE conversations
+           SET updated_at = now(),
+               status = 'open',
+               first_response_due_at = now() + interval '15 minutes'
+           WHERE id = $1`,
+          [session.conversationId]
+        );
+
+        const publicMessage = toPublicMessage({
           id: inserted[0].id,
           direction: "incoming",
-          body,
-          created_at: inserted[0].created_at
-        }
-      });
-    } catch (error) {
-      console.error("Web chat inbound failed", error);
-      res.status(500).json({ error: "Failed to send message" });
+          body: storedBody,
+          created_at: inserted[0].created_at,
+          attachment_url: attachmentUrl,
+          attachment_type: attachmentType,
+          attachment_name: attachmentName
+        });
+
+        io.emit("message:new", {
+          conversationId: session.conversationId,
+          messageId: inserted[0].id,
+          direction: "incoming",
+          body: storedBody,
+          createdAt: inserted[0].created_at,
+          channel: "web",
+          attachmentUrl: publicMessage.attachment_url,
+          attachmentType: publicMessage.attachment_type,
+          attachmentName: publicMessage.attachment_name
+        });
+        io.to(`webchat:${visitorToken}`).emit("webchat:message", publicMessage);
+
+        res.status(201).json({
+          ok: true,
+          message: publicMessage
+        });
+      } catch (error) {
+        console.error("Web chat inbound failed", error);
+        res.status(500).json({ error: "Failed to send message" });
+      }
     }
-  });
+  );
 
   return router;
 }
@@ -367,7 +435,8 @@ export async function sendWebChatMessageForConversation(
   workspaceId: string,
   body: string,
   messageId: string,
-  createdAt: string
+  createdAt: string,
+  attachment?: WebChatAttachment
 ): Promise<string | null> {
   const rows = await query<{ channel: string; external_id: string | null }>(
     `SELECT c.channel, ct.external_id
@@ -388,7 +457,10 @@ export async function sendWebChatMessageForConversation(
     id: messageId,
     direction: "outgoing",
     body,
-    created_at: createdAt
+    created_at: createdAt,
+    attachment_url: absoluteMediaUrl(attachment?.attachmentUrl),
+    attachment_type: attachment?.attachmentType || null,
+    attachment_name: attachment?.attachmentName || null
   });
 
   return messageId;

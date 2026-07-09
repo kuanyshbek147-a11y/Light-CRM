@@ -74,6 +74,32 @@
     }
   }
 
+  function mediaUrl(url) {
+    if (!url) {
+      return "";
+    }
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    return API_BASE + (url.charAt(0) === "/" ? url : "/" + url);
+  }
+
+  function isPlaceholderBody(body, attachmentType) {
+    if (!body) {
+      return true;
+    }
+    if (attachmentType === "audio" && body === "[Голосовое сообщение]") {
+      return true;
+    }
+    if (attachmentType === "image" && body === "[Изображение]") {
+      return true;
+    }
+    if (attachmentType === "video" && body === "[Видео]") {
+      return true;
+    }
+    return body === "[Медиа]";
+  }
+
   function ensureSession() {
     var body = { visitorToken: state.visitorToken || loadStoredToken() || undefined };
     return api("/api/integrations/webchat/widget/" + encodeURIComponent(WIDGET_ID) + "/session", {
@@ -171,6 +197,71 @@
     return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : "#5b5ce9";
   }
 
+  function setSending(isSending) {
+    state.sending = isSending;
+    sendBtn.disabled = isSending;
+    attachBtn.disabled = isSending;
+    fileInput.disabled = isSending;
+  }
+
+  function sendPayload(text, file) {
+    if (state.sending) {
+      return Promise.resolve();
+    }
+    var cleanText = (text || "").trim();
+    if (!cleanText && !file) {
+      return Promise.resolve();
+    }
+
+    setSending(true);
+
+    return ensureSession()
+      .then(function () {
+        var formData = new FormData();
+        if (cleanText) {
+          formData.append("body", cleanText);
+        }
+        if (file) {
+          formData.append("file", file, file.name || "media");
+        }
+        return fetch(
+          API_BASE +
+            "/api/integrations/webchat/widget/" +
+            encodeURIComponent(WIDGET_ID) +
+            "/session/" +
+            encodeURIComponent(state.visitorToken) +
+            "/messages",
+          {
+            method: "POST",
+            body: formData
+          }
+        ).then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) {
+              throw new Error((data && data.error) || "Request failed");
+            }
+            return data;
+          });
+        });
+      })
+      .then(function (data) {
+        input.value = "";
+        if (data.message) {
+          upsertMessage(data.message);
+        } else {
+          return refreshMessages();
+        }
+      })
+      .catch(function (err) {
+        console.warn("[Light CRM Widget] send failed", err);
+        alert("Не удалось отправить сообщение. Попробуйте ещё раз.");
+      })
+      .then(function () {
+        setSending(false);
+        input.focus();
+      });
+  }
+
   var host = document.createElement("div");
   host.id = "lightcrm-webchat-root";
   document.body.appendChild(host);
@@ -195,12 +286,19 @@
     ".msg.in{align-self:flex-end;background:var(--lc-primary,#5b5ce9);color:#fff;border-bottom-right-radius:4px}" +
     ".msg.out{align-self:flex-start;background:#fff;border:1px solid #e5e7eb;color:#151a2d;border-bottom-left-radius:4px}" +
     ".msgTime{display:block;margin-top:4px;font-size:10px;opacity:.7}" +
+    ".msgMedia{display:block;margin:0 0 6px;max-width:100%;border-radius:10px}" +
+    ".msgMedia.image,.msgMedia.video{width:100%;height:auto;background:#0f172a}" +
+    ".msgMedia.audio{width:100%}" +
+    ".msgBody{display:block}" +
     ".greeting{align-self:center;text-align:center;color:#64748b;font-size:13px;padding:8px 12px}" +
-    ".composer{display:flex;gap:8px;padding:10px;border-top:1px solid #e8ebf7;background:#fff}" +
-    ".composer input{flex:1;border:1px solid #dbe2f0;border-radius:12px;padding:10px 12px;font:inherit;outline:none}" +
-    ".composer input:focus{border-color:var(--lc-primary,#5b5ce9)}" +
-    ".composer button{border:none;border-radius:12px;padding:0 14px;background:var(--lc-primary,#5b5ce9);color:#fff;font-weight:700;cursor:pointer}" +
-    ".composer button:disabled{opacity:.6;cursor:default}";
+    ".composer{display:flex;gap:8px;padding:10px;border-top:1px solid #e8ebf7;background:#fff;align-items:center}" +
+    ".composer input[type=text]{flex:1;border:1px solid #dbe2f0;border-radius:12px;padding:10px 12px;font:inherit;outline:none;min-width:0}" +
+    ".composer input[type=text]:focus{border-color:var(--lc-primary,#5b5ce9)}" +
+    ".composer .attachBtn,.composer .sendBtn{border:none;border-radius:12px;height:40px;min-width:40px;padding:0 12px;" +
+    "background:var(--lc-primary,#5b5ce9);color:#fff;font-weight:700;cursor:pointer;flex-shrink:0}" +
+    ".composer .attachBtn{background:#eef2ff;color:var(--lc-primary,#5b5ce9)}" +
+    ".composer button:disabled{opacity:.6;cursor:default}" +
+    ".hiddenFile{display:none}";
 
   var wrap = document.createElement("div");
   wrap.className = "wrap";
@@ -212,8 +310,10 @@
     "  </div>" +
     '  <div class="messages"></div>' +
     '  <form class="composer">' +
+    '    <input class="hiddenFile" type="file" accept="image/*,video/*,audio/*" />' +
+    '    <button type="button" class="attachBtn" title="Прикрепить файл" aria-label="Прикрепить файл">📎</button>' +
     '    <input type="text" maxlength="4000" placeholder="Напишите сообщение..." autocomplete="off" />' +
-    '    <button type="submit">➤</button>' +
+    '    <button type="submit" class="sendBtn">➤</button>' +
     "  </form>" +
     "</div>" +
     '<button type="button" class="bubble" aria-label="Открыть чат">💬</button>';
@@ -225,8 +325,10 @@
   var bubble = wrap.querySelector(".bubble");
   var messagesEl = wrap.querySelector(".messages");
   var form = wrap.querySelector(".composer");
-  var input = wrap.querySelector(".composer input");
-  var sendBtn = wrap.querySelector(".composer button");
+  var input = wrap.querySelector(".composer input[type=text]");
+  var sendBtn = wrap.querySelector(".composer .sendBtn");
+  var attachBtn = wrap.querySelector(".composer .attachBtn");
+  var fileInput = wrap.querySelector(".composer .hiddenFile");
   var headerTitle = wrap.querySelector(".headerTitle");
   var headerHint = wrap.querySelector(".headerHint");
 
@@ -240,10 +342,47 @@
     }
     state.messages.forEach(function (message) {
       var row = document.createElement("div");
-      // visitor messages are "incoming" in CRM, but "out" from visitor UI perspective is manager reply
       var fromVisitor = message.direction === "incoming";
       row.className = "msg " + (fromVisitor ? "in" : "out");
-      row.textContent = message.body || "";
+
+      var url = mediaUrl(message.attachment_url);
+      if (url && message.attachment_type === "image") {
+        var image = document.createElement("img");
+        image.className = "msgMedia image";
+        image.src = url;
+        image.alt = message.attachment_name || "image";
+        image.loading = "lazy";
+        row.appendChild(image);
+      } else if (url && message.attachment_type === "video") {
+        var video = document.createElement("video");
+        video.className = "msgMedia video";
+        video.src = url;
+        video.controls = true;
+        video.playsInline = true;
+        row.appendChild(video);
+      } else if (url && message.attachment_type === "audio") {
+        var audio = document.createElement("audio");
+        audio.className = "msgMedia audio";
+        audio.src = url;
+        audio.controls = true;
+        row.appendChild(audio);
+      } else if (url) {
+        var link = document.createElement("a");
+        link.className = "msgBody";
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = message.attachment_name || "Скачать файл";
+        row.appendChild(link);
+      }
+
+      if (message.body && !isPlaceholderBody(message.body, message.attachment_type)) {
+        var text = document.createElement("span");
+        text.className = "msgBody";
+        text.textContent = message.body;
+        row.appendChild(text);
+      }
+
       var time = document.createElement("span");
       time.className = "msgTime";
       time.textContent = formatTime(message.created_at);
@@ -278,51 +417,29 @@
     }
   });
 
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
+  attachBtn.addEventListener("click", function () {
     if (state.sending) {
       return;
     }
-    var text = (input.value || "").trim();
-    if (!text) {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener("change", function () {
+    var file = fileInput.files && fileInput.files[0];
+    fileInput.value = "";
+    if (!file) {
       return;
     }
+    if (file.size > 20 * 1024 * 1024) {
+      alert("Файл слишком большой. Максимум 20 МБ.");
+      return;
+    }
+    sendPayload(input.value, file);
+  });
 
-    state.sending = true;
-    sendBtn.disabled = true;
-
-    ensureSession()
-      .then(function () {
-        return api(
-          "/api/integrations/webchat/widget/" +
-            encodeURIComponent(WIDGET_ID) +
-            "/session/" +
-            encodeURIComponent(state.visitorToken) +
-            "/messages",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ body: text })
-          }
-        );
-      })
-      .then(function (data) {
-        input.value = "";
-        if (data.message) {
-          upsertMessage(data.message);
-        } else {
-          return refreshMessages();
-        }
-      })
-      .catch(function (err) {
-        console.warn("[Light CRM Widget] send failed", err);
-        alert("Не удалось отправить сообщение. Попробуйте ещё раз.");
-      })
-      .then(function () {
-        state.sending = false;
-        sendBtn.disabled = false;
-        input.focus();
-      });
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    sendPayload(input.value, null);
   });
 
   api("/api/integrations/webchat/widget/" + encodeURIComponent(WIDGET_ID) + "/config")

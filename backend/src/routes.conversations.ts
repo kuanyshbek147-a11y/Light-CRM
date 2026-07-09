@@ -1,108 +1,24 @@
 import { Router } from "express";
-import fs from "fs";
 import multer from "multer";
 import path from "path";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
 import { sendInstagramMessageForConversation } from "./modules/integrations/instagram";
 import { sendWebChatMessageForConversation } from "./modules/integrations/webchat";
+import {
+  mediaUpload,
+  placeholderBodyForAttachment,
+  resolveAttachmentType,
+  resolveUploadMimeType,
+  uploadsDir
+} from "./modules/media/upload";
 import { sendTelegramMessageForConversation } from "./telegram";
 import { sendWhatsAppFileForConversation, sendWhatsAppMessageForConversation } from "./whatsapp";
 import { downloadMetaMediaBuffer, getMetaCloudConfigForWorkspace } from "./modules/integrations/whatsapp/meta-cloud";
 import { getRealtimeServer } from "./realtime";
 
 export const conversationsRouter = Router();
-const uploadsDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const allowedMimeTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "video/mp4",
-  "video/webm",
-  "video/quicktime",
-  "audio/ogg",
-  "audio/ogg; codecs=opus",
-  "audio/mpeg",
-  "audio/mp4",
-  "audio/aac",
-  "audio/webm",
-  "audio/amr",
-  "audio/aac",
-  "audio/x-m4a",
-  "audio/3gpp"
-]);
-
-function resolveAttachmentType(mimeType: string): "image" | "video" | "audio" | null {
-  if (mimeType.startsWith("video/")) {
-    return "video";
-  }
-  if (mimeType.startsWith("image/")) {
-    return "image";
-  }
-  if (mimeType.startsWith("audio/")) {
-    return "audio";
-  }
-  return null;
-}
-
-function resolveUploadMimeType(file: Express.Multer.File): string {
-  const mime = file.mimetype.toLowerCase();
-  if (mime.startsWith("audio/") || mime.startsWith("image/") || mime.startsWith("video/")) {
-    return mime;
-  }
-  const name = file.originalname.toLowerCase();
-  if (/\.(ogg|opus)$/.test(name)) {
-    return "audio/ogg";
-  }
-  if (/\.(m4a|aac)$/.test(name)) {
-    return "audio/mp4";
-  }
-  if (/\.(mp3)$/.test(name)) {
-    return "audio/mpeg";
-  }
-  if (/\.(amr|3gp)$/.test(name)) {
-    return "audio/amr";
-  }
-  if (/\.webm$/.test(name) && name.includes("voice")) {
-    return "audio/webm";
-  }
-  if (/\.(png|webp|gif|jpe?g)$/.test(name)) {
-    return mime || "image/jpeg";
-  }
-  if (/\.(mp4|mov)$/.test(name)) {
-    return "video/mp4";
-  }
-  return mime;
-}
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
-    filename: (_req, file, cb) => {
-      const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const uniquePrefix = `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-      cb(null, `${uniquePrefix}-${safeName}`);
-    }
-  }),
-  limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const mime = file.mimetype.toLowerCase();
-    const name = file.originalname.toLowerCase();
-    const hasAudioExtension = /\.(ogg|opus|m4a|aac|mp3|webm|amr|3gp|wav)$/.test(name);
-    const allowed =
-      allowedMimeTypes.has(mime) ||
-      mime.startsWith("audio/") ||
-      mime.startsWith("image/") ||
-      mime.startsWith("video/") ||
-      ((mime === "application/octet-stream" || mime === "") && hasAudioExtension);
-    cb(null, allowed);
-  }
-});
+const upload = mediaUpload;
 
 conversationsRouter.get("/scripts", async (req: AuthRequest, res) => {
   const rows = await query(
@@ -656,7 +572,7 @@ conversationsRouter.post("/:id/messages", (req, res, next) => {
   const attachmentName = file?.originalname || null;
   const storedBody =
     body.trim() ||
-    (attachmentType === "audio" ? "[Голосовое сообщение]" : attachmentType ? "[Медиа]" : "");
+    (file ? placeholderBodyForAttachment(attachmentType) : "");
 
   if (!storedBody.trim() && !file) {
     res.status(400).json({ error: "body_or_file_required" });
@@ -773,14 +689,25 @@ async function deliverOutboundMessage(params: {
       if (!externalMessageId) {
         deliveryError = "instagram_message_send_failed";
       }
-    } else if (channel === "web" && body.trim() && !file) {
-      externalMessageId = await sendWebChatMessageForConversation(
-        conversationId,
-        workspaceId,
-        body,
-        messageId,
-        createdAt
-      );
+    } else if (channel === "web") {
+      const attachmentUrl = file ? `/uploads/${path.basename(file.path)}` : null;
+      const attachmentType = file ? resolveAttachmentType(file.uploadMimeType) : null;
+      const storedBody =
+        body.trim() || (file ? placeholderBodyForAttachment(attachmentType) : "");
+      if (storedBody || attachmentUrl) {
+        externalMessageId = await sendWebChatMessageForConversation(
+          conversationId,
+          workspaceId,
+          storedBody,
+          messageId,
+          createdAt,
+          {
+            attachmentUrl,
+            attachmentType,
+            attachmentName: file?.originalname || null
+          }
+        );
+      }
     }
   } catch (error) {
     console.error("Outbound message delivery failed", error);
