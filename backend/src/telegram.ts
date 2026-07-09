@@ -10,6 +10,7 @@ import {
   getEnvTelegramCredentials,
   getTelegramCredentialsForWorkspace,
   getWorkspaceTelegramCredentials,
+  isTelegramDisabledForWorkspace,
   saveWorkspaceTelegramCredentials
 } from "./modules/integrations/telegram/credentials";
 import {
@@ -64,6 +65,10 @@ export function createTelegramRouter(io: Server): Router {
         res.status(403).json({ ok: false, error: "forbidden" });
         return;
       }
+      if (await isTelegramDisabledForWorkspace(workspaceId)) {
+        res.json({ ok: true, ignored: true });
+        return;
+      }
       await processTelegramUpdate(update, io, workspaceId);
       res.json({ ok: true });
     } catch (error) {
@@ -78,9 +83,10 @@ export function createTelegramRouter(io: Server): Router {
       return;
     }
 
+    const disabled = await isTelegramDisabledForWorkspace(req.user.workspaceId);
     const workspaceCreds = await getWorkspaceTelegramCredentials(req.user.workspaceId);
     const envCreds = getEnvTelegramCredentials();
-    const credentials = workspaceCreds || envCreds;
+    const credentials = disabled ? null : workspaceCreds || envCreds;
     const missing: string[] = [];
     if (!credentials?.botToken) {
       missing.push("TELEGRAM_BOT_TOKEN");
@@ -110,10 +116,11 @@ export function createTelegramRouter(io: Server): Router {
       enabled: missing.length === 0,
       missing,
       connected: Boolean(credentials?.botToken),
+      disabled,
       mode: TELEGRAM_DELIVERY_MODE,
       botUsername,
       botId: credentials?.botId || null,
-      source: workspaceCreds ? "workspace" : envCreds ? "env" : null,
+      source: disabled ? null : workspaceCreds ? "workspace" : envCreds ? "env" : null,
       webhookPath: credentials
         ? `/api/integrations/telegram/webhook/${credentials.webhookSecret}`
         : null,
@@ -187,17 +194,19 @@ export function createTelegramRouter(io: Server): Router {
       return;
     }
 
-    const credentials = await getWorkspaceTelegramCredentials(req.user.workspaceId);
-    if (credentials?.botToken) {
+    const workspaceCreds = await getWorkspaceTelegramCredentials(req.user.workspaceId);
+    const envCreds = getEnvTelegramCredentials();
+    const tokenToDetach = workspaceCreds?.botToken || envCreds?.botToken || "";
+    if (tokenToDetach) {
       try {
-        await deleteTelegramWebhook(credentials.botToken);
+        await deleteTelegramWebhook(tokenToDetach);
       } catch (error) {
         console.error("Telegram deleteWebhook warning", error);
       }
     }
 
     await clearWorkspaceTelegramCredentials(req.user.workspaceId);
-    res.json({ ok: true, connected: false });
+    res.json({ ok: true, connected: false, disabled: true });
   });
 
   return router;
@@ -250,7 +259,14 @@ async function resolveDefaultWorkspaceIdForSecret(secret: string): Promise<strin
     return null;
   }
   const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-  return workspaceRows[0]?.id ?? null;
+  const workspaceId = workspaceRows[0]?.id ?? null;
+  if (!workspaceId) {
+    return null;
+  }
+  if (await isTelegramDisabledForWorkspace(workspaceId)) {
+    return null;
+  }
+  return workspaceId;
 }
 
 async function processTelegramUpdate(

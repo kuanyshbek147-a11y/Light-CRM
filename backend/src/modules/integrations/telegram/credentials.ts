@@ -14,7 +14,8 @@ const KEYS = {
   webhookSecret: "telegram_webhook_secret",
   botUsername: "telegram_bot_username",
   botId: "telegram_bot_id",
-  connectedAt: "telegram_connected_at"
+  connectedAt: "telegram_connected_at",
+  disabled: "telegram_disabled"
 } as const;
 
 async function getSetting(workspaceId: string, key: string): Promise<string | null> {
@@ -73,9 +74,32 @@ export async function getWorkspaceTelegramCredentials(
   };
 }
 
+export async function isTelegramDisabledForWorkspace(workspaceId: string): Promise<boolean> {
+  const value = await getSetting(workspaceId, KEYS.disabled);
+  return value === "1" || value === "true";
+}
+
+export async function setTelegramDisabledForWorkspace(
+  workspaceId: string,
+  disabled: boolean
+): Promise<void> {
+  if (disabled) {
+    await setSetting(workspaceId, KEYS.disabled, "1");
+    return;
+  }
+  await query(
+    `DELETE FROM workspace_settings
+     WHERE workspace_id = $1 AND key = $2`,
+    [workspaceId, KEYS.disabled]
+  );
+}
+
 export async function getTelegramCredentialsForWorkspace(
   workspaceId: string
 ): Promise<TelegramCredentials | null> {
+  if (await isTelegramDisabledForWorkspace(workspaceId)) {
+    return null;
+  }
   const workspace = await getWorkspaceTelegramCredentials(workspaceId);
   if (workspace) {
     return workspace;
@@ -93,7 +117,8 @@ export async function saveWorkspaceTelegramCredentials(
     setSetting(workspaceId, KEYS.webhookSecret, credentials.webhookSecret),
     setSetting(workspaceId, KEYS.botUsername, credentials.botUsername || ""),
     setSetting(workspaceId, KEYS.botId, credentials.botId || ""),
-    setSetting(workspaceId, KEYS.connectedAt, connectedAt)
+    setSetting(workspaceId, KEYS.connectedAt, connectedAt),
+    setTelegramDisabledForWorkspace(workspaceId, false)
   ]);
 }
 
@@ -102,8 +127,12 @@ export async function clearWorkspaceTelegramCredentials(workspaceId: string): Pr
     `DELETE FROM workspace_settings
      WHERE workspace_id = $1
        AND key = ANY($2::text[])`,
-    [workspaceId, [KEYS.botToken, KEYS.webhookSecret, KEYS.botUsername, KEYS.botId, KEYS.connectedAt]]
+    [
+      workspaceId,
+      [KEYS.botToken, KEYS.webhookSecret, KEYS.botUsername, KEYS.botId, KEYS.connectedAt]
+    ]
   );
+  await setTelegramDisabledForWorkspace(workspaceId, true);
 }
 
 export function createTelegramWebhookSecret(): string {

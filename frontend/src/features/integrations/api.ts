@@ -226,6 +226,7 @@ export type TelegramStatus = {
   enabled: boolean;
   missing: string[];
   connected: boolean;
+  disabled?: boolean;
   mode: string;
   botUsername: string | null;
   botId: string | null;
