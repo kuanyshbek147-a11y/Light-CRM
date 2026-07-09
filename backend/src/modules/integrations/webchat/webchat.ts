@@ -7,7 +7,9 @@ import { authMiddleware, type AuthRequest } from "../../auth";
 import {
   createWebChatVisitorToken,
   createWebChatWidgetId,
+  DEMO_LANDING_WIDGET_ID,
   disableWorkspaceWebChat,
+  ensureDemoLandingWebChat,
   getPublicWebChatConfig,
   getWorkspaceWebChatSettings,
   saveWorkspaceWebChatSettings
@@ -209,6 +211,13 @@ export function createWebChatRouter(io: Server): Router {
   // Public widget endpoints
   router.get("/widget/:widgetId/config", async (req, res) => {
     const widgetId = String(req.params.widgetId || "");
+    if (widgetId === DEMO_LANDING_WIDGET_ID) {
+      try {
+        await ensureDemoLandingWebChat();
+      } catch (error) {
+        console.error("Failed to ensure demo landing webchat:", error);
+      }
+    }
     const config = await getPublicWebChatConfig(widgetId);
     if (!config) {
       res.status(404).json({ error: "Widget not found or disabled" });
