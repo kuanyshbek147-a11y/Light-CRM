@@ -12,7 +12,12 @@ import {
   getWorkspaceInstagramCredentials,
   saveWorkspaceInstagramCredentials
 } from "./credentials";
-import { sendInstagramTextMessage, validateInstagramPageToken } from "./graph";
+import {
+  listInstagramPagesForUserToken,
+  sendInstagramTextMessage,
+  subscribeInstagramPageToApp,
+  validateInstagramPageToken
+} from "./graph";
 import {
   isValidMetaWebhookSignature,
   verifyMetaWebhookChallenge
@@ -102,6 +107,25 @@ export function createInstagramRouter(io: Server): Router {
     });
   });
 
+  router.get("/connect/setup", (_req, res) => {
+    const appId = process.env.WHATSAPP_APP_ID || process.env.META_APP_ID || "2788233571542840";
+    const apiVersion = process.env.INSTAGRAM_API_VERSION || process.env.WHATSAPP_API_VERSION || "v21.0";
+    res.json({
+      appId,
+      apiVersion,
+      scopes: [
+        "pages_show_list",
+        "pages_messaging",
+        "pages_manage_metadata",
+        "instagram_basic",
+        "instagram_manage_messages",
+        "business_management"
+      ],
+      webhookPath: "/api/integrations/instagram/webhook",
+      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || null
+    });
+  });
+
   router.post("/connect", authMiddleware, async (req: AuthRequest, res) => {
     if (!req.user?.workspaceId) {
       res.status(401).json({ error: "Unauthorized" });
@@ -135,16 +159,106 @@ export function createInstagramRouter(io: Server): Router {
         igUserId: validated.igUserId || igUserId
       });
 
+      let pageSubscribed = false;
+      try {
+        pageSubscribed = await subscribeInstagramPageToApp(pageId, pageAccessToken);
+      } catch (subscribeError) {
+        console.error("Instagram page subscribe warning", subscribeError);
+      }
+
       res.json({
         ok: true,
         connected: true,
         pageId,
         pageName: validated.pageName,
         igUserId: validated.igUserId || igUserId || null,
-        igUsername: validated.igUsername
+        igUsername: validated.igUsername,
+        pageSubscribed
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Instagram connect failed";
+      res.status(400).json({ ok: false, error: message });
+    }
+  });
+
+  router.post("/connect/oauth", authMiddleware, async (req: AuthRequest, res) => {
+    if (!req.user?.workspaceId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const userAccessToken =
+      typeof req.body?.userAccessToken === "string" ? req.body.userAccessToken.trim() : "";
+    const preferredPageId = typeof req.body?.pageId === "string" ? req.body.pageId.trim() : "";
+
+    if (!userAccessToken) {
+      res.status(400).json({ error: "userAccessToken is required" });
+      return;
+    }
+
+    try {
+      const pages = await listInstagramPagesForUserToken(userAccessToken);
+      const pagesWithInstagram = pages.filter((page) => page.igUserId);
+      const selected =
+        pages.find((page) => preferredPageId && page.pageId === preferredPageId) ||
+        pagesWithInstagram[0] ||
+        pages[0];
+
+      if (!selected) {
+        res.status(400).json({
+          ok: false,
+          error:
+            "Не найдено Facebook Page. Нужна страница, привязанная к Instagram Business/Creator."
+        });
+        return;
+      }
+
+      if (!selected.igUserId) {
+        res.status(400).json({
+          ok: false,
+          error: `У страницы «${selected.pageName}» нет Instagram Business аккаунта.`,
+          pages: pages.map((page) => ({
+            pageId: page.pageId,
+            pageName: page.pageName,
+            igUsername: page.igUsername
+          }))
+        });
+        return;
+      }
+
+      await saveWorkspaceInstagramCredentials(req.user.workspaceId, {
+        pageId: selected.pageId,
+        pageAccessToken: selected.pageAccessToken,
+        igUserId: selected.igUserId
+      });
+
+      let pageSubscribed = false;
+      try {
+        pageSubscribed = await subscribeInstagramPageToApp(selected.pageId, selected.pageAccessToken);
+      } catch (subscribeError) {
+        console.error("Instagram page subscribe warning", subscribeError);
+      }
+
+      res.json({
+        ok: true,
+        connected: true,
+        pageId: selected.pageId,
+        pageName: selected.pageName,
+        igUserId: selected.igUserId,
+        igUsername: selected.igUsername,
+        pageSubscribed,
+        pages: pagesWithInstagram.map((page) => ({
+          pageId: page.pageId,
+          pageName: page.pageName,
+          igUsername: page.igUsername
+        }))
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Instagram OAuth connect failed";
       res.status(400).json({ ok: false, error: message });
     }
   });

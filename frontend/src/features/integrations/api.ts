@@ -140,6 +140,14 @@ export type InstagramStatus = {
   verifyToken: string | null;
 };
 
+export type InstagramConnectSetup = {
+  appId: string;
+  apiVersion: string;
+  scopes: string[];
+  webhookPath: string;
+  verifyToken: string | null;
+};
+
 export type InstagramConnectResult = {
   ok: boolean;
   connected?: boolean;
@@ -147,6 +155,8 @@ export type InstagramConnectResult = {
   pageName?: string | null;
   igUserId?: string | null;
   igUsername?: string | null;
+  pageSubscribed?: boolean;
+  pages?: Array<{ pageId: string; pageName: string; igUsername: string | null }>;
   error?: string;
 };
 
@@ -158,6 +168,14 @@ export async function loadInstagramStatus(token: string): Promise<InstagramStatu
     throw new Error("Не удалось загрузить статус Instagram");
   }
   return (await response.json()) as InstagramStatus;
+}
+
+export async function loadInstagramConnectSetup(): Promise<InstagramConnectSetup> {
+  const response = await fetch(`${API_BASE_URL}/integrations/instagram/connect/setup`);
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить настройки Instagram");
+  }
+  return (await response.json()) as InstagramConnectSetup;
 }
 
 export async function connectInstagram(
@@ -172,6 +190,22 @@ export async function connectInstagram(
   const data = (await response.json()) as InstagramConnectResult;
   if (!response.ok) {
     throw new Error(data.error || "Не удалось подключить Instagram");
+  }
+  return data;
+}
+
+export async function connectInstagramOAuth(
+  token: string,
+  payload: { userAccessToken: string; pageId?: string }
+): Promise<InstagramConnectResult> {
+  const response = await fetch(`${API_BASE_URL}/integrations/instagram/connect/oauth`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = (await response.json()) as InstagramConnectResult;
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось подключить Instagram через Facebook");
   }
   return data;
 }
