@@ -135,7 +135,14 @@ export function InstagramConnect({ authToken }: Props) {
       );
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка OAuth Instagram");
+      const message = err instanceof Error ? err.message : "Ошибка OAuth Instagram";
+      if (/invalid scopes/i.test(message)) {
+        setError(
+          "Meta отклонила scopes. В App Dashboard добавьте Instagram API + права: instagram_business_basic, instagram_business_manage_messages, pages_show_list, pages_messaging. Затем повторите вход."
+        );
+      } else {
+        setError(message);
+      }
     } finally {
       setOauthLoading(false);
     }
@@ -192,8 +199,11 @@ export function InstagramConnect({ authToken }: Props) {
         <div>
           <h3 className="integrationsPanelTitle">Instagram Direct</h3>
           <p className="integrationsHint">
-            Подключите Instagram Business через Facebook Login. Webhook уже настроен на
-            {" "}
+            Нужен Instagram Business, привязанный к Facebook Page. В Meta App Dashboard
+            добавьте продукт Instagram и права:{" "}
+            <code>instagram_business_basic</code>,{" "}
+            <code>instagram_business_manage_messages</code>,{" "}
+            <code>pages_show_list</code>, <code>pages_messaging</code>. Webhook:{" "}
             <code>/api/integrations/instagram/webhook</code>.
           </p>
         </div>

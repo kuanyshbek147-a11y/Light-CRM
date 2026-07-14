@@ -113,13 +113,15 @@ export function createInstagramRouter(io: Server): Router {
     res.json({
       appId,
       apiVersion,
+      // Meta deprecated instagram_basic / instagram_manage_messages (Invalid Scopes).
+      // Use Instagram Business Login scopes + Page permissions for /me/accounts.
       scopes: [
+        "business_management",
         "pages_show_list",
         "pages_messaging",
         "pages_manage_metadata",
-        "instagram_basic",
-        "instagram_manage_messages",
-        "business_management"
+        "instagram_business_basic",
+        "instagram_business_manage_messages"
       ],
       webhookPath: "/api/integrations/instagram/webhook",
       verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || null
