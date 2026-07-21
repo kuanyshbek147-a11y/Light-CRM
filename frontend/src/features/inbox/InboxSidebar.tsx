@@ -166,6 +166,8 @@ type InboxSidebarProps = {
   filters: InboxFilters;
   savedFilterPresets: SavedInboxFilterPreset[];
   onToggleSearchPanel: () => void;
+  notificationSoundOn: boolean;
+  onToggleNotificationSound: () => void;
   onSearchChange: (value: string) => void;
   onFiltersChange: (next: InboxFilters) => void;
   onApplyFilters: () => void;
@@ -187,6 +189,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     filters,
     savedFilterPresets,
     onToggleSearchPanel,
+    notificationSoundOn,
+    onToggleNotificationSound,
     onSearchChange,
     onFiltersChange,
     onApplyFilters,
@@ -227,8 +231,15 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
           >
             🔍
           </button>
-          <button type="button" className="threadIconBtn" title="Notifications" aria-label="Notifications">
-            🔔
+          <button
+            type="button"
+            className={`threadIconBtn${notificationSoundOn ? "" : " threadIconBtnMuted"}`}
+            title={notificationSoundOn ? "Звук уведомлений: вкл" : "Звук уведомлений: выкл"}
+            aria-label={notificationSoundOn ? "Выключить звук уведомлений" : "Включить звук уведомлений"}
+            aria-pressed={notificationSoundOn}
+            onClick={onToggleNotificationSound}
+          >
+            {notificationSoundOn ? "🔔" : "🔕"}
           </button>
         </div>
       </div>

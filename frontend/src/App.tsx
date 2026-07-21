@@ -3,7 +3,9 @@ import type { CSSProperties } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL, SOCKET_BASE_URL } from "./shared/config/api";
 import {
+  isNotificationSoundEnabled,
   playIncomingMessageSound,
+  setNotificationSoundEnabled,
   unlockNotificationSound
 } from "./shared/lib/notificationSound";
 import {
@@ -482,6 +484,7 @@ export function App(): JSX.Element {
   const pendingStopAndSendRef = useRef<boolean>(false);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
+  const [notificationSoundOn, setNotificationSoundOn] = useState<boolean>(() => isNotificationSoundEnabled());
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<
     "dialogs" | "pipeline" | "tasks" | "profile" | "analytics" | "knowledge" | "integrations" | "platform"
@@ -2260,8 +2263,20 @@ export function App(): JSX.Element {
 
         <div className="topbarRight">
           <div className="topbarIconGroup" aria-label="notifications and settings">
-            <button type="button" className="topbarIconButton" title="Notifications">
-              {"\uD83D\uDD14"}
+            <button
+              type="button"
+              className={`topbarIconButton${notificationSoundOn ? "" : " topbarIconButtonMuted"}`}
+              title={notificationSoundOn ? "Звук уведомлений: вкл" : "Звук уведомлений: выкл"}
+              aria-label={notificationSoundOn ? "Выключить звук уведомлений" : "Включить звук уведомлений"}
+              aria-pressed={notificationSoundOn}
+              onClick={() => {
+                const next = !notificationSoundOn;
+                setNotificationSoundEnabled(next);
+                setNotificationSoundOn(next);
+                unlockNotificationSound();
+              }}
+            >
+              {notificationSoundOn ? "\uD83D\uDD14" : "\uD83D\uDD15"}
             </button>
             <button
               type="button"
@@ -2436,6 +2451,13 @@ export function App(): JSX.Element {
             filters={filters}
             savedFilterPresets={savedFilterPresets}
             onToggleSearchPanel={() => setSearchPanelOpen((prev) => !prev)}
+            notificationSoundOn={notificationSoundOn}
+            onToggleNotificationSound={() => {
+              const next = !notificationSoundOn;
+              setNotificationSoundEnabled(next);
+              setNotificationSoundOn(next);
+              unlockNotificationSound();
+            }}
             onSearchChange={(next) => {
               setSearch(next);
               void loadConversations(token, next, filters, setConversations);

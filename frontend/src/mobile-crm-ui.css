@@ -707,6 +707,28 @@
   cursor: pointer;
 }
 
+.threadIconBtnMuted {
+  opacity: 0.55;
+  background: #f3f4f8;
+  border-style: dashed;
+  border-color: #c5cad8;
+  filter: grayscale(1);
+  position: relative;
+}
+
+.threadIconBtnMuted::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  height: 2px;
+  background: #9aa3b8;
+  transform: rotate(-28deg);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 /* ── Quick action chips in chat ── */
 .quickActionChips {
   display: flex;

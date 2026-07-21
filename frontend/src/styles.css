@@ -325,6 +325,28 @@ button {
   border-color: #d7ddfb;
 }
 
+.topbarIconButtonMuted {
+  opacity: 0.55;
+  background: #f3f4f8;
+  border-style: dashed;
+  border-color: #c5cad8;
+  filter: grayscale(1);
+  position: relative;
+}
+
+.topbarIconButtonMuted::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 50%;
+  height: 2px;
+  background: #9aa3b8;
+  transform: rotate(-28deg);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 .userChip {
   display: inline-flex;
   align-items: center;
