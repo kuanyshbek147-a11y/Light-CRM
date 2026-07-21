@@ -597,11 +597,15 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                       <button
                         type="button"
                         className="scriptCardMain"
-                        onClick={() =>
+                        onClick={() => {
+                          const link = (article.share_url || article.url || "").trim();
+                          const title = article.title.trim();
                           onSelectKnowledgeArticle(
-                            `${article.title}\n${article.share_url || article.url || ""}`.trim()
-                          )
-                        }
+                            link
+                              ? `Инструкция: «${title}»\n\nОткройте по ссылке:\n${link}`
+                              : title
+                          );
+                        }}
                       >
                         <span className="scriptCardTop">
                           <span className="scriptCardTitle">{article.title}</span>

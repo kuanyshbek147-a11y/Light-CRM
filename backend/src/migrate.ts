@@ -1,6 +1,35 @@
 import { pool } from "./db";
 import bcrypt from "bcryptjs";
+import { isLegacyKnowledgeSlug, slugifyKnowledgeTitle } from "./modules/knowledge/slug";
 import { ensureDemoLandingWebChat } from "./modules/integrations/webchat/credentials";
+
+async function backfillReadableKnowledgeSlugs(): Promise<void> {
+  const result = await pool.query<{ id: string; title: string; public_slug: string | null }>(
+    `SELECT id, title, public_slug FROM knowledge_articles ORDER BY created_at ASC`
+  );
+  const used = new Set(
+    result.rows
+      .map((row) => (row.public_slug || "").trim())
+      .filter((slug) => slug && !isLegacyKnowledgeSlug(slug))
+  );
+
+  for (const row of result.rows) {
+    const current = (row.public_slug || "").trim();
+    if (current && !isLegacyKnowledgeSlug(current)) {
+      continue;
+    }
+
+    const base = slugifyKnowledgeTitle(row.title || "instrukciya");
+    let candidate = base;
+    let n = 2;
+    while (used.has(candidate)) {
+      candidate = `${base.slice(0, 56)}-${n}`;
+      n += 1;
+    }
+    used.add(candidate);
+    await pool.query(`UPDATE knowledge_articles SET public_slug = $1 WHERE id = $2`, [candidate, row.id]);
+  }
+}
 
 /** Гарантирует колонку login и индекс (старые БД без полного прогона сида). */
 export async function ensureUserLoginSchema(): Promise<void> {
@@ -166,6 +195,7 @@ export async function ensureUserLoginSchema(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_articles_public_slug
       ON knowledge_articles (public_slug)
   `);
+  await backfillReadableKnowledgeSlugs();
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT`);

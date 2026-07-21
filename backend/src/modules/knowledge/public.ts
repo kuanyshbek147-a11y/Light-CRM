@@ -17,16 +17,17 @@ function formatBodyAsHtml(body: string): string {
     .join("\n");
 }
 
-function publicBaseUrl(): string {
+/** Публичная база для ссылок клиентам — домен сайта, не Render. */
+function knowledgePublicBaseUrl(): string {
   return (
-    process.env.PUBLIC_BASE_URL ||
+    process.env.KNOWLEDGE_PUBLIC_BASE_URL ||
     process.env.FRONTEND_PUBLIC_URL ||
-    "https://light-crm-backend.onrender.com"
+    "https://light-crm-kz.netlify.app"
   ).replace(/\/$/, "");
 }
 
 export function buildKnowledgeShareUrl(publicSlug: string): string {
-  return `${publicBaseUrl()}/kb/${encodeURIComponent(publicSlug)}`;
+  return `${knowledgePublicBaseUrl()}/help/${encodeURIComponent(publicSlug)}`;
 }
 
 export function createPublicKnowledgeRouter(): Router {
@@ -70,35 +71,60 @@ export function createPublicKnowledgeRouter(): Router {
         ? `<p><a href="${escapeHtml(article.url.trim())}" rel="noopener noreferrer">Открыть доп. материал</a></p>`
         : "";
 
+    const categoryBadge = article.category
+      ? `<span class="badge">${escapeHtml(article.category)}</span>`
+      : `<span class="badge">Инструкция</span>`;
+
     const html = `<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(article.title)} · Light CRM</title>
+  <title>${escapeHtml(article.title)} · Инструкция</title>
   <style>
     :root { color-scheme: light; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #f4f6fb; color: #0f172a; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(165deg, #eef4ff 0%, #f8fafc 42%, #f1f5f9 100%);
+      color: #0f172a;
+      min-height: 100vh;
+    }
     .wrap { max-width: 720px; margin: 0 auto; padding: 28px 18px 48px; }
-    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 24px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-size: 12px; font-weight: 700; }
-    h1 { margin: 12px 0 8px; font-size: 28px; line-height: 1.2; }
-    .summary { color: #475569; margin: 0 0 18px; }
-    .content { line-height: 1.65; font-size: 16px; }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      padding: 28px 26px;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.07);
+    }
+    .badge {
+      display: inline-block;
+      padding: 5px 11px;
+      border-radius: 999px;
+      background: #ecfeff;
+      color: #0e7490;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    h1 { margin: 14px 0 10px; font-size: clamp(22px, 4vw, 30px); line-height: 1.25; letter-spacing: -0.02em; }
+    .summary { color: #475569; margin: 0 0 20px; font-size: 15px; }
+    .content { line-height: 1.7; font-size: 16.5px; }
     .content p { margin: 0 0 14px; }
-    a { color: #4f46e5; }
-    .foot { margin-top: 22px; color: #94a3b8; font-size: 12px; }
+    a { color: #0e7490; }
+    .foot { margin-top: 26px; padding-top: 16px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 12px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <article class="card">
-      ${article.category ? `<span class="badge">${escapeHtml(article.category)}</span>` : ""}
+      ${categoryBadge}
       <h1>${escapeHtml(article.title)}</h1>
       ${article.summary ? `<p class="summary">${escapeHtml(article.summary)}</p>` : ""}
       <div class="content">${bodyHtml}</div>
       ${external}
-      <div class="foot">Light CRM · база знаний</div>
+      <div class="foot">Инструкция из Light CRM</div>
     </article>
   </div>
 </body>

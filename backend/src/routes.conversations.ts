@@ -8,6 +8,7 @@ import { sendInstagramMessageForConversation } from "./modules/integrations/inst
 import { sendEmailMessageForConversation } from "./modules/integrations/email";
 import { sendWebChatMessageForConversation } from "./modules/integrations/webchat";
 import { buildKnowledgeShareUrl } from "./modules/knowledge/public";
+import { isLegacyKnowledgeSlug, slugifyKnowledgeTitle } from "./modules/knowledge/slug";
 import {
   mediaUpload,
   placeholderBodyForAttachment,
@@ -23,8 +24,21 @@ import { getRealtimeServer } from "./realtime";
 export const conversationsRouter = Router();
 const upload = mediaUpload;
 
-function newKnowledgeSlug(): string {
-  return randomBytes(8).toString("hex");
+async function allocateKnowledgeSlug(title: string, excludeArticleId?: string): Promise<string> {
+  const base = slugifyKnowledgeTitle(title);
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const candidate = attempt === 0 ? base : `${base.slice(0, 56)}-${attempt + 1}`;
+    const rows = await query<{ id: string }>(
+      excludeArticleId
+        ? `SELECT id FROM knowledge_articles WHERE public_slug = $1 AND id <> $2 LIMIT 1`
+        : `SELECT id FROM knowledge_articles WHERE public_slug = $1 LIMIT 1`,
+      excludeArticleId ? [candidate, excludeArticleId] : [candidate]
+    );
+    if (!rows[0]) {
+      return candidate;
+    }
+  }
+  return `${base.slice(0, 48)}-${randomBytes(3).toString("hex")}`;
 }
 
 function mapKnowledgeArticle(row: {
@@ -172,7 +186,7 @@ conversationsRouter.post("/knowledge-base", async (req: AuthRequest, res) => {
     return;
   }
 
-  const slug = newKnowledgeSlug();
+  const slug = await allocateKnowledgeSlug(cleanTitle);
   const inserted = await query<{
     id: string;
     title: string;
@@ -222,6 +236,24 @@ conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest,
     return;
   }
 
+  const existing = await query<{ public_slug: string | null }>(
+    `SELECT public_slug
+     FROM knowledge_articles
+     WHERE id = $1 AND workspace_id = $2
+     LIMIT 1`,
+    [req.params.articleId, req.user?.workspaceId]
+  );
+  if (!existing[0]) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  const currentSlug = (existing[0].public_slug || "").trim();
+  const nextSlug =
+    !currentSlug || isLegacyKnowledgeSlug(currentSlug)
+      ? await allocateKnowledgeSlug(cleanTitle, req.params.articleId)
+      : currentSlug;
+
   const updated = await query<{
     id: string;
     title: string;
@@ -238,7 +270,7 @@ conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest,
          category = NULLIF($3, ''),
          summary = NULLIF($4, ''),
          body = NULLIF($5, ''),
-         public_slug = COALESCE(NULLIF(public_slug, ''), $6)
+         public_slug = $6
      WHERE id = $7 AND workspace_id = $8
      RETURNING id, title, url, category, summary, body, public_slug, created_at`,
     [
@@ -247,7 +279,7 @@ conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest,
       cleanCategory,
       cleanSummary,
       cleanBody,
-      newKnowledgeSlug(),
+      nextSlug,
       req.params.articleId,
       req.user?.workspaceId
     ]

@@ -50,6 +50,7 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.use("/help", createPublicKnowledgeRouter());
 app.use("/kb", createPublicKnowledgeRouter());
 app.use("/api/auth", authRouter);
 app.use("/api/platform", authMiddleware, platformRouter);

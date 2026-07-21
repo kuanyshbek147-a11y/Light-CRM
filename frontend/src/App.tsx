@@ -260,7 +260,7 @@ const UI = {
   noMatchingScripts:
     "\u041f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0438\u0445 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432 \u043d\u0435\u0442. \u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u044b\u0439 \u0438\u043b\u0438 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0435 \u043f\u043e\u0438\u0441\u043a\u043e\u0432\u044b\u0439 \u0437\u0430\u043f\u0440\u043e\u0441.",
   knowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
-  knowledgeBaseHint: "\u0421\u0442\u0430\u0442\u044c\u0438 \u0438 \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u0434\u043b\u044f \u043e\u0442\u0432\u0435\u0442\u043e\u0432 \u0432 \u0447\u0430\u0442\u0435.",
+  knowledgeBaseHint: "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0443 \u043f\u043e\u043d\u044f\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443.",
   searchKnowledgeBase: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0431\u0430\u0437\u0435 \u0437\u043d\u0430\u043d\u0438\u0439",
   noKnowledgeArticles:
     "\u0421\u0442\u0430\u0442\u0435\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442. \u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u043f\u0435\u0440\u0432\u0443\u044e \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044e \u0438\u043b\u0438 \u0433\u0430\u0439\u0434.",
@@ -1685,6 +1685,15 @@ export function App(): JSX.Element {
     return (article.share_url || article.url || "").trim();
   }
 
+  function formatKnowledgeShareMessage(article: KnowledgeArticle): string {
+    const link = knowledgeShareLink(article);
+    const title = article.title.trim();
+    if (!link) {
+      return title;
+    }
+    return `Инструкция: «${title}»\n\nОткройте по ссылке:\n${link}`;
+  }
+
   async function createKnowledgeArticle(): Promise<void> {
     if (!articleTitle.trim() || (!articleBody.trim() && !articleUrl.trim() && !articleSummary.trim())) {
       return;
@@ -1738,7 +1747,7 @@ export function App(): JSX.Element {
       return;
     }
 
-    const body = `${article.title}\n${link}`;
+    const body = formatKnowledgeShareMessage(article);
     if (!selectedConversation) {
       setMessageBody(body);
       setKnowledgeQuickOpen(false);

@@ -21,6 +21,18 @@
   force = true
 
 [[redirects]]
+  from = "/help/*"
+  to = "https://light-crm-backend.onrender.com/help/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/kb/*"
+  to = "https://light-crm-backend.onrender.com/help/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
