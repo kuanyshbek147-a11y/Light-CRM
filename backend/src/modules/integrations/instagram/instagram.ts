@@ -1,8 +1,12 @@
 import { Router } from "express";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
+import { randomUUID } from "crypto";
 import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "../../../auto-assignment";
 import { query } from "../../../db";
 import { authMiddleware, type AuthRequest } from "../../auth";
+import { placeholderBodyForAttachment, uploadsDir } from "../../media/upload";
 import {
   clearWorkspaceInstagramCredentials,
   findWorkspaceIdByInstagramIgUserId,
@@ -28,6 +32,15 @@ import {
 } from "../whatsapp/meta-cloud";
 
 type JsonRecord = Record<string, unknown>;
+type AttachmentKind = "image" | "video" | "audio" | "document";
+
+type InstagramAttachment = {
+  type?: string;
+  payload?: {
+    url?: string;
+    sticker_id?: number | string;
+  };
+};
 
 type InstagramMessagingEvent = {
   sender?: { id?: string };
@@ -37,7 +50,14 @@ type InstagramMessagingEvent = {
     mid?: string;
     text?: string;
     is_echo?: boolean;
-    attachments?: Array<{ type?: string; payload?: { url?: string } }>;
+    is_unsupported?: boolean;
+    attachments?: InstagramAttachment[];
+  };
+  reaction?: {
+    mid?: string;
+    action?: string;
+    reaction?: string;
+    emoji?: string;
   };
 };
 
@@ -47,6 +67,142 @@ function asRecord(value: unknown): JsonRecord | null {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function mapInstagramAttachmentType(type: string | undefined): AttachmentKind | null {
+  const normalized = (type || "").toLowerCase();
+  if (
+    normalized === "image" ||
+    normalized === "sticker" ||
+    normalized === "story_mention" ||
+    normalized === "share" ||
+    normalized === "ig_post" ||
+    normalized === "post" ||
+    normalized === "template"
+  ) {
+    return "image";
+  }
+  if (normalized === "video" || normalized === "reel" || normalized === "ig_reel") {
+    return "video";
+  }
+  if (normalized === "audio") {
+    return "audio";
+  }
+  if (normalized === "file" || normalized === "fallback") {
+    return "document";
+  }
+  return null;
+}
+
+function pickInstagramAttachment(
+  attachments: InstagramAttachment[] | undefined
+): { url: string; type: AttachmentKind; sourceType: string } | null {
+  if (!attachments?.length) {
+    return null;
+  }
+
+  const ranked = [...attachments].sort((a, b) => {
+    const score = (item: InstagramAttachment): number => {
+      const t = (item.type || "").toLowerCase();
+      if (t === "sticker") return 3;
+      if (t === "image") return 2;
+      if (item.payload?.url) return 1;
+      return 0;
+    };
+    return score(b) - score(a);
+  });
+
+  for (const item of ranked) {
+    const url = item.payload?.url?.trim();
+    if (!url) {
+      continue;
+    }
+    const mapped = mapInstagramAttachmentType(item.type) || "image";
+    return { url, type: mapped, sourceType: (item.type || "media").toLowerCase() };
+  }
+  return null;
+}
+
+async function downloadInstagramMediaToUploads(
+  mediaUrl: string,
+  sourceType: string,
+  accessToken?: string
+): Promise<{ url: string; attachmentType: AttachmentKind; fileName: string } | null> {
+  try {
+    const headers: Record<string, string> = {};
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const response = await fetch(mediaUrl, { headers });
+    if (!response.ok) {
+      console.error(`Instagram media download failed: ${response.status}`);
+      return null;
+    }
+
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    let attachmentType = mapInstagramAttachmentType(sourceType) || "image";
+    if (contentType.startsWith("video/")) {
+      attachmentType = "video";
+    } else if (contentType.startsWith("audio/")) {
+      attachmentType = "audio";
+    } else if (contentType.startsWith("image/") || sourceType === "sticker") {
+      attachmentType = "image";
+    }
+
+    let ext = "bin";
+    if (contentType.includes("png") || sourceType === "sticker") {
+      ext = contentType.includes("webp") ? "webp" : "png";
+    } else if (contentType.includes("webp")) {
+      ext = "webp";
+    } else if (contentType.includes("gif")) {
+      ext = "gif";
+    } else if (contentType.includes("jpeg") || contentType.includes("jpg")) {
+      ext = "jpg";
+    } else if (contentType.includes("mp4")) {
+      ext = "mp4";
+    } else if (contentType.includes("ogg")) {
+      ext = "ogg";
+    } else {
+      try {
+        const pathname = new URL(mediaUrl).pathname;
+        const fromUrl = path.extname(pathname).replace(".", "").toLowerCase();
+        if (fromUrl && fromUrl.length <= 5) {
+          ext = fromUrl;
+        }
+      } catch {
+        /* ignore */
+      }
+      if (ext === "bin" && attachmentType === "image") {
+        ext = "jpg";
+      }
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length) {
+      return null;
+    }
+
+    await mkdir(uploadsDir, { recursive: true });
+    const fileName = `instagram-${randomUUID()}.${ext}`;
+    await writeFile(path.join(uploadsDir, fileName), buffer);
+    return {
+      url: `/uploads/${fileName}`,
+      attachmentType,
+      fileName
+    };
+  } catch (error) {
+    console.error("Instagram media download error", error);
+    return null;
+  }
+}
+
+function resolveInstagramWebhookSecrets(): string[] {
+  const secrets = [
+    getInstagramAppSecret(),
+    process.env.WHATSAPP_APP_SECRET || "",
+    process.env.META_APP_SECRET || ""
+  ].filter(Boolean);
+  return [...new Set(secrets)];
 }
 
 export function createInstagramRouter(io: Server): Router {
@@ -62,12 +218,15 @@ export function createInstagramRouter(io: Server): Router {
   });
 
   router.post("/webhook", async (req, res) => {
-    const appSecret = getInstagramAppSecret();
     const rawBody = (req as { rawBody?: Buffer }).rawBody;
     const signatureHeader =
       typeof req.headers["x-hub-signature-256"] === "string" ? req.headers["x-hub-signature-256"] : undefined;
 
-    if (!isValidMetaWebhookSignature(rawBody, signatureHeader, appSecret)) {
+    const secrets = resolveInstagramWebhookSecrets();
+    const signatureOk =
+      secrets.length === 0 ||
+      secrets.some((secret) => isValidMetaWebhookSignature(rawBody, signatureHeader, secret));
+    if (!signatureOk) {
       res.status(403).json({ ok: false, error: "forbidden" });
       return;
     }
@@ -387,24 +546,87 @@ async function processInstagramMessagingEvent(
   io: Server
 ): Promise<void> {
   const message = event.message;
+  const reaction = event.reaction;
+
+  // Heart / emoji reactions arrive without message.text
+  if (!message && reaction) {
+    const reactionBody =
+      reaction.action === "unreact"
+        ? "[Реакция снята]"
+        : reaction.emoji || reaction.reaction || "❤️";
+    await persistInstagramIncoming({
+      event,
+      entryId,
+      io,
+      body: reactionBody,
+      externalMessageId: reaction.mid ? `reaction:${reaction.mid}:${reaction.action || "react"}` : null,
+      attachmentUrl: null,
+      attachmentType: null,
+      attachmentName: null
+    });
+    return;
+  }
+
   if (!message || message.is_echo) {
     return;
   }
 
-  const senderId = event.sender?.id;
-  if (!senderId) {
-    return;
+  const text = (message.text || "").trim();
+  const picked = pickInstagramAttachment(message.attachments);
+  let attachmentUrl: string | null = null;
+  let attachmentType: AttachmentKind | null = null;
+  let attachmentName: string | null = null;
+
+  if (picked) {
+    const workspaceId = await resolveWorkspaceIdForInstagramEvent(event, entryId);
+    const creds = workspaceId ? await getInstagramCredentialsForWorkspace(workspaceId) : null;
+    const stored = await downloadInstagramMediaToUploads(
+      picked.url,
+      picked.sourceType,
+      creds?.pageAccessToken
+    );
+    if (stored) {
+      attachmentUrl = stored.url;
+      attachmentType = stored.attachmentType;
+      attachmentName =
+        picked.sourceType === "sticker" ? "sticker" : stored.fileName;
+    }
   }
 
-  const text = (message.text || "").trim();
-  const attachmentHint = message.attachments?.[0]?.type
-    ? `[${message.attachments[0].type}]`
-    : "";
-  const body = text || attachmentHint;
+  let body = text;
+  if (!body && attachmentType) {
+    body =
+      picked?.sourceType === "sticker"
+        ? "[Стикер]"
+        : placeholderBodyForAttachment(attachmentType === "document" ? null : attachmentType);
+  }
+  if (!body && message.is_unsupported) {
+    body = "[Неподдерживаемое вложение Instagram]";
+  }
+  if (!body && message.attachments?.length) {
+    const types = message.attachments.map((item) => item.type || "media").join(",");
+    body = `[${types}]`;
+  }
   if (!body) {
     return;
   }
 
+  await persistInstagramIncoming({
+    event,
+    entryId,
+    io,
+    body,
+    externalMessageId: message.mid || null,
+    attachmentUrl,
+    attachmentType,
+    attachmentName
+  });
+}
+
+async function resolveWorkspaceIdForInstagramEvent(
+  event: InstagramMessagingEvent,
+  entryId: string
+): Promise<string | null> {
   const recipientId = event.recipient?.id || entryId;
   let workspaceId =
     (await findWorkspaceIdByInstagramPageId(recipientId)) ||
@@ -431,6 +653,25 @@ async function processInstagramMessagingEvent(
     workspaceId = workspaceRows[0]?.id ?? null;
   }
 
+  return workspaceId;
+}
+
+async function persistInstagramIncoming(params: {
+  event: InstagramMessagingEvent;
+  entryId: string;
+  io: Server;
+  body: string;
+  externalMessageId: string | null;
+  attachmentUrl: string | null;
+  attachmentType: AttachmentKind | null;
+  attachmentName: string | null;
+}): Promise<void> {
+  const senderId = params.event.sender?.id;
+  if (!senderId) {
+    return;
+  }
+
+  const workspaceId = await resolveWorkspaceIdForInstagramEvent(params.event, params.entryId);
   if (!workspaceId) {
     return;
   }
@@ -476,11 +717,10 @@ async function processInstagramMessagingEvent(
       )
     )[0].id;
 
-  const externalMessageId = message.mid || null;
-  if (externalMessageId) {
+  if (params.externalMessageId) {
     const existing = await query<{ id: string }>(
       `SELECT id FROM messages WHERE conversation_id = $1 AND external_message_id = $2 LIMIT 1`,
-      [conversationId, externalMessageId]
+      [conversationId, params.externalMessageId]
     );
     if (existing[0]) {
       return;
@@ -488,10 +728,21 @@ async function processInstagramMessagingEvent(
   }
 
   const inserted = await query<{ id: string; created_at: string }>(
-    `INSERT INTO messages (conversation_id, workspace_id, direction, body, external_message_id)
-     VALUES ($1, $2, 'incoming', $3, $4)
+    `INSERT INTO messages (
+       conversation_id, workspace_id, direction, body, external_message_id,
+       attachment_url, attachment_type, attachment_name
+     )
+     VALUES ($1, $2, 'incoming', $3, $4, $5, $6, $7)
      RETURNING id, created_at`,
-    [conversationId, workspaceId, body, externalMessageId]
+    [
+      conversationId,
+      workspaceId,
+      params.body,
+      params.externalMessageId,
+      params.attachmentUrl,
+      params.attachmentType,
+      params.attachmentName
+    ]
   );
 
   await query(
@@ -502,11 +753,14 @@ async function processInstagramMessagingEvent(
     [conversationId]
   );
 
-  io.emit("message:new", {
+  params.io.emit("message:new", {
     conversationId,
     messageId: inserted[0].id,
     direction: "incoming",
-    body,
+    body: params.body,
+    attachmentUrl: params.attachmentUrl,
+    attachmentType: params.attachmentType,
+    attachmentName: params.attachmentName,
     createdAt: inserted[0].created_at
   });
 }
