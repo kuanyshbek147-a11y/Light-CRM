@@ -126,12 +126,14 @@
 }
 
 .loginBrandMark {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
-  background: #fff url("/logo-mark.png") center / contain no-repeat;
-  box-shadow: 0 8px 20px rgba(91, 92, 233, 0.18);
+  object-fit: contain;
+  background: transparent;
+  box-shadow: none;
   flex-shrink: 0;
+  display: block;
 }
 
 .loginBrandTitle {
@@ -383,6 +385,13 @@
   min-width: 0;
 }
 
+.dialogCardMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .dialogCardName {
   font-size: 14px;
   font-weight: 700;
@@ -436,11 +445,13 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
+  line-height: 1.2;
   flex-shrink: 0;
+  letter-spacing: 0.01em;
 }
 
 .channelBadge.whatsapp {
@@ -461,6 +472,11 @@
 .channelBadge.web {
   background: rgba(91, 92, 233, 0.12);
   color: #3730a3;
+}
+
+.channelBadge.email {
+  background: rgba(234, 179, 8, 0.14);
+  color: #a16207;
 }
 
 .dialogCardBadges {
@@ -658,9 +674,20 @@
 }
 
 .threadContactPhone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   font-size: 12px;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.threadMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .threadHeaderActions {
@@ -1353,8 +1380,12 @@
     gap: 8px;
   }
 
-  .appShell.hasBottomNav .dialogCardChannelRow {
-    display: none;
+  .appShell.hasBottomNav .dialogCardMeta {
+    display: inline-flex !important;
+  }
+
+  .appShell.hasBottomNav .dialogCardMeta .channelBadge {
+    display: inline-flex !important;
   }
 
   .appShell.hasBottomNav .dialogCardAvatar.chatAvatar {
@@ -1473,9 +1504,12 @@
   }
 
   .dialogCardActions,
-  .dialogCardChannelRow,
   .dialogCardTime {
     display: none;
+  }
+
+  .dialogCardMeta .channelBadge {
+    display: inline-flex !important;
   }
 
   .dialogCard {

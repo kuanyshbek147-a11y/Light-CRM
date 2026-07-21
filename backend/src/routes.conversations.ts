@@ -4,6 +4,7 @@ import path from "path";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
 import { sendInstagramMessageForConversation } from "./modules/integrations/instagram";
+import { sendEmailMessageForConversation } from "./modules/integrations/email";
 import { sendWebChatMessageForConversation } from "./modules/integrations/webchat";
 import {
   mediaUpload,
@@ -688,6 +689,11 @@ async function deliverOutboundMessage(params: {
       externalMessageId = await sendInstagramMessageForConversation(conversationId, workspaceId, body);
       if (!externalMessageId) {
         deliveryError = "instagram_message_send_failed";
+      }
+    } else if (channel === "email" && body.trim() && !file) {
+      externalMessageId = await sendEmailMessageForConversation(conversationId, workspaceId, body);
+      if (!externalMessageId) {
+        deliveryError = "email_message_send_failed";
       }
     } else if (channel === "web") {
       const attachmentUrl = file ? `/uploads/${path.basename(file.path)}` : null;

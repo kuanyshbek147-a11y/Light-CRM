@@ -375,7 +375,24 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
               </button>
               <div className="threadContactPhone">
-                {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
+                <span className={`channelBadge ${selectedConversationData.channel}`}>
+                  {selectedConversationData.channel === "whatsapp"
+                    ? "WhatsApp"
+                    : selectedConversationData.channel === "telegram"
+                      ? "Telegram"
+                      : selectedConversationData.channel === "instagram"
+                        ? "Instagram"
+                        : selectedConversationData.channel === "web"
+                          ? "Сайт"
+                          : selectedConversationData.channel === "email"
+                            ? "Email"
+                            : selectedConversationData.channel}
+                </span>
+                <span>
+                  {selectedConversationData.is_group
+                    ? "группа"
+                    : selectedConversationData.phone || selectedConversationData.channel}
+                </span>
               </div>
             </div>
             <div className="threadHeaderActions">
@@ -401,7 +418,24 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
               </button>
               <div className="threadMeta">
-                {selectedConversationData.is_group ? "WhatsApp группа" : selectedConversationData.phone}
+                <span className={`channelBadge ${selectedConversationData.channel}`}>
+                  {selectedConversationData.channel === "whatsapp"
+                    ? "WhatsApp"
+                    : selectedConversationData.channel === "telegram"
+                      ? "Telegram"
+                      : selectedConversationData.channel === "instagram"
+                        ? "Instagram"
+                        : selectedConversationData.channel === "web"
+                          ? "Сайт"
+                          : selectedConversationData.channel === "email"
+                            ? "Email"
+                            : selectedConversationData.channel}
+                </span>
+                <span>
+                  {selectedConversationData.is_group
+                    ? "группа"
+                    : selectedConversationData.phone || ""}
+                </span>
               </div>
             </div>
           </div>

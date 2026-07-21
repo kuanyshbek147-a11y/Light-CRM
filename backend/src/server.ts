@@ -10,6 +10,10 @@ import { metricsRouter } from "./modules/analytics";
 import { conversationsRouter } from "./modules/conversations";
 import { dealsRouter } from "./modules/deals";
 import { createInstagramRouter } from "./modules/integrations/instagram";
+import {
+  createEmailRouter,
+  startEmailPolling
+} from "./modules/integrations/email";
 import { createTelegramRouter, startTelegramPolling } from "./modules/integrations/telegram";
 import {
   attachWebChatSocketHandlers,
@@ -50,11 +54,13 @@ app.use("/api/integrations/telegram", createTelegramRouter(io));
 app.use("/api/integrations/whatsapp", createWhatsAppRouter(io));
 app.use("/api/integrations/instagram", createInstagramRouter(io));
 app.use("/api/integrations/webchat", createWebChatRouter(io));
+app.use("/api/integrations/email", createEmailRouter(io));
 app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conversationsRouter);
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRouter);
 startSimulator(io);
 startTelegramPolling(io);
+startEmailPolling(io);
 
 const publicDir = path.join(process.cwd(), "public");
 const publicIndex = path.join(publicDir, "index.html");

@@ -4,7 +4,24 @@ import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
-type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web";
+type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web" | "email";
+
+function channelLabel(channel: Conversation["channel"]): string {
+  switch (channel) {
+    case "whatsapp":
+      return "WhatsApp";
+    case "telegram":
+      return "Telegram";
+    case "instagram":
+      return "Instagram";
+    case "web":
+      return "Сайт";
+    case "email":
+      return "Email";
+    default:
+      return channel;
+  }
+}
 
 function formatDialogTime(value: string): string {
   const date = new Date(value);
@@ -117,19 +134,12 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                   {conversation.contact_name}
                   {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
                 </button>
-                <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
-              </span>
-              <span className="dialogCardChannelRow">
-                <span className={`channelBadge ${conversation.channel}`}>
-                  {conversation.channel === "whatsapp"
-                    ? "WhatsApp"
-                    : conversation.channel === "instagram"
-                      ? "Instagram"
-                      : conversation.channel === "web"
-                        ? "Сайт"
-                        : "Telegram"}
+                <span className="dialogCardMeta">
+                  <span className={`channelBadge ${conversation.channel}`} title={channelLabel(conversation.channel)}>
+                    {channelLabel(conversation.channel)}
+                  </span>
+                  <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
                 </span>
-                <span className="chatPhone">{conversation.is_group ? "group" : conversation.phone}</span>
               </span>
               <span className="dialogCardSnippet chatSnippet">
                 {formatSnippet(conversation, noMessages)}
@@ -225,11 +235,12 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
 
       <div className="channelFilters" role="tablist" aria-label="Channel filters">
         {([
-          ["all", "All Channels"],
+          ["all", "Все"],
           ["whatsapp", "WhatsApp"],
           ["telegram", "Telegram"],
           ["instagram", "Instagram"],
-          ["web", "Сайт"]
+          ["web", "Сайт"],
+          ["email", "Email"]
         ] as const).map(([value, label]) => (
           <button
             key={value}
