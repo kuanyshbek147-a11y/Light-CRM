@@ -590,7 +590,25 @@ async function processInstagramMessagingEvent(
       attachmentType = stored.attachmentType;
       attachmentName =
         picked.sourceType === "sticker" ? "sticker" : stored.fileName;
+    } else {
+      // CDN URL may still open in the browser even if server-side download fails.
+      attachmentUrl = picked.url;
+      attachmentType = picked.type;
+      attachmentName = picked.sourceType === "sticker" ? "sticker" : "instagram-media";
     }
+  } else if (message.attachments?.some((item) => (item.type || "").toLowerCase() === "ephemeral")) {
+    // View-once media — Meta never sends a URL.
+    await persistInstagramIncoming({
+      event,
+      entryId,
+      io,
+      body: "[Одноразовое медиа Instagram]",
+      externalMessageId: message.mid || null,
+      attachmentUrl: null,
+      attachmentType: null,
+      attachmentName: null
+    });
+    return;
   }
 
   let body = text;
@@ -601,7 +619,13 @@ async function processInstagramMessagingEvent(
         : placeholderBodyForAttachment(attachmentType === "document" ? null : attachmentType);
   }
   if (!body && message.is_unsupported) {
-    body = "[Неподдерживаемое вложение Instagram]";
+    // Meta Instagram Messaging API: GIFs/stickers are not delivered (is_unsupported, no URL).
+    // https://developers.facebook.com/docs/messenger-platform/instagram/features/webhook/
+    console.info("Instagram unsupported media", {
+      mid: message.mid,
+      attachmentTypes: (message.attachments || []).map((item) => item.type || null)
+    });
+    body = "🎨 Стикер / GIF (Meta не передаёт файл в API)";
   }
   if (!body && message.attachments?.length) {
     const types = message.attachments.map((item) => item.type || "media").join(",");
