@@ -3,6 +3,10 @@ import type { CSSProperties } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL, SOCKET_BASE_URL } from "./shared/config/api";
 import {
+  playIncomingMessageSound,
+  unlockNotificationSound
+} from "./shared/lib/notificationSound";
+import {
   clearStoredSession,
   persistSession,
   readStoredSession,
@@ -614,6 +618,9 @@ export function App(): JSX.Element {
       metaMediaId?: string | null;
       createdAt?: string;
     }) => {
+      if (payload?.direction !== "outgoing") {
+        playIncomingMessageSound();
+      }
       void loadConversations(token, search, filters, setConversations);
       if (!payload?.conversationId || payload.conversationId !== selectedConversation || !payload.messageId) {
         return;
@@ -671,6 +678,19 @@ export function App(): JSX.Element {
       socket.disconnect();
     };
   }, [token, search, filters, selectedConversation]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    const unlock = (): void => unlockNotificationSound();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!token || currentSection !== "dialogs") {
