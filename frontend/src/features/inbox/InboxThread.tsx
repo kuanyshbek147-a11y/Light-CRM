@@ -597,13 +597,19 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                       <button
                         type="button"
                         className="scriptCardMain"
-                        onClick={() => onSelectKnowledgeArticle(`${article.title}\n${article.url}`)}
+                        onClick={() =>
+                          onSelectKnowledgeArticle(
+                            `${article.title}\n${article.share_url || article.url || ""}`.trim()
+                          )
+                        }
                       >
                         <span className="scriptCardTop">
                           <span className="scriptCardTitle">{article.title}</span>
                           <span className="scriptBadge">{article.category || ui.general}</span>
                         </span>
-                        <span className="scriptCardBody">{article.summary || article.url}</span>
+                        <span className="scriptCardBody">
+                          {article.summary || article.body || article.share_url || article.url}
+                        </span>
                       </button>
                       <div className="scriptCardActions">
                         <button type="button" className="textButton" onClick={() => onSendKnowledgeArticleLink(article)}>

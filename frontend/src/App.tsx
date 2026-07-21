@@ -53,6 +53,7 @@ import {
 import {
   createKnowledgeArticleApi,
   deleteKnowledgeArticleApi,
+  updateKnowledgeArticleApi,
   removeScript,
   sendConversationTextMessage,
   upsertScript
@@ -264,10 +265,14 @@ const UI = {
   noKnowledgeArticles:
     "\u0421\u0442\u0430\u0442\u0435\u0439 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442. \u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u043f\u0435\u0440\u0432\u0443\u044e \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044e \u0438\u043b\u0438 \u0433\u0430\u0439\u0434.",
   articleTitle: "\u0417\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a \u0441\u0442\u0430\u0442\u044c\u0438",
-  articleUrl: "URL \u0441\u0442\u0430\u0442\u044c\u0438",
+  articleUrl: "\u0412\u043d\u0435\u0448\u043d\u044f\u044f \u0441\u0441\u044b\u043b\u043a\u0430 (\u043d\u0435\u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u043e)",
+  articleBody: "\u0422\u0435\u043a\u0441\u0442 \u0441\u0442\u0430\u0442\u044c\u0438 / \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438",
   articleSummary: "\u041a\u0440\u0430\u0442\u043a\u043e\u0435 \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435",
   saveArticle: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u044c\u044e",
   sendArticleLink: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443",
+  copyArticleLink: "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443",
+  editArticle: "\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c",
+  newKnowledgeArticle: "\u041d\u043e\u0432\u0430\u044f \u0441\u0442\u0430\u0442\u044c\u044f",
   typeMessage: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435...",
   emojis: "\u0421\u043c\u0430\u0439\u043b\u0438\u043a\u0438",
   attachFile: "\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u0444\u0430\u0439\u043b",
@@ -510,6 +515,8 @@ export function App(): JSX.Element {
   const [articleUrl, setArticleUrl] = useState<string>("");
   const [articleCategory, setArticleCategory] = useState<string>("");
   const [articleSummary, setArticleSummary] = useState<string>("");
+  const [articleBody, setArticleBody] = useState<string>("");
+  const [editingArticleId, setEditingArticleId] = useState<string>("");
   const [editingScriptId, setEditingScriptId] = useState<string>("");
   const [deals, setDeals] = useState<Deal[]>([]);
   const [dealStages, setDealStages] = useState<PipelineStage[]>([]);
@@ -957,10 +964,9 @@ export function App(): JSX.Element {
     if (!needle) {
       return true;
     }
-
-    return [article.title, article.category || "", article.summary || "", article.url].some((value) =>
-      value.toLowerCase().includes(needle)
-    );
+    return [article.title, article.category, article.summary, article.body, article.url, article.share_url]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(needle));
   });
   const availableStageNames = dealStages.length
     ? dealStages.map((stage) => stage.name)
@@ -1656,46 +1662,94 @@ export function App(): JSX.Element {
     }
   }
 
-  async function createKnowledgeArticle(): Promise<void> {
-    if (!articleTitle.trim() || !articleUrl.trim()) {
-      return;
-    }
-
-    const created = await createKnowledgeArticleApi(token, {
-        title: articleTitle,
-        url: articleUrl,
-        category: articleCategory,
-        summary: articleSummary
-    });
-
-    if (!created) {
-      return;
-    }
-
-    await refreshKnowledge({ token, setKnowledgeArticles });
+  function resetKnowledgeForm(): void {
     setArticleTitle("");
     setArticleUrl("");
     setArticleCategory("");
     setArticleSummary("");
+    setArticleBody("");
+    setEditingArticleId("");
+  }
+
+  function beginEditKnowledgeArticle(article: KnowledgeArticle): void {
+    setEditingArticleId(article.id);
+    setArticleTitle(article.title);
+    setArticleUrl(article.url || "");
+    setArticleCategory(article.category || "");
+    setArticleSummary(article.summary || "");
+    setArticleBody(article.body || "");
+    setCurrentSection("knowledge");
+  }
+
+  function knowledgeShareLink(article: KnowledgeArticle): string {
+    return (article.share_url || article.url || "").trim();
+  }
+
+  async function createKnowledgeArticle(): Promise<void> {
+    if (!articleTitle.trim() || (!articleBody.trim() && !articleUrl.trim() && !articleSummary.trim())) {
+      return;
+    }
+
+    const payload = {
+      title: articleTitle,
+      url: articleUrl,
+      category: articleCategory,
+      summary: articleSummary,
+      body: articleBody
+    };
+
+    const saved = editingArticleId
+      ? await updateKnowledgeArticleApi(token, editingArticleId, payload)
+      : await createKnowledgeArticleApi(token, payload);
+
+    if (!saved) {
+      return;
+    }
+
+    await refreshKnowledge({ token, setKnowledgeArticles });
+    resetKnowledgeForm();
   }
 
   async function deleteKnowledgeArticle(articleId: string): Promise<void> {
     await deleteKnowledgeArticleApi(token, articleId);
-
+    if (editingArticleId === articleId) {
+      resetKnowledgeForm();
+    }
     await refreshKnowledge({ token, setKnowledgeArticles });
   }
 
+  async function copyKnowledgeArticleLink(article: KnowledgeArticle): Promise<void> {
+    const link = knowledgeShareLink(article);
+    if (!link) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast("Ссылка скопирована", "success");
+    } catch {
+      setMessageBody(`${article.title}\n${link}`);
+    }
+  }
+
   async function sendKnowledgeArticleLink(article: KnowledgeArticle): Promise<void> {
-    if (!selectedConversation) {
-      setMessageBody(`${article.title}\n${article.url}`);
-      setScriptLibraryOpen(false);
+    const link = knowledgeShareLink(article);
+    if (!link) {
+      showToast("У статьи нет публичной ссылки", "error");
       return;
     }
 
-    const body = `${article.title}\n${article.url}`;
+    const body = `${article.title}\n${link}`;
+    if (!selectedConversation) {
+      setMessageBody(body);
+      setKnowledgeQuickOpen(false);
+      setCurrentSection("dialogs");
+      return;
+    }
+
     await sendConversationTextMessage(token, selectedConversation, body);
 
     setScriptLibraryOpen(false);
+    setKnowledgeQuickOpen(false);
     await refreshAfterMessage({
       token,
       conversationId: selectedConversation,
@@ -2692,9 +2746,22 @@ export function App(): JSX.Element {
                             <span className="scriptCardTitle">{article.title}</span>
                             <span className="scriptBadge">{article.category || UI.general}</span>
                           </span>
-                          <span className="scriptCardBody">{article.summary || article.url}</span>
+                          <span className="scriptCardBody">
+                            {article.summary || article.body || article.share_url || article.url}
+                          </span>
+                          {article.share_url ? (
+                            <span className="scriptCardBody" style={{ opacity: 0.75, fontSize: 12 }}>
+                              {article.share_url}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="scriptCardActions">
+                          <button type="button" className="textButton" onClick={() => beginEditKnowledgeArticle(article)}>
+                            {UI.editArticle}
+                          </button>
+                          <button type="button" className="textButton" onClick={() => void copyKnowledgeArticleLink(article)}>
+                            {UI.copyArticleLink}
+                          </button>
                           <button type="button" className="textButton" onClick={() => void sendKnowledgeArticleLink(article)}>
                             {UI.sendArticleLink}
                           </button>
@@ -2715,7 +2782,9 @@ export function App(): JSX.Element {
               </div>
 
               <div className="knowledgeFormCard">
-                <div className="scriptPanelTitle">{UI.newScript}</div>
+                <div className="scriptPanelTitle">
+                  {editingArticleId ? UI.editArticle : UI.newKnowledgeArticle}
+                </div>
                 <div className="scriptForm">
                   <input
                     className="filterInput"
@@ -2723,11 +2792,17 @@ export function App(): JSX.Element {
                     value={articleTitle}
                     onChange={(event) => setArticleTitle(event.target.value)}
                   />
+                  <textarea
+                    className="scriptTextarea scriptTextareaLarge"
+                    placeholder={UI.articleBody}
+                    value={articleBody}
+                    onChange={(event) => setArticleBody(event.target.value)}
+                  />
                   <input
                     className="filterInput"
-                    placeholder={UI.articleUrl}
-                    value={articleUrl}
-                    onChange={(event) => setArticleUrl(event.target.value)}
+                    placeholder={UI.articleSummary}
+                    value={articleSummary}
+                    onChange={(event) => setArticleSummary(event.target.value)}
                   />
                   <input
                     className="filterInput"
@@ -2735,15 +2810,22 @@ export function App(): JSX.Element {
                     value={articleCategory}
                     onChange={(event) => setArticleCategory(event.target.value)}
                   />
-                  <textarea
-                    className="scriptTextarea scriptTextareaLarge"
-                    placeholder={UI.articleSummary}
-                    value={articleSummary}
-                    onChange={(event) => setArticleSummary(event.target.value)}
+                  <input
+                    className="filterInput"
+                    placeholder={UI.articleUrl}
+                    value={articleUrl}
+                    onChange={(event) => setArticleUrl(event.target.value)}
                   />
-                  <button type="button" className="primaryButton" onClick={() => void createKnowledgeArticle()}>
-                    {UI.saveArticle}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="primaryButton" onClick={() => void createKnowledgeArticle()}>
+                      {UI.saveArticle}
+                    </button>
+                    {editingArticleId ? (
+                      <button type="button" className="pipelineToggleBtn" onClick={resetKnowledgeForm}>
+                        {UI.cancel || "Отмена"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>

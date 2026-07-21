@@ -155,6 +155,17 @@ export async function ensureUserLoginSchema(): Promise<void> {
   `);
   await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS category TEXT`);
   await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS summary TEXT`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS body TEXT`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS public_slug TEXT`);
+  await pool.query(`
+    UPDATE knowledge_articles
+    SET public_slug = substr(replace(id::text, '-', ''), 1, 16)
+    WHERE public_slug IS NULL OR trim(public_slug) = ''
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_articles_public_slug
+      ON knowledge_articles (public_slug)
+  `);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT`);

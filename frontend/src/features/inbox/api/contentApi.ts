@@ -50,8 +50,8 @@ export async function loadKnowledgeArticles(
 
 export async function createKnowledgeArticleApi(
   token: string,
-  payload: { title: string; url: string; category: string; summary: string }
-): Promise<boolean> {
+  payload: { title: string; url?: string; category: string; summary: string; body?: string }
+): Promise<KnowledgeArticle | null> {
   const response = await fetch(`${API}/conversations/knowledge-base`, {
     method: "POST",
     headers: {
@@ -60,7 +60,29 @@ export async function createKnowledgeArticleApi(
     },
     body: JSON.stringify(payload)
   });
-  return response.ok;
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as KnowledgeArticle;
+}
+
+export async function updateKnowledgeArticleApi(
+  token: string,
+  articleId: string,
+  payload: { title: string; url?: string; category: string; summary: string; body?: string }
+): Promise<KnowledgeArticle | null> {
+  const response = await fetch(`${API}/conversations/knowledge-base/${articleId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as KnowledgeArticle;
 }
 
 export async function deleteKnowledgeArticleApi(token: string, articleId: string): Promise<void> {

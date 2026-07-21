@@ -1,11 +1,13 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
+import { randomBytes } from "crypto";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
 import { sendInstagramMessageForConversation } from "./modules/integrations/instagram";
 import { sendEmailMessageForConversation } from "./modules/integrations/email";
 import { sendWebChatMessageForConversation } from "./modules/integrations/webchat";
+import { buildKnowledgeShareUrl } from "./modules/knowledge/public";
 import {
   mediaUpload,
   placeholderBodyForAttachment,
@@ -20,6 +22,30 @@ import { getRealtimeServer } from "./realtime";
 
 export const conversationsRouter = Router();
 const upload = mediaUpload;
+
+function newKnowledgeSlug(): string {
+  return randomBytes(8).toString("hex");
+}
+
+function mapKnowledgeArticle(row: {
+  id: string;
+  title: string;
+  url: string | null;
+  category: string | null;
+  summary: string | null;
+  body: string | null;
+  public_slug: string | null;
+  created_at: string;
+}) {
+  const publicSlug = row.public_slug || "";
+  return {
+    ...row,
+    url: row.url || "",
+    body: row.body || "",
+    public_slug: publicSlug,
+    share_url: publicSlug ? buildKnowledgeShareUrl(publicSlug) : ""
+  };
+}
 
 conversationsRouter.get("/scripts", async (req: AuthRequest, res) => {
   const rows = await query(
@@ -107,73 +133,132 @@ conversationsRouter.delete("/scripts/:scriptId", async (req: AuthRequest, res) =
 });
 
 conversationsRouter.get("/knowledge-base", async (req: AuthRequest, res) => {
-  const rows = await query(
-    `SELECT id, title, url, category, summary, created_at
+  const rows = await query<{
+    id: string;
+    title: string;
+    url: string | null;
+    category: string | null;
+    summary: string | null;
+    body: string | null;
+    public_slug: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, title, url, category, summary, body, public_slug, created_at
      FROM knowledge_articles
      WHERE workspace_id = $1
      ORDER BY created_at DESC`,
     [req.user?.workspaceId]
   );
 
-  res.json(rows);
+  res.json(rows.map(mapKnowledgeArticle));
 });
 
 conversationsRouter.post("/knowledge-base", async (req: AuthRequest, res) => {
-  const { title, url, category, summary } = req.body as {
+  const { title, url, category, summary, body } = req.body as {
     title: string;
-    url: string;
+    url?: string;
     category?: string;
     summary?: string;
+    body?: string;
   };
-  const cleanTitle = title.trim();
-  const cleanUrl = url.trim();
+  const cleanTitle = (title || "").trim();
+  const cleanUrl = (url || "").trim();
   const cleanCategory = (category || "").trim();
   const cleanSummary = (summary || "").trim();
+  const cleanBody = (body || "").trim();
 
-  if (!cleanTitle || !cleanUrl) {
-    res.status(400).json({ error: "title_and_url_required" });
+  if (!cleanTitle || (!cleanBody && !cleanUrl && !cleanSummary)) {
+    res.status(400).json({ error: "title_and_content_required" });
     return;
   }
 
-  const inserted = await query(
-    `INSERT INTO knowledge_articles (workspace_id, title, url, category, summary, created_by_user_id)
-     VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), $6)
-     RETURNING id, title, url, category, summary, created_at`,
-    [req.user?.workspaceId, cleanTitle, cleanUrl, cleanCategory, cleanSummary, req.user?.id]
+  const slug = newKnowledgeSlug();
+  const inserted = await query<{
+    id: string;
+    title: string;
+    url: string | null;
+    category: string | null;
+    summary: string | null;
+    body: string | null;
+    public_slug: string | null;
+    created_at: string;
+  }>(
+    `INSERT INTO knowledge_articles (
+       workspace_id, title, url, category, summary, body, public_slug, created_by_user_id
+     )
+     VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), NULLIF($6, ''), $7, $8)
+     RETURNING id, title, url, category, summary, body, public_slug, created_at`,
+    [
+      req.user?.workspaceId,
+      cleanTitle,
+      cleanUrl || "",
+      cleanCategory,
+      cleanSummary,
+      cleanBody,
+      slug,
+      req.user?.id
+    ]
   );
 
-  res.status(201).json(inserted[0]);
+  res.status(201).json(mapKnowledgeArticle(inserted[0]));
 });
 
 conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest, res) => {
-  const { title, url, category, summary } = req.body as {
+  const { title, url, category, summary, body } = req.body as {
     title: string;
-    url: string;
+    url?: string;
     category?: string;
     summary?: string;
+    body?: string;
   };
-  const cleanTitle = title.trim();
-  const cleanUrl = url.trim();
+  const cleanTitle = (title || "").trim();
+  const cleanUrl = (url || "").trim();
   const cleanCategory = (category || "").trim();
   const cleanSummary = (summary || "").trim();
+  const cleanBody = (body || "").trim();
 
-  if (!cleanTitle || !cleanUrl) {
-    res.status(400).json({ error: "title_and_url_required" });
+  if (!cleanTitle || (!cleanBody && !cleanUrl && !cleanSummary)) {
+    res.status(400).json({ error: "title_and_content_required" });
     return;
   }
 
-  const updated = await query(
+  const updated = await query<{
+    id: string;
+    title: string;
+    url: string | null;
+    category: string | null;
+    summary: string | null;
+    body: string | null;
+    public_slug: string | null;
+    created_at: string;
+  }>(
     `UPDATE knowledge_articles
      SET title = $1,
          url = $2,
          category = NULLIF($3, ''),
-         summary = NULLIF($4, '')
-     WHERE id = $5 AND workspace_id = $6
-     RETURNING id, title, url, category, summary, created_at`,
-    [cleanTitle, cleanUrl, cleanCategory, cleanSummary, req.params.articleId, req.user?.workspaceId]
+         summary = NULLIF($4, ''),
+         body = NULLIF($5, ''),
+         public_slug = COALESCE(NULLIF(public_slug, ''), $6)
+     WHERE id = $7 AND workspace_id = $8
+     RETURNING id, title, url, category, summary, body, public_slug, created_at`,
+    [
+      cleanTitle,
+      cleanUrl || "",
+      cleanCategory,
+      cleanSummary,
+      cleanBody,
+      newKnowledgeSlug(),
+      req.params.articleId,
+      req.user?.workspaceId
+    ]
   );
 
-  res.json(updated[0] || null);
+  if (!updated[0]) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  res.json(mapKnowledgeArticle(updated[0]));
 });
 
 conversationsRouter.delete("/knowledge-base/:articleId", async (req: AuthRequest, res) => {

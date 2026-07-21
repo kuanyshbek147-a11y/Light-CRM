@@ -22,6 +22,7 @@ import {
 import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
 import { platformRouter } from "./modules/platform";
 import { createAutoReplyRouter } from "./modules/auto-reply";
+import { createPublicKnowledgeRouter } from "./modules/knowledge/public";
 import { startSimulator } from "./simulator";
 import { ensureUserLoginSchema, ensureDemoIntegrations } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
@@ -49,6 +50,7 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+app.use("/kb", createPublicKnowledgeRouter());
 app.use("/api/auth", authRouter);
 app.use("/api/platform", authMiddleware, platformRouter);
 app.use("/api/integrations/telegram", createTelegramRouter(io));

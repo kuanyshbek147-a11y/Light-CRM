@@ -50,6 +50,9 @@ export type KnowledgeArticle = {
   url: string;
   category: string | null;
   summary: string | null;
+  body?: string | null;
+  public_slug?: string | null;
+  share_url?: string | null;
   created_at: string;
 };
 
