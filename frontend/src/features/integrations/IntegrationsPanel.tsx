@@ -1,3 +1,4 @@
+import { AutoReplyConnect } from "./AutoReplyConnect";
 import { EmailConnect } from "./EmailConnect";
 import { InstagramConnect } from "./InstagramConnect";
 import { TelegramConnect } from "./TelegramConnect";
@@ -20,6 +21,7 @@ export function IntegrationsPanel({ authToken }: Props) {
           </p>
         </div>
       </div>
+      <AutoReplyConnect authToken={authToken} />
       <WhatsAppEmbeddedSignup authToken={authToken} />
       <InstagramConnect authToken={authToken} />
       <TelegramConnect authToken={authToken} />

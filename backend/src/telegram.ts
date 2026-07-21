@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./modules/auth";
+import { maybeAutoReply } from "./modules/auto-reply";
 import {
   clearWorkspaceTelegramCredentials,
   createTelegramWebhookSecret,
@@ -351,6 +352,14 @@ async function processTelegramUpdate(
     direction: "incoming",
     body: message.text,
     createdAt: inserted[0].created_at
+  });
+
+  void maybeAutoReply({
+    workspaceId,
+    conversationId,
+    channel: "telegram",
+    incomingBody: message.text || "",
+    io
   });
 }
 

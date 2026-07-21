@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./modules/auth";
+import { maybeAutoReply } from "./modules/auto-reply";
 import { finalizeEmbeddedSignupConnection, subscribeWabaToApp } from "./modules/integrations/whatsapp/embedded-signup";
 import {
   downloadMetaMediaToUploads,
@@ -739,6 +740,14 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       attachmentName: message.attachmentName,
       metaMediaId: message.metaMediaId,
       createdAt: inserted[0].created_at
+    });
+
+    void maybeAutoReply({
+      workspaceId,
+      conversationId,
+      channel: "whatsapp",
+      incomingBody: message.body,
+      io
     });
   }
 }

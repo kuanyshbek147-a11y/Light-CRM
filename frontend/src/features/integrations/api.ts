@@ -440,3 +440,44 @@ export async function disconnectEmail(token: string): Promise<{ ok: boolean; con
   }
   return data;
 }
+
+export type AutoReplySettings = {
+  enabled: boolean;
+  mode: "rules" | "ai";
+  defaultText: string;
+  systemPrompt: string;
+  firstOnly: boolean;
+  aiConfigured: boolean;
+};
+
+export async function loadAutoReplySettings(token: string): Promise<AutoReplySettings> {
+  const response = await fetch(`${API_BASE_URL}/integrations/auto-reply/status`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить настройки автоответчика");
+  }
+  return (await response.json()) as AutoReplySettings;
+}
+
+export async function saveAutoReplySettings(
+  token: string,
+  payload: Partial<{
+    enabled: boolean;
+    mode: "rules" | "ai";
+    defaultText: string;
+    systemPrompt: string;
+    firstOnly: boolean;
+  }>
+): Promise<AutoReplySettings> {
+  const response = await fetch(`${API_BASE_URL}/integrations/auto-reply/settings`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = (await response.json()) as AutoReplySettings & { ok?: boolean; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось сохранить автоответчик");
+  }
+  return data;
+}

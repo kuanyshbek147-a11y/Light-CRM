@@ -5,6 +5,7 @@ import { resolveAutoAssignedManager } from "../../../auto-assignment";
 import { query } from "../../../db";
 import { getRealtimeServer } from "../../../realtime";
 import { authMiddleware, type AuthRequest } from "../../auth";
+import { maybeAutoReply } from "../../auto-reply";
 import {
   mediaUpload,
   placeholderBodyForAttachment,
@@ -415,6 +416,14 @@ export function createWebChatRouter(io: Server): Router {
           attachmentName: publicMessage.attachment_name
         });
         io.to(`webchat:${visitorToken}`).emit("webchat:message", publicMessage);
+
+        void maybeAutoReply({
+          workspaceId: config.workspaceId,
+          conversationId: session.conversationId,
+          channel: "web",
+          incomingBody: storedBody,
+          io
+        });
 
         res.status(201).json({
           ok: true,

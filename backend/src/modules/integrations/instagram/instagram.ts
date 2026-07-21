@@ -6,6 +6,7 @@ import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "../../../auto-assignment";
 import { query } from "../../../db";
 import { authMiddleware, type AuthRequest } from "../../auth";
+import { maybeAutoReply } from "../../auto-reply";
 import { placeholderBodyForAttachment, uploadsDir } from "../../media/upload";
 import {
   clearWorkspaceInstagramCredentials,
@@ -786,5 +787,13 @@ async function persistInstagramIncoming(params: {
     attachmentType: params.attachmentType,
     attachmentName: params.attachmentName,
     createdAt: inserted[0].created_at
+  });
+
+  void maybeAutoReply({
+    workspaceId,
+    conversationId,
+    channel: "instagram",
+    incomingBody: params.body,
+    io: params.io
   });
 }

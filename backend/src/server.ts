@@ -21,6 +21,7 @@ import {
 } from "./modules/integrations/webchat";
 import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
 import { platformRouter } from "./modules/platform";
+import { createAutoReplyRouter } from "./modules/auto-reply";
 import { startSimulator } from "./simulator";
 import { ensureUserLoginSchema, ensureDemoIntegrations } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
@@ -55,6 +56,7 @@ app.use("/api/integrations/whatsapp", createWhatsAppRouter(io));
 app.use("/api/integrations/instagram", createInstagramRouter(io));
 app.use("/api/integrations/webchat", createWebChatRouter(io));
 app.use("/api/integrations/email", createEmailRouter(io));
+app.use("/api/integrations/auto-reply", createAutoReplyRouter());
 app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conversationsRouter);
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRouter);
