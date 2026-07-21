@@ -84,6 +84,44 @@ button {
   line-height: 1.55;
 }
 
+.landingCtaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.landingCtaPrimary,
+.landingCtaSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+  padding: 0 18px;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.landingCtaSecondary {
+  background: #fff;
+  color: #312e81;
+  border: 1px solid #c7d2fe;
+  box-shadow: none;
+  font-weight: 750;
+}
+
+.landingCtaSecondary:hover {
+  background: #eef2ff;
+}
+
+.landingCtaHint {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .landingHighlights {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
