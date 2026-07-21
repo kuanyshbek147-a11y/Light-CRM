@@ -560,6 +560,21 @@ export function App(): JSX.Element {
       : `${analyticsPeriod} \u0434\u043d\u0435\u0439`;
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (!code || !state) return;
+    try {
+      const expected = sessionStorage.getItem("instagram_oauth_state");
+      if (expected && expected === state) {
+        setCurrentSection("integrations");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
     if (!token) {
       return;
     }
@@ -2084,7 +2099,7 @@ export function App(): JSX.Element {
 
         <aside className="loginCard loginCardModern">
           <div className="loginCardBrandRow">
-            <div className="loginBrandMark" aria-hidden="true" />
+            <img className="loginBrandMark" src="/logo-mark.png" alt="" width={48} height={48} />
             <div className="loginBrandText">
               <div className="loginBrandTitle">{UI.brandTitle}</div>
               <div className="loginBrandSubtitle">{UI.demoAccess}</div>
@@ -2208,7 +2223,7 @@ export function App(): JSX.Element {
     >
       <header className="topbar">
         <div className="brand">
-          <div className="brandMark" />
+          <img className="brandMark" src="/logo-mark.png" alt="" width={32} height={32} />
           <div className="brandText">
             <div className="brandTitle">{UI.brandTitle}</div>
             <div className="brandSubtitle">{isMobileLayout ? mobileSectionSubtitle : UI.landingBadge}</div>
@@ -3200,7 +3215,7 @@ export function App(): JSX.Element {
           <div className="clientCardModal" onClick={(event) => event.stopPropagation()}>
             <div className="clientCardModalHeader">
               <div className="clientCardModalBrand">
-                <div className="brandMark" />
+                <img className="brandMark" src="/logo-mark.png" alt="" width={36} height={36} />
                 <div>
                   <div className="clientCardModalTitle">{UI.brandTitle}</div>
                   <div className="clientCardModalSubtitle">{UI.customerCardTitle}</div>

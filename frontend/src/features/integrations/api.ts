@@ -146,11 +146,14 @@ export type InstagramConnectSetup = {
   scopes: string[];
   webhookPath: string;
   verifyToken: string | null;
+  mode?: "instagram_login" | "facebook_login";
+  redirectUri?: string;
 };
 
 export type InstagramConnectResult = {
   ok: boolean;
   connected?: boolean;
+  mode?: string;
   pageId?: string;
   pageName?: string | null;
   igUserId?: string | null;
@@ -170,8 +173,11 @@ export async function loadInstagramStatus(token: string): Promise<InstagramStatu
   return (await response.json()) as InstagramStatus;
 }
 
-export async function loadInstagramConnectSetup(): Promise<InstagramConnectSetup> {
-  const response = await fetch(`${API_BASE_URL}/integrations/instagram/connect/setup`);
+export async function loadInstagramConnectSetup(redirectOrigin?: string): Promise<InstagramConnectSetup> {
+  const query = redirectOrigin
+    ? `?redirectOrigin=${encodeURIComponent(redirectOrigin)}`
+    : "";
+  const response = await fetch(`${API_BASE_URL}/integrations/instagram/connect/setup${query}`);
   if (!response.ok) {
     throw new Error("Не удалось загрузить настройки Instagram");
   }
@@ -196,7 +202,7 @@ export async function connectInstagram(
 
 export async function connectInstagramOAuth(
   token: string,
-  payload: { userAccessToken: string; pageId?: string }
+  payload: { code?: string; redirectUri?: string; userAccessToken?: string; pageId?: string }
 ): Promise<InstagramConnectResult> {
   const response = await fetch(`${API_BASE_URL}/integrations/instagram/connect/oauth`, {
     method: "POST",
@@ -205,7 +211,7 @@ export async function connectInstagramOAuth(
   });
   const data = (await response.json()) as InstagramConnectResult;
   if (!response.ok) {
-    throw new Error(data.error || "Не удалось подключить Instagram через Facebook");
+    throw new Error(data.error || "Не удалось подключить Instagram");
   }
   return data;
 }
@@ -346,6 +352,91 @@ export async function disconnectWebChat(token: string): Promise<{ ok: boolean; c
   const data = (await response.json()) as { ok: boolean; connected: boolean; error?: string };
   if (!response.ok) {
     throw new Error(data.error || "Не удалось отключить виджет чата");
+  }
+  return data;
+}
+
+export type EmailProviderId = "gmail" | "yandex" | "mailru" | "outlook" | "custom";
+
+export type EmailProviderPreset = {
+  id: EmailProviderId;
+  label: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  imapHost: string;
+  imapPort: number;
+  imapSecure: boolean;
+  hint: string;
+};
+
+export type EmailStatus = {
+  connected: boolean;
+  disabled?: boolean;
+  email: string | null;
+  displayName: string | null;
+  provider: EmailProviderId | null;
+  smtpHost: string | null;
+  smtpPort: number | null;
+  imapHost: string | null;
+  imapPort: number | null;
+  connectedAt: string | null;
+  providers: EmailProviderPreset[];
+};
+
+export type EmailConnectResult = {
+  ok: boolean;
+  connected?: boolean;
+  email?: string;
+  provider?: EmailProviderId;
+  error?: string;
+};
+
+export async function loadEmailStatus(token: string): Promise<EmailStatus> {
+  const response = await fetch(`${API_BASE_URL}/integrations/email/status`, {
+    headers: authHeaders(token)
+  });
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить статус почты");
+  }
+  return (await response.json()) as EmailStatus;
+}
+
+export async function connectEmail(
+  token: string,
+  payload: {
+    email: string;
+    password: string;
+    displayName?: string;
+    provider?: EmailProviderId;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpSecure?: boolean;
+    imapHost?: string;
+    imapPort?: number;
+    imapSecure?: boolean;
+  }
+): Promise<EmailConnectResult> {
+  const response = await fetch(`${API_BASE_URL}/integrations/email/connect`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  const data = (await response.json()) as EmailConnectResult;
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось подключить почту");
+  }
+  return data;
+}
+
+export async function disconnectEmail(token: string): Promise<{ ok: boolean; connected: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/integrations/email/disconnect`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  const data = (await response.json()) as { ok: boolean; connected: boolean; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "Не удалось отключить почту");
   }
   return data;
 }

@@ -33,16 +33,16 @@ async function setSetting(workspaceId: string, key: string, value: string): Prom
 }
 
 export function getEnvInstagramCredentials(): InstagramCredentials | null {
-  const pageId = process.env.INSTAGRAM_PAGE_ID || "";
   const pageAccessToken = process.env.INSTAGRAM_PAGE_ACCESS_TOKEN || "";
   const igUserId = process.env.INSTAGRAM_IG_USER_ID || "";
-  if (!pageId || !pageAccessToken) {
+  const pageId = process.env.INSTAGRAM_PAGE_ID || igUserId;
+  if (!pageAccessToken || (!pageId && !igUserId)) {
     return null;
   }
   return {
-    pageId,
+    pageId: pageId || igUserId,
     pageAccessToken,
-    igUserId,
+    igUserId: igUserId || pageId,
     connectedAt: new Date().toISOString()
   };
 }
@@ -57,14 +57,14 @@ export async function getWorkspaceInstagramCredentials(
     getSetting(workspaceId, KEYS.connectedAt)
   ]);
 
-  if (!pageId || !pageAccessToken) {
+  if (!pageAccessToken || (!pageId && !igUserId)) {
     return null;
   }
 
   return {
-    pageId,
+    pageId: pageId || igUserId || "",
     pageAccessToken,
-    igUserId: igUserId || "",
+    igUserId: igUserId || pageId || "",
     connectedAt: connectedAt || new Date().toISOString()
   };
 }

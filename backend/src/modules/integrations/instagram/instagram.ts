@@ -13,6 +13,10 @@ import {
   saveWorkspaceInstagramCredentials
 } from "./credentials";
 import {
+  exchangeInstagramLoginCode,
+  getInstagramAppId,
+  getInstagramAppSecret,
+  getInstagramLoginScopes,
   listInstagramPagesForUserToken,
   sendInstagramTextMessage,
   subscribeInstagramPageToApp,
@@ -58,7 +62,7 @@ export function createInstagramRouter(io: Server): Router {
   });
 
   router.post("/webhook", async (req, res) => {
-    const appSecret = process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET || "";
+    const appSecret = getInstagramAppSecret();
     const rawBody = (req as { rawBody?: Buffer }).rawBody;
     const signatureHeader =
       typeof req.headers["x-hub-signature-256"] === "string" ? req.headers["x-hub-signature-256"] : undefined;
@@ -87,11 +91,11 @@ export function createInstagramRouter(io: Server): Router {
     const envCreds = getEnvInstagramCredentials();
     const credentials = workspaceCreds || envCreds;
     const missing: string[] = [];
-    if (!credentials?.pageId) {
-      missing.push("INSTAGRAM_PAGE_ID");
-    }
     if (!credentials?.pageAccessToken) {
-      missing.push("INSTAGRAM_PAGE_ACCESS_TOKEN");
+      missing.push("INSTAGRAM_ACCESS_TOKEN");
+    }
+    if (!credentials?.igUserId && !credentials?.pageId) {
+      missing.push("INSTAGRAM_IG_USER_ID");
     }
 
     res.json({
@@ -103,28 +107,32 @@ export function createInstagramRouter(io: Server): Router {
       connectedAt: credentials?.connectedAt || null,
       source: workspaceCreds ? "workspace" : envCreds ? "env" : null,
       webhookPath: "/api/integrations/instagram/webhook",
-      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || null
+      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || process.env.INSTAGRAM_VERIFY_TOKEN || null,
+      mode: "instagram_login",
+      appId: getInstagramAppId() || null
     });
   });
 
-  router.get("/connect/setup", (_req, res) => {
-    const appId = process.env.WHATSAPP_APP_ID || process.env.META_APP_ID || "2788233571542840";
+  router.get("/connect/setup", (req, res) => {
+    const appId = getInstagramAppId();
     const apiVersion = process.env.INSTAGRAM_API_VERSION || process.env.WHATSAPP_API_VERSION || "v21.0";
+    const frontendOrigin =
+      (typeof req.query.redirectOrigin === "string" && req.query.redirectOrigin.trim()) ||
+      process.env.INSTAGRAM_OAUTH_REDIRECT_ORIGIN ||
+      process.env.FRONTEND_PUBLIC_URL ||
+      "https://light-crm-kz.netlify.app";
+    const redirectUri =
+      process.env.INSTAGRAM_OAUTH_REDIRECT_URI ||
+      `${frontendOrigin.replace(/\/$/, "")}/`;
+
     res.json({
+      mode: "instagram_login",
       appId,
       apiVersion,
-      // Meta deprecated instagram_basic / instagram_manage_messages (Invalid Scopes).
-      // Use Instagram Business Login scopes + Page permissions for /me/accounts.
-      scopes: [
-        "business_management",
-        "pages_show_list",
-        "pages_messaging",
-        "pages_manage_metadata",
-        "instagram_business_basic",
-        "instagram_business_manage_messages"
-      ],
+      scopes: getInstagramLoginScopes(),
+      redirectUri,
       webhookPath: "/api/integrations/instagram/webhook",
-      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || null
+      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || process.env.INSTAGRAM_VERIFY_TOKEN || null
     });
   });
 
@@ -143,37 +151,40 @@ export function createInstagramRouter(io: Server): Router {
       typeof req.body?.pageAccessToken === "string" ? req.body.pageAccessToken.trim() : "";
     const igUserId = typeof req.body?.igUserId === "string" ? req.body.igUserId.trim() : "";
 
-    if (!pageId || !pageAccessToken) {
-      res.status(400).json({ error: "pageId and pageAccessToken are required" });
+    if (!pageAccessToken || (!pageId && !igUserId)) {
+      res.status(400).json({ error: "pageAccessToken and igUserId (or pageId) are required" });
       return;
     }
 
     try {
       const validated = await validateInstagramPageToken({
-        pageId,
+        pageId: pageId || igUserId,
         pageAccessToken,
-        igUserId
+        igUserId: igUserId || pageId
       });
 
+      const resolvedIgUserId = validated.igUserId || igUserId || pageId;
       await saveWorkspaceInstagramCredentials(req.user.workspaceId, {
-        pageId,
+        pageId: pageId || resolvedIgUserId,
         pageAccessToken,
-        igUserId: validated.igUserId || igUserId
+        igUserId: resolvedIgUserId
       });
 
       let pageSubscribed = false;
-      try {
-        pageSubscribed = await subscribeInstagramPageToApp(pageId, pageAccessToken);
-      } catch (subscribeError) {
-        console.error("Instagram page subscribe warning", subscribeError);
+      if (pageId && pageId !== resolvedIgUserId) {
+        try {
+          pageSubscribed = await subscribeInstagramPageToApp(pageId, pageAccessToken);
+        } catch (subscribeError) {
+          console.error("Instagram page subscribe warning", subscribeError);
+        }
       }
 
       res.json({
         ok: true,
         connected: true,
-        pageId,
+        pageId: pageId || resolvedIgUserId,
         pageName: validated.pageName,
-        igUserId: validated.igUserId || igUserId || null,
+        igUserId: resolvedIgUserId || null,
         igUsername: validated.igUsername,
         pageSubscribed
       });
@@ -193,12 +204,45 @@ export function createInstagramRouter(io: Server): Router {
       return;
     }
 
+    const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+    const redirectUri =
+      typeof req.body?.redirectUri === "string" ? req.body.redirectUri.trim() : "";
     const userAccessToken =
       typeof req.body?.userAccessToken === "string" ? req.body.userAccessToken.trim() : "";
     const preferredPageId = typeof req.body?.pageId === "string" ? req.body.pageId.trim() : "";
 
+    // Preferred path: Instagram Login (app Light CRM-IG)
+    if (code) {
+      if (!redirectUri) {
+        res.status(400).json({ ok: false, error: "redirectUri is required with code" });
+        return;
+      }
+      try {
+        const profile = await exchangeInstagramLoginCode({ code, redirectUri });
+        await saveWorkspaceInstagramCredentials(req.user.workspaceId, {
+          pageId: profile.igUserId,
+          pageAccessToken: profile.accessToken,
+          igUserId: profile.igUserId
+        });
+        res.json({
+          ok: true,
+          connected: true,
+          mode: "instagram_login",
+          pageId: profile.igUserId,
+          pageName: profile.name || profile.username,
+          igUserId: profile.igUserId,
+          igUsername: profile.username,
+          pageSubscribed: false
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Instagram Login failed";
+        res.status(400).json({ ok: false, error: message });
+      }
+      return;
+    }
+
     if (!userAccessToken) {
-      res.status(400).json({ error: "userAccessToken is required" });
+      res.status(400).json({ error: "code or userAccessToken is required" });
       return;
     }
 
@@ -248,6 +292,7 @@ export function createInstagramRouter(io: Server): Router {
       res.json({
         ok: true,
         connected: true,
+        mode: "facebook_login",
         pageId: selected.pageId,
         pageName: selected.pageName,
         igUserId: selected.igUserId,

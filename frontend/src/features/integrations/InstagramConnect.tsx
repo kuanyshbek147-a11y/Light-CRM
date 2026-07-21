@@ -13,44 +13,19 @@ type Props = {
   authToken: string;
 };
 
-const FB_SDK_SRC = "https://connect.facebook.net/en_US/sdk.js";
+const OAUTH_STATE_KEY = "instagram_oauth_state";
+const OAUTH_REDIRECT_KEY = "instagram_oauth_redirect";
 
-function ensureFacebookSdk(appId: string, apiVersion: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const finish = (): void => {
-      if (!window.FB) {
-        reject(new Error("Facebook SDK не загрузился"));
-        return;
-      }
-      window.FB.init({
-        appId,
-        cookie: true,
-        xfbml: false,
-        version: apiVersion
-      });
-      resolve();
-    };
-
-    if (window.FB) {
-      finish();
-      return;
-    }
-
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${FB_SDK_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => finish());
-      existing.addEventListener("error", () => reject(new Error("Не удалось загрузить Facebook SDK")));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = FB_SDK_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => finish();
-    script.onerror = () => reject(new Error("Не удалось загрузить Facebook SDK"));
-    document.body.appendChild(script);
+function buildInstagramAuthUrl(setup: InstagramConnectSetup, state: string): string {
+  const redirectUri = setup.redirectUri || `${window.location.origin}/`;
+  const params = new URLSearchParams({
+    client_id: setup.appId,
+    redirect_uri: redirectUri,
+    scope: (setup.scopes || []).join(","),
+    response_type: "code",
+    state
   });
+  return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
 }
 
 export function InstagramConnect({ authToken }: Props) {
@@ -72,7 +47,7 @@ export function InstagramConnect({ authToken }: Props) {
     try {
       const [nextStatus, nextSetup] = await Promise.all([
         loadInstagramStatus(authToken),
-        loadInstagramConnectSetup()
+        loadInstagramConnectSetup(window.location.origin)
       ]);
       setStatus(nextStatus);
       setSetup(nextSetup);
@@ -93,9 +68,66 @@ export function InstagramConnect({ authToken }: Props) {
     void refreshStatus();
   }, [refreshStatus]);
 
+  // Complete Instagram Login redirect (?code=...&state=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    const oauthError = params.get("error_description") || params.get("error");
+    if (!code && !oauthError) {
+      return;
+    }
+
+    const expectedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+    const redirectUri = sessionStorage.getItem(OAUTH_REDIRECT_KEY) || `${window.location.origin}/`;
+
+    // Clean URL immediately so refresh doesn't re-run exchange.
+    const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    if (oauthError) {
+      setError(oauthError);
+      sessionStorage.removeItem(OAUTH_STATE_KEY);
+      sessionStorage.removeItem(OAUTH_REDIRECT_KEY);
+      return;
+    }
+
+    if (!code) {
+      return;
+    }
+    if (!expectedState || !state || state !== expectedState) {
+      setError("OAuth state не совпал. Нажмите «Подключить Instagram» ещё раз.");
+      return;
+    }
+
+    void (async () => {
+      setOauthLoading(true);
+      setError("");
+      setSuccess("");
+      try {
+        const result = await connectInstagramOAuth(authToken, { code, redirectUri });
+        if (!result.ok) {
+          throw new Error(result.error || "Не удалось подключить Instagram");
+        }
+        setSuccess(
+          result.igUsername
+            ? `Instagram @${result.igUsername} подключён`
+            : "Instagram подключён"
+        );
+        await refreshStatus();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Ошибка Instagram Login");
+      } finally {
+        sessionStorage.removeItem(OAUTH_STATE_KEY);
+        sessionStorage.removeItem(OAUTH_REDIRECT_KEY);
+        setOauthLoading(false);
+      }
+    })();
+  }, [authToken, refreshStatus]);
+
   async function onConnectOAuth(): Promise<void> {
     if (!setup?.appId) {
-      setError("Не задан Meta App ID");
+      setError("Не задан INSTAGRAM_APP_ID (приложение Light CRM-IG)");
       return;
     }
 
@@ -103,47 +135,13 @@ export function InstagramConnect({ authToken }: Props) {
     setError("");
     setSuccess("");
     try {
-      await ensureFacebookSdk(setup.appId, setup.apiVersion || "v21.0");
-      const accessToken = await new Promise<string>((resolve, reject) => {
-        window.FB.login(
-          (response) => {
-            const token = response.authResponse?.accessToken;
-            if (token) {
-              resolve(token);
-              return;
-            }
-            reject(new Error("Вход через Facebook отменён или не дал токен"));
-          },
-          {
-            scope: (setup.scopes || []).join(","),
-            return_scopes: true
-          }
-        );
-      });
-
-      const result = await connectInstagramOAuth(authToken, {
-        userAccessToken: accessToken
-      });
-      if (!result.ok) {
-        throw new Error(result.error || "Не удалось подключить Instagram");
-      }
-
-      setSuccess(
-        result.igUsername
-          ? `Instagram @${result.igUsername} подключён`
-          : `Instagram подключён (${result.pageName || result.pageId})`
-      );
-      await refreshStatus();
+      const redirectUri = setup.redirectUri || `${window.location.origin}/`;
+      const state = crypto.randomUUID();
+      sessionStorage.setItem(OAUTH_STATE_KEY, state);
+      sessionStorage.setItem(OAUTH_REDIRECT_KEY, redirectUri);
+      window.location.assign(buildInstagramAuthUrl(setup, state));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Ошибка OAuth Instagram";
-      if (/invalid scopes/i.test(message)) {
-        setError(
-          "Meta отклонила scopes. В App Dashboard добавьте Instagram API + права: instagram_business_basic, instagram_business_manage_messages, pages_show_list, pages_messaging. Затем повторите вход."
-        );
-      } else {
-        setError(message);
-      }
-    } finally {
+      setError(err instanceof Error ? err.message : "Ошибка Instagram Login");
       setOauthLoading(false);
     }
   }
@@ -154,7 +152,7 @@ export function InstagramConnect({ authToken }: Props) {
     setSuccess("");
     try {
       const result = await connectInstagram(authToken, {
-        pageId,
+        pageId: pageId || igUserId,
         pageAccessToken,
         igUserId: igUserId || undefined
       });
@@ -199,11 +197,9 @@ export function InstagramConnect({ authToken }: Props) {
         <div>
           <h3 className="integrationsPanelTitle">Instagram Direct</h3>
           <p className="integrationsHint">
-            Нужен Instagram Business, привязанный к Facebook Page. В Meta App Dashboard
-            добавьте продукт Instagram и права:{" "}
+            Подключение через <strong>Instagram Login</strong> (приложение Light CRM-IG). Нужны права:{" "}
             <code>instagram_business_basic</code>,{" "}
-            <code>instagram_business_manage_messages</code>,{" "}
-            <code>pages_show_list</code>, <code>pages_messaging</code>. Webhook:{" "}
+            <code>instagram_business_manage_messages</code>. Webhook:{" "}
             <code>/api/integrations/instagram/webhook</code>.
           </p>
         </div>
@@ -215,16 +211,16 @@ export function InstagramConnect({ authToken }: Props) {
       {status?.connected ? (
         <div className="instagramStatusGrid">
           <div>
-            <div className="sidebarHint">Page ID</div>
-            <div className="scriptCardTitle">{status.pageId || "—"}</div>
-          </div>
-          <div>
             <div className="sidebarHint">IG User ID</div>
-            <div className="scriptCardTitle">{status.igUserId || "—"}</div>
+            <div className="scriptCardTitle">{status.igUserId || status.pageId || "—"}</div>
           </div>
           <div>
             <div className="sidebarHint">Источник</div>
             <div className="scriptCardTitle">{status.source || "—"}</div>
+          </div>
+          <div>
+            <div className="sidebarHint">App ID</div>
+            <div className="scriptCardTitle">{setup?.appId || "—"}</div>
           </div>
         </div>
       ) : null}
@@ -233,10 +229,10 @@ export function InstagramConnect({ authToken }: Props) {
         <button
           type="button"
           className="primaryButton"
-          disabled={oauthLoading || loading}
+          disabled={oauthLoading || loading || !setup?.appId}
           onClick={() => void onConnectOAuth()}
         >
-          {oauthLoading ? "Подключение..." : "Подключить через Facebook"}
+          {oauthLoading ? "Подключение..." : "Подключить Instagram"}
         </button>
         {status?.connected ? (
           <button
@@ -260,13 +256,13 @@ export function InstagramConnect({ authToken }: Props) {
         <div className="instagramConnectForm">
           <input
             className="filterInput"
-            placeholder="Facebook Page ID"
-            value={pageId}
-            onChange={(event) => setPageId(event.target.value)}
+            placeholder="Instagram User ID"
+            value={igUserId}
+            onChange={(event) => setIgUserId(event.target.value)}
           />
           <input
             className="filterInput"
-            placeholder="Page Access Token"
+            placeholder="Instagram Access Token"
             value={pageAccessToken}
             onChange={(event) => setPageAccessToken(event.target.value)}
             type="password"
@@ -274,14 +270,14 @@ export function InstagramConnect({ authToken }: Props) {
           />
           <input
             className="filterInput"
-            placeholder="Instagram User ID (необязательно)"
-            value={igUserId}
-            onChange={(event) => setIgUserId(event.target.value)}
+            placeholder="Facebook Page ID (если токен Page)"
+            value={pageId}
+            onChange={(event) => setPageId(event.target.value)}
           />
           <button
             type="button"
             className="primaryButton"
-            disabled={saving || !pageId.trim() || !pageAccessToken.trim()}
+            disabled={saving || !pageAccessToken.trim() || (!igUserId.trim() && !pageId.trim())}
             onClick={() => void onConnectManual()}
           >
             {saving ? "Сохранение..." : "Сохранить вручную"}
@@ -293,8 +289,9 @@ export function InstagramConnect({ authToken }: Props) {
       {success ? <div className="integrationsSuccess">{success}</div> : null}
 
       <div className="integrationsHint">
-        Нужны: Instagram Business/Creator + Facebook Page. Verify token:
-        {" "}
+        В Meta App добавьте Valid OAuth Redirect URI:{" "}
+        <code>{setup?.redirectUri || `${typeof window !== "undefined" ? window.location.origin : ""}/`}</code>
+        . Verify token:{" "}
         <code>{status?.verifyToken || setup?.verifyToken || "lightcrm-meta-verify-2026"}</code>.
       </div>
     </div>
