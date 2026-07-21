@@ -21,6 +21,7 @@ import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { LandingWebChat } from "./features/landing/LandingWebChat";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
+import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 import {
   canRecordVoiceForWhatsApp,
   extensionForRecordedAudio,
@@ -2263,21 +2264,15 @@ export function App(): JSX.Element {
 
         <div className="topbarRight">
           <div className="topbarIconGroup" aria-label="notifications and settings">
-            <button
-              type="button"
-              className={`topbarIconButton${notificationSoundOn ? "" : " topbarIconButtonMuted"}`}
-              title={notificationSoundOn ? "Звук уведомлений: вкл" : "Звук уведомлений: выкл"}
-              aria-label={notificationSoundOn ? "Выключить звук уведомлений" : "Включить звук уведомлений"}
-              aria-pressed={notificationSoundOn}
-              onClick={() => {
+            <NotificationBellButton
+              enabled={notificationSoundOn}
+              onToggle={() => {
                 const next = !notificationSoundOn;
                 setNotificationSoundEnabled(next);
                 setNotificationSoundOn(next);
                 unlockNotificationSound();
               }}
-            >
-              {notificationSoundOn ? "\uD83D\uDD14" : "\uD83D\uDD15"}
-            </button>
+            />
             <button
               type="button"
               className="topbarIconButton"

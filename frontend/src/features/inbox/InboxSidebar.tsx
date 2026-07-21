@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
+import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
@@ -231,16 +232,12 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
           >
             🔍
           </button>
-          <button
-            type="button"
-            className={`threadIconBtn${notificationSoundOn ? "" : " threadIconBtnMuted"}`}
-            title={notificationSoundOn ? "Звук уведомлений: вкл" : "Звук уведомлений: выкл"}
-            aria-label={notificationSoundOn ? "Выключить звук уведомлений" : "Включить звук уведомлений"}
-            aria-pressed={notificationSoundOn}
-            onClick={onToggleNotificationSound}
-          >
-            {notificationSoundOn ? "🔔" : "🔕"}
-          </button>
+          <NotificationBellButton
+            className="threadIconBtn"
+            size={19}
+            enabled={notificationSoundOn}
+            onToggle={onToggleNotificationSound}
+          />
         </div>
       </div>
 
