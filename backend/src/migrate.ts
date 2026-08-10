@@ -186,6 +186,45 @@ export async function ensureUserLoginSchema(): Promise<void> {
   await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS summary TEXT`);
   await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS body TEXT`);
   await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS public_slug TEXT`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS status TEXT`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS view_count INTEGER`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN`);
+  await pool.query(`ALTER TABLE knowledge_articles ADD COLUMN IF NOT EXISTS is_archived BOOLEAN`);
+  await pool.query(`
+    UPDATE knowledge_articles
+    SET status = 'published'
+    WHERE status IS NULL OR trim(status) = ''
+  `);
+  await pool.query(`
+    UPDATE knowledge_articles
+    SET view_count = 0
+    WHERE view_count IS NULL
+  `);
+  await pool.query(`
+    UPDATE knowledge_articles
+    SET updated_at = COALESCE(updated_at, created_at, now())
+    WHERE updated_at IS NULL
+  `);
+  await pool.query(`
+    UPDATE knowledge_articles
+    SET is_pinned = false
+    WHERE is_pinned IS NULL
+  `);
+  await pool.query(`
+    UPDATE knowledge_articles
+    SET is_archived = false
+    WHERE is_archived IS NULL
+  `);
+  await pool.query(`
+    ALTER TABLE knowledge_articles
+      ALTER COLUMN status SET DEFAULT 'published',
+      ALTER COLUMN view_count SET DEFAULT 0,
+      ALTER COLUMN is_pinned SET DEFAULT false,
+      ALTER COLUMN is_archived SET DEFAULT false,
+      ALTER COLUMN updated_at SET DEFAULT now()
+  `);
   await pool.query(`
     UPDATE knowledge_articles
     SET public_slug = substr(replace(id::text, '-', ''), 1, 16)

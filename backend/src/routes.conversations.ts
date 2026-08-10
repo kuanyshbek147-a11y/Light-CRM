@@ -41,7 +41,7 @@ async function allocateKnowledgeSlug(title: string, excludeArticleId?: string): 
   return `${base.slice(0, 48)}-${randomBytes(3).toString("hex")}`;
 }
 
-function mapKnowledgeArticle(row: {
+type KnowledgeRow = {
   id: string;
   title: string;
   url: string | null;
@@ -49,16 +49,71 @@ function mapKnowledgeArticle(row: {
   summary: string | null;
   body: string | null;
   public_slug: string | null;
+  status: string | null;
+  expires_at: string | null;
+  view_count: number | null;
+  is_pinned: boolean | null;
+  is_archived: boolean | null;
   created_at: string;
-}) {
+  updated_at: string | null;
+};
+
+const KNOWLEDGE_SELECT = `id, title, url, category, summary, body, public_slug,
+  status, expires_at, view_count, is_pinned, is_archived, created_at, updated_at`;
+
+function parseKnowledgeStatus(value: unknown): "draft" | "published" {
+  return String(value || "").trim() === "draft" ? "draft" : "published";
+}
+
+function parseExpiresAt(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const raw = String(value).trim();
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString();
+}
+
+function mapKnowledgeArticle(row: KnowledgeRow) {
   const publicSlug = row.public_slug || "";
+  const status = parseKnowledgeStatus(row.status);
+  const expiresAt = row.expires_at || null;
+  const expired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
   return {
     ...row,
     url: row.url || "",
     body: row.body || "",
     public_slug: publicSlug,
-    share_url: publicSlug ? buildKnowledgeShareUrl(publicSlug) : ""
+    share_url: publicSlug ? buildKnowledgeShareUrl(publicSlug) : "",
+    status,
+    expires_at: expiresAt,
+    view_count: Number(row.view_count || 0),
+    is_pinned: Boolean(row.is_pinned),
+    is_archived: Boolean(row.is_archived),
+    updated_at: row.updated_at || row.created_at,
+    is_expired: expired,
+    is_shareable: status === "published" && !row.is_archived && !expired && Boolean(publicSlug)
   };
+}
+
+async function getWorkspaceSetting(workspaceId: string, key: string): Promise<string> {
+  const rows = await query<{ value: string }>(
+    `SELECT value FROM workspace_settings WHERE workspace_id = $1 AND key = $2 LIMIT 1`,
+    [workspaceId, key]
+  );
+  return rows[0]?.value || "";
+}
+
+async function setWorkspaceSetting(workspaceId: string, key: string, value: string): Promise<void> {
+  await query(
+    `INSERT INTO workspace_settings (workspace_id, key, value)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (workspace_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [workspaceId, key, value]
+  );
 }
 
 conversationsRouter.get("/scripts", async (req: AuthRequest, res) => {
@@ -147,39 +202,60 @@ conversationsRouter.delete("/scripts/:scriptId", async (req: AuthRequest, res) =
 });
 
 conversationsRouter.get("/knowledge-base", async (req: AuthRequest, res) => {
-  const rows = await query<{
-    id: string;
-    title: string;
-    url: string | null;
-    category: string | null;
-    summary: string | null;
-    body: string | null;
-    public_slug: string | null;
-    created_at: string;
-  }>(
-    `SELECT id, title, url, category, summary, body, public_slug, created_at
+  const rows = await query<KnowledgeRow>(
+    `SELECT ${KNOWLEDGE_SELECT}
      FROM knowledge_articles
      WHERE workspace_id = $1
-     ORDER BY created_at DESC`,
+     ORDER BY is_pinned DESC, COALESCE(updated_at, created_at) DESC`,
     [req.user?.workspaceId]
   );
 
   res.json(rows.map(mapKnowledgeArticle));
 });
 
+conversationsRouter.get("/knowledge-base/settings", async (req: AuthRequest, res) => {
+  const workspaceId = req.user?.workspaceId || "";
+  const [brandName, contactUrl] = await Promise.all([
+    getWorkspaceSetting(workspaceId, "knowledge_brand_name"),
+    getWorkspaceSetting(workspaceId, "knowledge_contact_url")
+  ]);
+  res.json({ brand_name: brandName, contact_url: contactUrl });
+});
+
+conversationsRouter.put("/knowledge-base/settings", async (req: AuthRequest, res) => {
+  const workspaceId = req.user?.workspaceId || "";
+  const brandName = String((req.body as { brand_name?: string }).brand_name || "").trim();
+  const contactUrl = String((req.body as { contact_url?: string }).contact_url || "").trim();
+  if (contactUrl && !/^https?:\/\//i.test(contactUrl)) {
+    res.status(400).json({ error: "contact_url_must_be_http" });
+    return;
+  }
+  await setWorkspaceSetting(workspaceId, "knowledge_brand_name", brandName);
+  await setWorkspaceSetting(workspaceId, "knowledge_contact_url", contactUrl);
+  res.json({ brand_name: brandName, contact_url: contactUrl });
+});
+
 conversationsRouter.post("/knowledge-base", async (req: AuthRequest, res) => {
-  const { title, url, category, summary, body } = req.body as {
+  const body = req.body as {
     title: string;
     url?: string;
     category?: string;
     summary?: string;
     body?: string;
+    status?: string;
+    expires_at?: string | null;
+    is_pinned?: boolean;
+    is_archived?: boolean;
   };
-  const cleanTitle = (title || "").trim();
-  const cleanUrl = (url || "").trim();
-  const cleanCategory = (category || "").trim();
-  const cleanSummary = (summary || "").trim();
-  const cleanBody = (body || "").trim();
+  const cleanTitle = (body.title || "").trim();
+  const cleanUrl = (body.url || "").trim();
+  const cleanCategory = (body.category || "").trim();
+  const cleanSummary = (body.summary || "").trim();
+  const cleanBody = (body.body || "").trim();
+  const status = parseKnowledgeStatus(body.status);
+  const expiresAt = parseExpiresAt(body.expires_at);
+  const isPinned = Boolean(body.is_pinned);
+  const isArchived = Boolean(body.is_archived);
 
   if (!cleanTitle || (!cleanBody && !cleanUrl && !cleanSummary)) {
     res.status(400).json({ error: "title_and_content_required" });
@@ -187,21 +263,14 @@ conversationsRouter.post("/knowledge-base", async (req: AuthRequest, res) => {
   }
 
   const slug = await allocateKnowledgeSlug(cleanTitle);
-  const inserted = await query<{
-    id: string;
-    title: string;
-    url: string | null;
-    category: string | null;
-    summary: string | null;
-    body: string | null;
-    public_slug: string | null;
-    created_at: string;
-  }>(
+  const inserted = await query<KnowledgeRow>(
     `INSERT INTO knowledge_articles (
-       workspace_id, title, url, category, summary, body, public_slug, created_by_user_id
+       workspace_id, title, url, category, summary, body, public_slug,
+       status, expires_at, view_count, is_pinned, is_archived, created_by_user_id, updated_at
      )
-     VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), NULLIF($6, ''), $7, $8)
-     RETURNING id, title, url, category, summary, body, public_slug, created_at`,
+     VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''), NULLIF($6, ''), $7,
+             $8, $9, 0, $10, $11, $12, now())
+     RETURNING ${KNOWLEDGE_SELECT}`,
     [
       req.user?.workspaceId,
       cleanTitle,
@@ -210,6 +279,10 @@ conversationsRouter.post("/knowledge-base", async (req: AuthRequest, res) => {
       cleanSummary,
       cleanBody,
       slug,
+      status,
+      expiresAt,
+      isPinned,
+      isArchived,
       req.user?.id
     ]
   );
@@ -218,18 +291,26 @@ conversationsRouter.post("/knowledge-base", async (req: AuthRequest, res) => {
 });
 
 conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest, res) => {
-  const { title, url, category, summary, body } = req.body as {
+  const body = req.body as {
     title: string;
     url?: string;
     category?: string;
     summary?: string;
     body?: string;
+    status?: string;
+    expires_at?: string | null;
+    is_pinned?: boolean;
+    is_archived?: boolean;
   };
-  const cleanTitle = (title || "").trim();
-  const cleanUrl = (url || "").trim();
-  const cleanCategory = (category || "").trim();
-  const cleanSummary = (summary || "").trim();
-  const cleanBody = (body || "").trim();
+  const cleanTitle = (body.title || "").trim();
+  const cleanUrl = (body.url || "").trim();
+  const cleanCategory = (body.category || "").trim();
+  const cleanSummary = (body.summary || "").trim();
+  const cleanBody = (body.body || "").trim();
+  const status = parseKnowledgeStatus(body.status);
+  const expiresAt = parseExpiresAt(body.expires_at);
+  const isPinned = Boolean(body.is_pinned);
+  const isArchived = Boolean(body.is_archived);
 
   if (!cleanTitle || (!cleanBody && !cleanUrl && !cleanSummary)) {
     res.status(400).json({ error: "title_and_content_required" });
@@ -254,25 +335,21 @@ conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest,
       ? await allocateKnowledgeSlug(cleanTitle, req.params.articleId)
       : currentSlug;
 
-  const updated = await query<{
-    id: string;
-    title: string;
-    url: string | null;
-    category: string | null;
-    summary: string | null;
-    body: string | null;
-    public_slug: string | null;
-    created_at: string;
-  }>(
+  const updated = await query<KnowledgeRow>(
     `UPDATE knowledge_articles
      SET title = $1,
          url = $2,
          category = NULLIF($3, ''),
          summary = NULLIF($4, ''),
          body = NULLIF($5, ''),
-         public_slug = $6
-     WHERE id = $7 AND workspace_id = $8
-     RETURNING id, title, url, category, summary, body, public_slug, created_at`,
+         public_slug = $6,
+         status = $7,
+         expires_at = $8,
+         is_pinned = $9,
+         is_archived = $10,
+         updated_at = now()
+     WHERE id = $11 AND workspace_id = $12
+     RETURNING ${KNOWLEDGE_SELECT}`,
     [
       cleanTitle,
       cleanUrl || "",
@@ -280,6 +357,10 @@ conversationsRouter.patch("/knowledge-base/:articleId", async (req: AuthRequest,
       cleanSummary,
       cleanBody,
       nextSlug,
+      status,
+      expiresAt,
+      isPinned,
+      isArchived,
       req.params.articleId,
       req.user?.workspaceId
     ]

@@ -1,7 +1,19 @@
 import { API_BASE_URL } from "../../../shared/config/api";
-import type { KnowledgeArticle, MessageScript } from "../model/types";
+import type { KnowledgeArticle, KnowledgeSettings, MessageScript } from "../model/types";
 
 const API = API_BASE_URL;
+
+export type KnowledgeArticlePayload = {
+  title: string;
+  url?: string;
+  category: string;
+  summary: string;
+  body?: string;
+  status?: "draft" | "published";
+  expires_at?: string | null;
+  is_pinned?: boolean;
+  is_archived?: boolean;
+};
 
 export async function loadScripts(token: string, setScripts: (data: MessageScript[]) => void): Promise<void> {
   const response = await fetch(`${API}/conversations/scripts`, {
@@ -50,7 +62,7 @@ export async function loadKnowledgeArticles(
 
 export async function createKnowledgeArticleApi(
   token: string,
-  payload: { title: string; url?: string; category: string; summary: string; body?: string }
+  payload: KnowledgeArticlePayload
 ): Promise<KnowledgeArticle | null> {
   const response = await fetch(`${API}/conversations/knowledge-base`, {
     method: "POST",
@@ -69,7 +81,7 @@ export async function createKnowledgeArticleApi(
 export async function updateKnowledgeArticleApi(
   token: string,
   articleId: string,
-  payload: { title: string; url?: string; category: string; summary: string; body?: string }
+  payload: KnowledgeArticlePayload
 ): Promise<KnowledgeArticle | null> {
   const response = await fetch(`${API}/conversations/knowledge-base/${articleId}`, {
     method: "PATCH",
@@ -90,6 +102,34 @@ export async function deleteKnowledgeArticleApi(token: string, articleId: string
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` }
   });
+}
+
+export async function loadKnowledgeSettings(token: string): Promise<KnowledgeSettings> {
+  const response = await fetch(`${API}/conversations/knowledge-base/settings`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    return { brand_name: "", contact_url: "" };
+  }
+  return (await response.json()) as KnowledgeSettings;
+}
+
+export async function saveKnowledgeSettingsApi(
+  token: string,
+  payload: KnowledgeSettings
+): Promise<KnowledgeSettings | null> {
+  const response = await fetch(`${API}/conversations/knowledge-base/settings`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as KnowledgeSettings;
 }
 
 export async function sendConversationTextMessage(

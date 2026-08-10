@@ -13,6 +13,7 @@ type InboxThreadUi = {
   searchKnowledgeBase: string;
   noKnowledgeArticles: string;
   sendArticleLink: string;
+  insertArticleText: string;
   general: string;
   emojis: string;
   typeMessage: string;
@@ -70,6 +71,7 @@ type InboxThreadProps = {
   onSelectScript: (scriptId: string, body: string) => void;
   onSelectKnowledgeArticle: (body: string) => void;
   onSendKnowledgeArticleLink: (article: KnowledgeArticle) => void;
+  onInsertKnowledgeArticleText: (article: KnowledgeArticle) => void;
   onToggleEmojiPicker: () => void;
   onMessageBodyChange: (value: string) => void;
   onPickFile: (file: File) => void;
@@ -123,6 +125,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onSelectScript,
     onSelectKnowledgeArticle,
     onSendKnowledgeArticleLink,
+    onInsertKnowledgeArticleText,
     onToggleEmojiPicker,
     onMessageBodyChange,
     onPickFile,
@@ -608,7 +611,10 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                         }}
                       >
                         <span className="scriptCardTop">
-                          <span className="scriptCardTitle">{article.title}</span>
+                          <span className="scriptCardTitle">
+                            {article.is_pinned ? "★ " : ""}
+                            {article.title}
+                          </span>
                           <span className="scriptBadge">{article.category || ui.general}</span>
                         </span>
                         <span className="scriptCardBody">
@@ -616,6 +622,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                         </span>
                       </button>
                       <div className="scriptCardActions">
+                        <button type="button" className="textButton" onClick={() => onInsertKnowledgeArticleText(article)}>
+                          {ui.insertArticleText}
+                        </button>
                         <button type="button" className="textButton" onClick={() => onSendKnowledgeArticleLink(article)}>
                           {ui.sendArticleLink}
                         </button>

@@ -53,7 +53,20 @@ export type KnowledgeArticle = {
   body?: string | null;
   public_slug?: string | null;
   share_url?: string | null;
+  status?: "draft" | "published";
+  expires_at?: string | null;
+  view_count?: number;
+  is_pinned?: boolean;
+  is_archived?: boolean;
+  is_expired?: boolean;
+  is_shareable?: boolean;
   created_at: string;
+  updated_at?: string;
+};
+
+export type KnowledgeSettings = {
+  brand_name: string;
+  contact_url: string;
 };
 
 export type ContactCard = {
