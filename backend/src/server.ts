@@ -117,6 +117,14 @@ server.listen(port, () => {
   console.log(`Backend running on ${port}`);
 });
 
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection (kept alive):", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception (kept alive):", error);
+});
+
 void ensureUserLoginSchema()
   .then(async () => {
     console.log("Database schema ready");

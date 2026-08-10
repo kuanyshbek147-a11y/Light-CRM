@@ -1150,29 +1150,57 @@ export function App(): JSX.Element {
       return;
     }
 
-    try {
-      const response = await fetch(`${API}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login: loginValue, password: passwordValue })
-      });
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        if (attempt > 1) {
+          setLoginError(`Сервер просыпается… попытка ${attempt}/${maxAttempts}`);
+        }
+        const response = await fetch(`${API}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: loginValue, password: passwordValue })
+        });
 
-      const data = (await response.json()) as { token?: string; user?: SessionUser; error?: string };
-      if (!response.ok || !data.token) {
-        setLoginError(data.error || UI.loginFailed);
-        return;
-      }
+        const raw = await response.text();
+        let data: { token?: string; user?: SessionUser; error?: string } = {};
+        try {
+          data = raw ? (JSON.parse(raw) as { token?: string; user?: SessionUser; error?: string }) : {};
+        } catch {
+          if (attempt < maxAttempts && (response.status === 502 || response.status === 503 || response.status === 504)) {
+            await new Promise((resolve) => window.setTimeout(resolve, 2500 * attempt));
+            continue;
+          }
+          setLoginError("Сервер API временно недоступен. Подождите 30–60 сек и нажмите «Войти» ещё раз.");
+          return;
+        }
 
-      setSessionUser(data.user ?? null);
-      setToken(data.token);
-      persistSession(data.token, data.user ?? null);
-      if (isSuperAdminUser(data.user ?? null)) {
-        setCurrentSection("platform");
+        if (!response.ok || !data.token) {
+          if (attempt < maxAttempts && (response.status === 502 || response.status === 503 || response.status === 504)) {
+            await new Promise((resolve) => window.setTimeout(resolve, 2500 * attempt));
+            continue;
+          }
+          setLoginError(data.error || UI.loginFailed);
+          return;
+        }
+
+        setSessionUser(data.user ?? null);
+        setToken(data.token);
+        persistSession(data.token, data.user ?? null);
+        setLoginError("");
+        if (isSuperAdminUser(data.user ?? null)) {
+          setCurrentSection("platform");
+          return;
+        }
+        await hydrateWorkspace(data.token);
         return;
+      } catch {
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2500 * attempt));
+          continue;
+        }
+        setLoginError("Сервер API временно недоступен. Подождите 30–60 сек и нажмите «Войти» ещё раз.");
       }
-      await hydrateWorkspace(data.token);
-    } catch {
-      setLoginError("Сервер API недоступен. Проверьте backend или используйте http://localhost:5173");
     }
   }
 

@@ -299,6 +299,7 @@ export function startFollowUpScanner(): void {
       console.error("Follow-up scanner failed:", error);
     }
   };
-  void tick();
+  // Не грузим БД в момент старта инстанса (cold start / free tier).
   silenceTimer = setInterval(() => void tick(), 15 * 60 * 1000);
+  setTimeout(() => void tick(), 60_000);
 }

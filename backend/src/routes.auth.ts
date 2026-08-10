@@ -10,6 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 export const authRouter = Router();
 
 authRouter.post("/login", async (req, res) => {
+  try {
   const body = req.body as { login?: string; email?: string; password?: string };
   const password = typeof body.password === "string" ? body.password : "";
   const raw =
@@ -86,6 +87,10 @@ authRouter.post("/login", async (req, res) => {
       color: user.color
     }
   });
+  } catch (error) {
+    console.error("Login failed:", error);
+    res.status(503).json({ error: "База данных временно недоступна. Попробуйте через минуту." });
+  }
 });
 
 authRouter.get("/me", async (req, res) => {
