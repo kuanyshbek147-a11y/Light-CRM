@@ -204,3 +204,40 @@ export async function globalSearch(token: string, q: string): Promise<GlobalSear
   }
   return (await response.json()) as GlobalSearchResult;
 }
+
+export type FollowUpSettings = {
+  enabled: boolean;
+  onStageChange: boolean;
+  stageDueHours: number;
+  onSilence: boolean;
+  silenceHours: number;
+  skipClosedStages: boolean;
+};
+
+export async function loadFollowUpSettings(token: string): Promise<FollowUpSettings | null> {
+  const response = await fetch(`${API}/follow-up/settings`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as FollowUpSettings;
+}
+
+export async function saveFollowUpSettingsApi(
+  token: string,
+  payload: FollowUpSettings
+): Promise<FollowUpSettings | null> {
+  const response = await fetch(`${API}/follow-up/settings`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as FollowUpSettings;
+}

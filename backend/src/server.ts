@@ -27,6 +27,7 @@ import { startSimulator } from "./simulator";
 import { ensureUserLoginSchema, ensureDemoIntegrations } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
 import { setRealtimeServer } from "./realtime";
+import { createFollowUpRouter, startFollowUpScanner } from "./modules/follow-up";
 import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
@@ -68,6 +69,7 @@ app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
+app.use("/api/follow-up", authMiddleware, requireWorkspaceMiddleware, createFollowUpRouter());
 app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRouter);
 startSimulator(io);
 startTelegramPolling(io);
@@ -119,6 +121,7 @@ void ensureUserLoginSchema()
   .then(async () => {
     console.log("Database schema ready");
     await ensureDemoIntegrations();
+    startFollowUpScanner();
   })
   .catch((error) => {
     console.error("Migration failed (will retry on requests):", error);

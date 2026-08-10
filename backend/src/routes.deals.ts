@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
+import { maybeCreateStageFollowUp } from "./modules/follow-up";
 
 export const dealsRouter = Router();
 
@@ -188,6 +189,11 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
     return;
   }
 
+  const previous = await query<{ id: string; stage: string }>(
+    `SELECT id, stage FROM deals WHERE conversation_id = $1 AND workspace_id = $2 LIMIT 1`,
+    [req.params.conversationId, req.user?.workspaceId]
+  );
+
   const rows = await query<{ id: string; conversation_id: string; stage: string; updated_at: string }>(
     `INSERT INTO deals (workspace_id, conversation_id, owner_user_id, stage, amount)
      SELECT $1, $2, $3, $4, 0
@@ -208,19 +214,45 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
     return;
   }
 
+  await maybeCreateStageFollowUp({
+    workspaceId: req.user?.workspaceId || "",
+    conversationId: rows[0].conversation_id,
+    dealId: rows[0].id,
+    stage: rows[0].stage,
+    previousStage: previous[0]?.stage || null,
+    ownerUserId: req.user?.id || null
+  });
+
   res.json(rows[0]);
 });
 
 dealsRouter.patch("/:id/stage", async (req: AuthRequest, res) => {
   const { stage } = req.body as { stage: string };
+  const cleanStage = (stage || "").trim();
 
-  const rows = await query(
+  const previous = await query<{ stage: string; conversation_id: string }>(
+    `SELECT stage, conversation_id FROM deals WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
+    [req.params.id, req.user?.workspaceId]
+  );
+
+  const rows = await query<{ id: string; stage: string; conversation_id: string; updated_at: string }>(
     `UPDATE deals
      SET stage = $1, updated_at = now()
      WHERE id = $2 AND workspace_id = $3
-     RETURNING id, stage, updated_at`,
-    [stage, req.params.id, req.user?.workspaceId]
+     RETURNING id, stage, conversation_id, updated_at`,
+    [cleanStage, req.params.id, req.user?.workspaceId]
   );
+
+  if (rows[0]) {
+    await maybeCreateStageFollowUp({
+      workspaceId: req.user?.workspaceId || "",
+      conversationId: rows[0].conversation_id,
+      dealId: rows[0].id,
+      stage: rows[0].stage,
+      previousStage: previous[0]?.stage || null,
+      ownerUserId: req.user?.id || null
+    });
+  }
 
   res.json(rows[0]);
 });
@@ -231,6 +263,11 @@ dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
     amount?: number | string;
     next_step_at?: string | null;
   };
+
+  const previous = await query<{ stage: string; conversation_id: string }>(
+    `SELECT stage, conversation_id FROM deals WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
+    [req.params.id, req.user?.workspaceId]
+  );
 
   const cleanStage = stage !== undefined ? String(stage).trim() : undefined;
   let cleanAmount: number | undefined;
@@ -249,7 +286,14 @@ dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
         ? String(next_step_at).trim()
         : undefined;
 
-  const rows = await query(
+  const rows = await query<{
+    id: string;
+    conversation_id: string;
+    stage: string;
+    amount: string;
+    next_step_at: string | null;
+    updated_at: string;
+  }>(
     `UPDATE deals
      SET stage = COALESCE(NULLIF($1, ''), stage),
          amount = COALESCE($2, amount),
@@ -273,6 +317,17 @@ dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
   if (!rows[0]) {
     res.status(404).json({ error: "not_found" });
     return;
+  }
+
+  if (cleanStage) {
+    await maybeCreateStageFollowUp({
+      workspaceId: req.user?.workspaceId || "",
+      conversationId: rows[0].conversation_id,
+      dealId: rows[0].id,
+      stage: rows[0].stage,
+      previousStage: previous[0]?.stage || null,
+      ownerUserId: req.user?.id || null
+    });
   }
 
   res.json(rows[0]);

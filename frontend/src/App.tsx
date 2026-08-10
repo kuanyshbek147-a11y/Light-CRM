@@ -90,12 +90,15 @@ import {
   loadCrmContactDetails,
   loadCrmContacts,
   loadCrmTasks,
+  loadFollowUpSettings,
   mergeCrmContacts,
+  saveFollowUpSettingsApi,
   updateCrmTask,
   updateDealDetails,
   type CrmContactDetails,
   type CrmContactListItem,
   type CrmTask,
+  type FollowUpSettings,
   type GlobalSearchResult
 } from "./features/crm/api";
 
@@ -268,6 +271,14 @@ const UI = {
   openTasksTab: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   doneTasksTab: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435",
   noTasks: "\u0417\u0430\u0434\u0430\u0447 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
+  followUpSettings: "\u0410\u0432\u0442\u043e follow-up",
+  followUpEnabled: "\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f",
+  followUpOnStage: "\u041f\u0440\u0438 \u0441\u043c\u0435\u043d\u0435 \u044d\u0442\u0430\u043f\u0430 \u0441\u0434\u0435\u043b\u043a\u0438",
+  followUpStageHours: "\u0427\u0435\u0440\u0435\u0437 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0430\u0441\u043e\u0432 \u043d\u0430\u043f\u043e\u043c\u043d\u0438\u0442\u044c (\u044d\u0442\u0430\u043f)",
+  followUpOnSilence: "\u0415\u0441\u043b\u0438 \u0434\u043e\u043b\u0433\u043e \u043d\u0435\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0432 \u0434\u0438\u0430\u043b\u043e\u0433\u0435",
+  followUpSilenceHours: "\u0422\u0438\u0448\u0438\u043d\u0430, \u0447\u0430\u0441\u043e\u0432",
+  followUpSkipClosed: "\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u0432\u044b\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445/\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445 \u044d\u0442\u0430\u043f\u0430\u0445",
+  saveFollowUp: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c follow-up",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
   mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
@@ -594,6 +605,14 @@ export function App(): JSX.Element {
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalSearchResults, setGlobalSearchResults] = useState<GlobalSearchResult | null>(null);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [followUpSettings, setFollowUpSettings] = useState<FollowUpSettings>({
+    enabled: true,
+    onStageChange: true,
+    stageDueHours: 24,
+    onSilence: true,
+    silenceHours: 48,
+    skipClosedStages: true
+  });
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
   const [selectedScriptId, setSelectedScriptId] = useState<string>("");
@@ -1332,6 +1351,29 @@ export function App(): JSX.Element {
       return;
     }
     setCrmTasks(await loadCrmTasks(token, taskStatusFilter));
+  }
+
+  async function refreshFollowUpSettings(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const settings = await loadFollowUpSettings(token);
+    if (settings) {
+      setFollowUpSettings(settings);
+    }
+  }
+
+  async function saveFollowUpSettings(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const saved = await saveFollowUpSettingsApi(token, followUpSettings);
+    if (!saved) {
+      showToast("Не удалось сохранить follow-up", "error");
+      return;
+    }
+    setFollowUpSettings(saved);
+    showToast("Настройки follow-up сохранены", "success");
   }
 
   async function refreshCrmContacts(q = contactsSearch): Promise<void> {
@@ -2930,6 +2972,7 @@ export function App(): JSX.Element {
             onClick={() => {
               setCurrentSection("tasks");
               void refreshCrmTasks();
+              void refreshFollowUpSettings();
             }}
             title={UI.menuTasks}
           >
@@ -3855,6 +3898,95 @@ export function App(): JSX.Element {
                 ))}
               </div>
             ) : null}
+
+            <div className="knowledgeFormCard" style={{ marginTop: 24 }}>
+              <div className="scriptPanelTitle">{UI.followUpSettings}</div>
+              <div className="sidebarHint" style={{ marginBottom: 12 }}>
+                Система сама создаст задачу-напоминание: после смены этапа или если в чате долго тишина.
+              </div>
+              <div className="scriptForm">
+                <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={followUpSettings.enabled}
+                    onChange={(event) =>
+                      setFollowUpSettings((prev) => ({ ...prev, enabled: event.target.checked }))
+                    }
+                  />
+                  {UI.followUpEnabled}
+                </label>
+                <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={followUpSettings.onStageChange}
+                    onChange={(event) =>
+                      setFollowUpSettings((prev) => ({ ...prev, onStageChange: event.target.checked }))
+                    }
+                  />
+                  {UI.followUpOnStage}
+                </label>
+                <label className="sidebarHint" style={{ display: "block" }}>
+                  {UI.followUpStageHours}
+                  <input
+                    className="filterInput"
+                    type="number"
+                    min={1}
+                    max={720}
+                    value={followUpSettings.stageDueHours}
+                    onChange={(event) =>
+                      setFollowUpSettings((prev) => ({
+                        ...prev,
+                        stageDueHours: Number(event.target.value) || 24
+                      }))
+                    }
+                    style={{ marginTop: 4 }}
+                  />
+                </label>
+                <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={followUpSettings.onSilence}
+                    onChange={(event) =>
+                      setFollowUpSettings((prev) => ({ ...prev, onSilence: event.target.checked }))
+                    }
+                  />
+                  {UI.followUpOnSilence}
+                </label>
+                <label className="sidebarHint" style={{ display: "block" }}>
+                  {UI.followUpSilenceHours}
+                  <input
+                    className="filterInput"
+                    type="number"
+                    min={1}
+                    max={720}
+                    value={followUpSettings.silenceHours}
+                    onChange={(event) =>
+                      setFollowUpSettings((prev) => ({
+                        ...prev,
+                        silenceHours: Number(event.target.value) || 48
+                      }))
+                    }
+                    style={{ marginTop: 4 }}
+                  />
+                </label>
+                <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={followUpSettings.skipClosedStages}
+                    onChange={(event) =>
+                      setFollowUpSettings((prev) => ({
+                        ...prev,
+                        skipClosedStages: event.target.checked
+                      }))
+                    }
+                  />
+                  {UI.followUpSkipClosed}
+                </label>
+                <button type="button" className="primaryButton" onClick={() => void saveFollowUpSettings()}>
+                  {UI.saveFollowUp}
+                </button>
+              </div>
+            </div>
           </section>
         ) : currentSection === "contacts" ? (
           <section className="knowledgePage card">
