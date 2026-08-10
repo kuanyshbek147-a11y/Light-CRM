@@ -167,7 +167,7 @@ dealsRouter.delete("/stages/:id", async (req: AuthRequest, res) => {
 dealsRouter.get("/", async (req: AuthRequest, res) => {
   const rows = await query(
     `SELECT d.id, d.conversation_id, d.stage, d.amount, d.next_step_at,
-            ct.name AS contact_name, u.full_name AS manager_name
+            ct.name AS contact_name, u.full_name AS manager_name, c.contact_id
      FROM deals d
      JOIN conversations c ON c.id = d.conversation_id
      JOIN contacts ct ON ct.id = c.contact_id
@@ -221,6 +221,59 @@ dealsRouter.patch("/:id/stage", async (req: AuthRequest, res) => {
      RETURNING id, stage, updated_at`,
     [stage, req.params.id, req.user?.workspaceId]
   );
+
+  res.json(rows[0]);
+});
+
+dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
+  const { stage, amount, next_step_at } = req.body as {
+    stage?: string;
+    amount?: number | string;
+    next_step_at?: string | null;
+  };
+
+  const cleanStage = stage !== undefined ? String(stage).trim() : undefined;
+  let cleanAmount: number | undefined;
+  if (amount !== undefined && amount !== null && amount !== "") {
+    cleanAmount = Number(amount);
+    if (Number.isNaN(cleanAmount) || cleanAmount < 0) {
+      res.status(400).json({ error: "invalid_amount" });
+      return;
+    }
+  }
+
+  const nextStep =
+    next_step_at === null
+      ? null
+      : next_step_at !== undefined && String(next_step_at).trim()
+        ? String(next_step_at).trim()
+        : undefined;
+
+  const rows = await query(
+    `UPDATE deals
+     SET stage = COALESCE(NULLIF($1, ''), stage),
+         amount = COALESCE($2, amount),
+         next_step_at = CASE
+           WHEN $3::text = '__CLEAR__' THEN NULL
+           WHEN NULLIF($3, '') IS NULL THEN next_step_at
+           ELSE NULLIF($3, '')::timestamp
+         END,
+         updated_at = now()
+     WHERE id = $4 AND workspace_id = $5
+     RETURNING id, conversation_id, stage, amount, next_step_at, updated_at`,
+    [
+      cleanStage ?? "",
+      cleanAmount ?? null,
+      nextStep === null ? "__CLEAR__" : nextStep || "",
+      req.params.id,
+      req.user?.workspaceId
+    ]
+  );
+
+  if (!rows[0]) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
 
   res.json(rows[0]);
 });

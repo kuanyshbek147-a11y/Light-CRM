@@ -806,6 +806,60 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     [workspaceId]
   );
 
+  const [instagramDialogs] = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM conversations
+     WHERE workspace_id = $1 AND channel = 'instagram'`,
+    [workspaceId]
+  );
+
+  const [emailDialogs] = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM conversations
+     WHERE workspace_id = $1 AND channel = 'email'`,
+    [workspaceId]
+  );
+
+  const [webDialogs] = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM conversations
+     WHERE workspace_id = $1 AND channel IN ('web', 'webchat')`,
+    [workspaceId]
+  );
+
+  const [salesTotals] = await query<{
+    total_deals: string;
+    won_deals: string;
+    lost_deals: string;
+    won_amount: string;
+    pipeline_amount: string;
+  }>(
+    `SELECT
+       COUNT(*)::text AS total_deals,
+       COUNT(*) FILTER (
+         WHERE lower(stage) LIKE '%won%'
+            OR lower(stage) LIKE '%выиг%'
+            OR lower(stage) LIKE '%успех%'
+            OR lower(stage) LIKE '%закрыт%'
+       )::text AS won_deals,
+       COUNT(*) FILTER (
+         WHERE lower(stage) LIKE '%lost%'
+            OR lower(stage) LIKE '%проиг%'
+            OR lower(stage) LIKE '%отказ%'
+       )::text AS lost_deals,
+       COALESCE(SUM(amount) FILTER (
+         WHERE lower(stage) LIKE '%won%'
+            OR lower(stage) LIKE '%выиг%'
+            OR lower(stage) LIKE '%успех%'
+            OR lower(stage) LIKE '%закрыт%'
+       ), 0)::text AS won_amount,
+       COALESCE(SUM(amount), 0)::text AS pipeline_amount
+     FROM deals
+     WHERE workspace_id = $1
+       AND ${dealUpdatedRangeCondition}`,
+    rangeParams
+  );
+
   const managersKpi = await query<{
     manager_id: string;
     manager_name: string;
@@ -1029,6 +1083,24 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     avgMessagesPerConversation: Number(avgMessagesPerDialog?.avg_messages || 0),
     whatsappConversations: Number(whatsappDialogs?.count || 0),
     telegramConversations: Number(telegramDialogs?.count || 0),
+    instagramConversations: Number(instagramDialogs?.count || 0),
+    emailConversations: Number(emailDialogs?.count || 0),
+    webConversations: Number(webDialogs?.count || 0),
+    salesKpi: {
+      totalDeals: Number(salesTotals?.total_deals || 0),
+      wonDeals: Number(salesTotals?.won_deals || 0),
+      lostDeals: Number(salesTotals?.lost_deals || 0),
+      wonAmount: Number(salesTotals?.won_amount || 0),
+      pipelineAmount: Number(salesTotals?.pipeline_amount || 0),
+      winRate:
+        Number(salesTotals?.won_deals || 0) + Number(salesTotals?.lost_deals || 0) > 0
+          ? Math.round(
+              (Number(salesTotals?.won_deals || 0) /
+                (Number(salesTotals?.won_deals || 0) + Number(salesTotals?.lost_deals || 0))) *
+                100
+            )
+          : 0
+    },
     managersKpi: managersKpi.map((row) => ({
       managerId: row.manager_id,
       managerName: row.manager_name,

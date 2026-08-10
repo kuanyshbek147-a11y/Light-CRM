@@ -280,9 +280,28 @@ button {
 }
 
 .topbarSearch {
+  position: relative;
   flex: 1;
   min-width: 220px;
   max-width: 520px;
+}
+
+.topbarSearchDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.topbarSearchGroup {
+  display: grid;
+  gap: 4px;
 }
 
 .topbarSearchInput {

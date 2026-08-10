@@ -240,6 +240,12 @@ export async function ensureUserLoginSchema(): Promise<void> {
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT`);
   await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta_media_id TEXT`);
   await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS is_group BOOLEAN NOT NULL DEFAULT false`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP`);
+  await pool.query(`
+    UPDATE contacts
+    SET created_at = now()
+    WHERE created_at IS NULL
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pipeline_stages (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

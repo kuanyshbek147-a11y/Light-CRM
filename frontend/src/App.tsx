@@ -84,14 +84,30 @@ import {
 import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
 import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
+import {
+  createCrmTask,
+  globalSearch,
+  loadCrmContactDetails,
+  loadCrmContacts,
+  loadCrmTasks,
+  mergeCrmContacts,
+  updateCrmTask,
+  updateDealDetails,
+  type CrmContactDetails,
+  type CrmContactListItem,
+  type CrmTask,
+  type GlobalSearchResult
+} from "./features/crm/api";
 
 type Deal = {
   id: string;
   conversation_id: string;
   stage: string;
   amount: string;
+  next_step_at?: string | null;
   contact_name: string;
   manager_name: string;
+  contact_id?: string;
 };
 
 type PipelineStage = {
@@ -112,6 +128,17 @@ type Metrics = {
   avgMessagesPerConversation: number;
   whatsappConversations: number;
   telegramConversations: number;
+  instagramConversations?: number;
+  emailConversations?: number;
+  webConversations?: number;
+  salesKpi?: {
+    totalDeals: number;
+    wonDeals: number;
+    lostDeals: number;
+    wonAmount: number;
+    pipelineAmount: number;
+    winRate: number;
+  };
   managersKpi?: Array<{
     managerId: string;
     managerName: string;
@@ -227,11 +254,29 @@ const UI = {
   funnelKpiTab: "KPI \u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
   menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+  menuContacts: "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
   menuProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
   sectionDialogsCenter: "Dialogs Center",
   sectionFunnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   sectionTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+  sectionContacts: "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
   sectionProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
+  globalSearchPlaceholder: "\u041f\u043e\u0438\u0441\u043a: \u0434\u0438\u0430\u043b\u043e\u0433\u0438, \u043a\u043b\u0438\u0435\u043d\u0442\u044b, \u0441\u0434\u0435\u043b\u043a\u0438...",
+  newTaskPlaceholder: "\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u0434\u0430\u0447\u0430",
+  markTaskDone: "\u0413\u043e\u0442\u043e\u0432\u043e",
+  reopenTask: "\u0412\u0435\u0440\u043d\u0443\u0442\u044c",
+  openTasksTab: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
+  doneTasksTab: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435",
+  noTasks: "\u0417\u0430\u0434\u0430\u0447 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
+  contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
+  mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
+  dealAmount: "\u0421\u0443\u043c\u043c\u0430",
+  dealNextStep: "\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433",
+  saveDeal: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0434\u0435\u043b\u043a\u0443",
+  salesConversion: "\u041a\u043e\u043d\u0432\u0435\u0440\u0441\u0438\u044f \u043f\u0440\u043e\u0434\u0430\u0436",
+  winRate: "Win rate",
+  wonAmount: "\u0412\u044b\u0440\u0443\u0447\u043a\u0430",
+  pipelineAmountLabel: "\u0412 \u0432\u043e\u0440\u043e\u043d\u043a\u0435",
   sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
   menuAnalytics: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
@@ -239,6 +284,7 @@ const UI = {
   menuIntegrations: "\u0418\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
   menuPlatform: "\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
+  searchClients: "\u041f\u043e\u0438\u0441\u043a \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
   chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
   searchByNameOrPhone: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0438\u043c\u0435\u043d\u0438 \u0438\u043b\u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
@@ -522,8 +568,32 @@ export function App(): JSX.Element {
   const [notificationSoundOn, setNotificationSoundOn] = useState<boolean>(() => isNotificationSoundEnabled());
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<
-    "dialogs" | "pipeline" | "tasks" | "profile" | "analytics" | "knowledge" | "integrations" | "platform"
+    | "dialogs"
+    | "pipeline"
+    | "tasks"
+    | "contacts"
+    | "profile"
+    | "analytics"
+    | "knowledge"
+    | "integrations"
+    | "platform"
   >("dialogs");
+  const [crmTasks, setCrmTasks] = useState<CrmTask[]>([]);
+  const [taskStatusFilter, setTaskStatusFilter] = useState<"open" | "done">("open");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDueLocal, setNewTaskDueLocal] = useState("");
+  const [crmContacts, setCrmContacts] = useState<CrmContactListItem[]>([]);
+  const [contactsSearch, setContactsSearch] = useState("");
+  const [selectedContactId, setSelectedContactId] = useState("");
+  const [contactDetails, setContactDetails] = useState<CrmContactDetails | null>(null);
+  const [mergeSourceContactId, setMergeSourceContactId] = useState("");
+  const [selectedDealId, setSelectedDealId] = useState("");
+  const [dealAmountDraft, setDealAmountDraft] = useState("");
+  const [dealNextStepDraft, setDealNextStepDraft] = useState("");
+  const [dealStageDraft, setDealStageDraft] = useState("");
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [globalSearchResults, setGlobalSearchResults] = useState<GlobalSearchResult | null>(null);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
   const [selectedScriptId, setSelectedScriptId] = useState<string>("");
@@ -1252,6 +1322,109 @@ export function App(): JSX.Element {
     await createConversationTask(token, conversationId, title);
     setQuickTaskByConversation((prev) => ({ ...prev, [conversationId]: "" }));
     await refreshConversationList({ token, search, filters, setConversations });
+    if (currentSection === "tasks") {
+      await refreshCrmTasks();
+    }
+  }
+
+  async function refreshCrmTasks(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    setCrmTasks(await loadCrmTasks(token, taskStatusFilter));
+  }
+
+  async function refreshCrmContacts(q = contactsSearch): Promise<void> {
+    if (!token) {
+      return;
+    }
+    setCrmContacts(await loadCrmContacts(token, q));
+  }
+
+  async function openContactDetails(contactId: string): Promise<void> {
+    if (!token) {
+      return;
+    }
+    setSelectedContactId(contactId);
+    setContactDetails(await loadCrmContactDetails(token, contactId));
+    setCurrentSection("contacts");
+  }
+
+  async function submitNewCrmTask(): Promise<void> {
+    if (!token || !newTaskTitle.trim()) {
+      return;
+    }
+    const dueAt = newTaskDueLocal.trim() ? new Date(newTaskDueLocal).toISOString() : null;
+    const created = await createCrmTask(token, { title: newTaskTitle.trim(), dueAt });
+    if (!created) {
+      showToast("Не удалось создать задачу", "error");
+      return;
+    }
+    setNewTaskTitle("");
+    setNewTaskDueLocal("");
+    await refreshCrmTasks();
+    showToast("Задача создана", "success");
+  }
+
+  async function toggleCrmTaskDone(task: CrmTask): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const nextStatus = task.status === "open" ? "done" : "open";
+    await updateCrmTask(token, task.id, { status: nextStatus });
+    await refreshCrmTasks();
+  }
+
+  async function runGlobalSearch(value: string): Promise<void> {
+    setGlobalSearchQuery(value);
+    if (!token || value.trim().length < 2) {
+      setGlobalSearchResults(null);
+      setGlobalSearchOpen(false);
+      return;
+    }
+    const results = await globalSearch(token, value.trim());
+    setGlobalSearchResults(results);
+    setGlobalSearchOpen(true);
+  }
+
+  function beginEditDeal(deal: Deal): void {
+    setSelectedDealId(deal.id);
+    setDealAmountDraft(String(deal.amount || "0"));
+    setDealStageDraft(deal.stage || "");
+    setDealNextStepDraft(deal.next_step_at ? toDatetimeLocalValue(deal.next_step_at) : "");
+  }
+
+  async function saveSelectedDeal(): Promise<void> {
+    if (!token || !selectedDealId) {
+      return;
+    }
+    const amount = Number(dealAmountDraft);
+    const ok = await updateDealDetails(token, selectedDealId, {
+      stage: dealStageDraft,
+      amount: Number.isNaN(amount) ? 0 : amount,
+      next_step_at: dealNextStepDraft.trim() ? new Date(dealNextStepDraft).toISOString() : null
+    });
+    if (!ok) {
+      showToast("Не удалось сохранить сделку", "error");
+      return;
+    }
+    await loadDeals(token, setDeals);
+    showToast("Сделка сохранена", "success");
+  }
+
+  async function mergeSelectedContact(): Promise<void> {
+    if (!token || !selectedContactId || !mergeSourceContactId) {
+      return;
+    }
+    const ok = await mergeCrmContacts(token, selectedContactId, mergeSourceContactId);
+    if (!ok) {
+      showToast("Не удалось склеить клиентов", "error");
+      return;
+    }
+    setMergeSourceContactId("");
+    await refreshCrmContacts();
+    await openContactDetails(selectedContactId);
+    showToast("Клиенты склеены", "success");
   }
 
   async function markSlaFollowUpDone(conversationId: string): Promise<void> {
@@ -2468,9 +2641,11 @@ export function App(): JSX.Element {
           : UI.pipelineBoardHint
         : currentSection === "tasks"
           ? UI.sectionTasks
-          : currentSection === "profile"
-            ? UI.sectionProfile
-            : UI.landingBadge;
+          : currentSection === "contacts"
+            ? UI.sectionContacts
+            : currentSection === "profile"
+              ? UI.sectionProfile
+              : UI.landingBadge;
 
   const bottomNavActive: MobileNavSection =
     currentSection === "pipeline"
@@ -2503,6 +2678,9 @@ export function App(): JSX.Element {
       return;
     }
     setCurrentSection(section);
+    if (section === "tasks") {
+      void refreshCrmTasks();
+    }
   }
 
   const openConversationsWithFollowUp = conversations.filter((conversation) => conversation.has_sla_follow_up);
@@ -2525,9 +2703,108 @@ export function App(): JSX.Element {
         <div className="topbarSearch">
           <input
             className="topbarSearchInput"
-            placeholder="Search across deals and dialogues..."
-            aria-label="Search across deals and dialogues"
+            placeholder={UI.globalSearchPlaceholder}
+            aria-label={UI.globalSearchPlaceholder}
+            value={globalSearchQuery}
+            onChange={(event) => void runGlobalSearch(event.target.value)}
+            onFocus={() => {
+              if (globalSearchResults) {
+                setGlobalSearchOpen(true);
+              }
+            }}
+            onBlur={() => {
+              window.setTimeout(() => setGlobalSearchOpen(false), 180);
+            }}
           />
+          {globalSearchOpen && globalSearchResults ? (
+            <div className="topbarSearchDropdown card">
+              {globalSearchResults.conversations.length ? (
+                <div className="topbarSearchGroup">
+                  <div className="sidebarHint">{UI.menuDialogs}</div>
+                  {globalSearchResults.conversations.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="textButton"
+                      onMouseDown={() => {
+                        setCurrentSection("dialogs");
+                        setGlobalSearchOpen(false);
+                        void onSelectConversation(item.id);
+                      }}
+                    >
+                      {item.contact_name} · {item.channel}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {globalSearchResults.contacts.length ? (
+                <div className="topbarSearchGroup">
+                  <div className="sidebarHint">{UI.menuContacts}</div>
+                  {globalSearchResults.contacts.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="textButton"
+                      onMouseDown={() => {
+                        setGlobalSearchOpen(false);
+                        void openContactDetails(item.id);
+                      }}
+                    >
+                      {item.name} · {item.phone}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {globalSearchResults.deals.length ? (
+                <div className="topbarSearchGroup">
+                  <div className="sidebarHint">{UI.menuPipeline}</div>
+                  {globalSearchResults.deals.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="textButton"
+                      onMouseDown={() => {
+                        setCurrentSection("pipeline");
+                        setSelectedDealId(item.id);
+                        setDealAmountDraft(String(item.amount || "0"));
+                        setDealStageDraft(item.stage || "");
+                        setGlobalSearchOpen(false);
+                        void onSelectConversation(item.conversation_id);
+                      }}
+                    >
+                      {item.contact_name} · {item.stage} · {item.amount}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {globalSearchResults.tasks.length ? (
+                <div className="topbarSearchGroup">
+                  <div className="sidebarHint">{UI.menuTasks}</div>
+                  {globalSearchResults.tasks.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="textButton"
+                      onMouseDown={() => {
+                        setCurrentSection("tasks");
+                        setGlobalSearchOpen(false);
+                        void refreshCrmTasks();
+                      }}
+                    >
+                      {item.title}
+                      {item.contact_name ? ` · ${item.contact_name}` : ""}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {!globalSearchResults.conversations.length &&
+              !globalSearchResults.contacts.length &&
+              !globalSearchResults.deals.length &&
+              !globalSearchResults.tasks.length ? (
+                <div className="emptyScriptState">{UI.noMatchingScripts}</div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="topbarRight">
@@ -2646,6 +2923,34 @@ export function App(): JSX.Element {
               {"\u29D2"}
             </span>
             <span className="leftMenuButtonLabel">{UI.menuPipeline}</span>
+          </button>
+          <button
+            type="button"
+            className={`leftMenuButton ${currentSection === "tasks" ? "active" : ""}`}
+            onClick={() => {
+              setCurrentSection("tasks");
+              void refreshCrmTasks();
+            }}
+            title={UI.menuTasks}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u2611"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuTasks}</span>
+          </button>
+          <button
+            type="button"
+            className={`leftMenuButton ${currentSection === "contacts" ? "active" : ""}`}
+            onClick={() => {
+              setCurrentSection("contacts");
+              void refreshCrmContacts();
+            }}
+            title={UI.menuContacts}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25CE"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuContacts}</span>
           </button>
           <button
             type="button"
@@ -3290,6 +3595,41 @@ export function App(): JSX.Element {
                     <span>{UI.telegramChannel}</span>
                     <strong>{metrics?.telegramConversations ?? 0}</strong>
                   </div>
+                  <div className="analyticsChannelItem">
+                    <span>Instagram</span>
+                    <strong>{metrics?.instagramConversations ?? 0}</strong>
+                  </div>
+                  <div className="analyticsChannelItem">
+                    <span>Email</span>
+                    <strong>{metrics?.emailConversations ?? 0}</strong>
+                  </div>
+                  <div className="analyticsChannelItem">
+                    <span>Web</span>
+                    <strong>{metrics?.webConversations ?? 0}</strong>
+                  </div>
+                </div>
+              </div>
+              <div className="analyticsCard analyticsCardWide">
+                <div className="analyticsLabel">{UI.salesConversion}</div>
+                <div className="analyticsChannels">
+                  <div className="analyticsChannelItem">
+                    <span>{UI.winRate}</span>
+                    <strong>{metrics?.salesKpi?.winRate ?? 0}%</strong>
+                  </div>
+                  <div className="analyticsChannelItem">
+                    <span>{UI.wonAmount}</span>
+                    <strong>{metrics?.salesKpi?.wonAmount ?? 0}</strong>
+                  </div>
+                  <div className="analyticsChannelItem">
+                    <span>{UI.pipelineAmountLabel}</span>
+                    <strong>{metrics?.salesKpi?.pipelineAmount ?? 0}</strong>
+                  </div>
+                  <div className="analyticsChannelItem">
+                    <span>Won / Lost</span>
+                    <strong>
+                      {metrics?.salesKpi?.wonDeals ?? 0} / {metrics?.salesKpi?.lostDeals ?? 0}
+                    </strong>
+                  </div>
                 </div>
               </div>
               <div className="analyticsCard analyticsCardWide">
@@ -3409,34 +3749,235 @@ export function App(): JSX.Element {
             </div>
           </section>
         ) : currentSection === "tasks" ? (
-          <section className="simpleMobilePage card">
-            <div className="mobilePageHeader">
-              <div className="mobilePageHeaderText">
-                <div className="mobilePageTitle">{UI.sectionTasks}</div>
-                <div className="mobilePageSubtitle">{openConversationsWithFollowUp.length} active</div>
+          <section className="knowledgePage card">
+            <div className="railHeader">
+              <div>
+                <div className="sidebarTitle">{UI.sectionTasks}</div>
+                <div className="sidebarHint">
+                  {crmTasks.length} · {taskStatusFilter === "open" ? UI.openTasksTab : UI.doneTasksTab}
+                </div>
               </div>
             </div>
-            {openConversationsWithFollowUp.length ? (
-              openConversationsWithFollowUp.map((conversation) => (
-                <div key={conversation.id} className="taskCard">
-                  <div className="taskCardTitle">SLA follow-up: {conversation.contact_name}</div>
-                  <div className="taskCardMeta">{conversation.phone || conversation.channel}</div>
-                  <button
-                    type="button"
-                    className="dialogActionBtn primary"
-                    style={{ marginTop: 10 }}
-                    onClick={() => {
-                      setCurrentSection("dialogs");
-                      void onSelectConversation(conversation.id);
-                    }}
-                  >
-                    Open chat
-                  </button>
+            <div className="pipelineFilterButtons" style={{ marginBottom: 12 }}>
+              <button
+                type="button"
+                className={`leftMenuButton ${taskStatusFilter === "open" ? "active" : ""}`}
+                onClick={() => {
+                  setTaskStatusFilter("open");
+                  void (async () => {
+                    if (!token) return;
+                    setCrmTasks(await loadCrmTasks(token, "open"));
+                  })();
+                }}
+              >
+                {UI.openTasksTab}
+              </button>
+              <button
+                type="button"
+                className={`leftMenuButton ${taskStatusFilter === "done" ? "active" : ""}`}
+                onClick={() => {
+                  setTaskStatusFilter("done");
+                  void (async () => {
+                    if (!token) return;
+                    setCrmTasks(await loadCrmTasks(token, "done"));
+                  })();
+                }}
+              >
+                {UI.doneTasksTab}
+              </button>
+            </div>
+            <div className="scriptForm" style={{ marginBottom: 16 }}>
+              <input
+                className="filterInput"
+                placeholder={UI.newTaskPlaceholder}
+                value={newTaskTitle}
+                onChange={(event) => setNewTaskTitle(event.target.value)}
+              />
+              <input
+                className="filterInput"
+                type="datetime-local"
+                value={newTaskDueLocal}
+                onChange={(event) => setNewTaskDueLocal(event.target.value)}
+              />
+              <button type="button" className="primaryButton" onClick={() => void submitNewCrmTask()}>
+                {UI.save}
+              </button>
+            </div>
+            {crmTasks.length ? (
+              crmTasks.map((task) => (
+                <div key={task.id} className="taskCard">
+                  <div className="taskCardTitle">{task.title}</div>
+                  <div className="taskCardMeta">
+                    {task.contact_name || "—"}
+                    {task.due_at ? ` · ${new Date(task.due_at).toLocaleString()}` : ""}
+                    {task.deal_stage ? ` · ${task.deal_stage}` : ""}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <button type="button" className="dialogActionBtn primary" onClick={() => void toggleCrmTaskDone(task)}>
+                      {task.status === "open" ? UI.markTaskDone : UI.reopenTask}
+                    </button>
+                    {task.conversation_id ? (
+                      <button
+                        type="button"
+                        className="dialogActionBtn"
+                        onClick={() => {
+                          setCurrentSection("dialogs");
+                          void onSelectConversation(task.conversation_id as string);
+                        }}
+                      >
+                        {UI.backToChats}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))
             ) : (
-              <div className="emptyScriptState">No active tasks. Create one from a dialog card.</div>
+              <div className="emptyScriptState">{UI.noTasks}</div>
             )}
+            {openConversationsWithFollowUp.length ? (
+              <div style={{ marginTop: 24 }}>
+                <div className="scriptPanelTitle">SLA follow-up</div>
+                {openConversationsWithFollowUp.map((conversation) => (
+                  <div key={conversation.id} className="taskCard">
+                    <div className="taskCardTitle">SLA: {conversation.contact_name}</div>
+                    <button
+                      type="button"
+                      className="dialogActionBtn primary"
+                      style={{ marginTop: 10 }}
+                      onClick={() => {
+                        setCurrentSection("dialogs");
+                        void onSelectConversation(conversation.id);
+                      }}
+                    >
+                      {UI.backToChats}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : currentSection === "contacts" ? (
+          <section className="knowledgePage card">
+            <div className="railHeader">
+              <div>
+                <div className="sidebarTitle">{UI.sectionContacts}</div>
+                <div className="sidebarHint">{crmContacts.length}</div>
+              </div>
+            </div>
+            <div className="knowledgePageGrid">
+              <div className="knowledgeListCard">
+                <input
+                  className="searchInput"
+                  placeholder={UI.searchClients}
+                  value={contactsSearch}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setContactsSearch(value);
+                    void refreshCrmContacts(value);
+                  }}
+                />
+                <div className="knowledgeArticlesList">
+                  {crmContacts.map((contact) => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      className={`scriptCardMain ${selectedContactId === contact.id ? "active" : ""}`}
+                      onClick={() => void openContactDetails(contact.id)}
+                      style={{ width: "100%", textAlign: "left", marginBottom: 8 }}
+                    >
+                      <span className="scriptCardTop">
+                        <span className="scriptCardTitle">{contact.name}</span>
+                        <span className="scriptBadge">{contact.channels.join(", ") || "—"}</span>
+                      </span>
+                      <span className="scriptCardBody">
+                        {contact.phone}
+                        {contact.city ? ` · ${contact.city}` : ""}
+                        {` · ${contact.conversations_count} диал. · ${contact.deals_count} сделок`}
+                      </span>
+                    </button>
+                  ))}
+                  {crmContacts.length ? null : <div className="emptyScriptState">{UI.noKnowledgeArticles}</div>}
+                </div>
+              </div>
+              <div className="knowledgeFormCard">
+                {contactDetails ? (
+                  <>
+                    <div className="scriptPanelTitle">{contactDetails.contact.name}</div>
+                    <div className="sidebarHint">
+                      {contactDetails.contact.phone}
+                      {contactDetails.contact.city ? ` · ${contactDetails.contact.city}` : ""}
+                    </div>
+                    <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
+                      {UI.menuDialogs}
+                    </div>
+                    {contactDetails.conversations.map((conversation) => (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        className="textButton"
+                        onClick={() => {
+                          setCurrentSection("dialogs");
+                          void onSelectConversation(conversation.id);
+                        }}
+                      >
+                        {conversation.channel} · {conversation.status}
+                      </button>
+                    ))}
+                    <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
+                      {UI.menuPipeline}
+                    </div>
+                    {contactDetails.deals.map((deal) => (
+                      <div key={deal.id} className="taskCardMeta">
+                        {deal.stage} · {deal.amount}
+                        {deal.next_step_at ? ` · next ${new Date(deal.next_step_at).toLocaleString()}` : ""}
+                      </div>
+                    ))}
+                    <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
+                      {UI.contactTimeline}
+                    </div>
+                    <div className="knowledgeArticlesList">
+                      {contactDetails.timeline.map((item) => (
+                        <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
+                          <div className="taskCardTitle">{item.title}</div>
+                          <div className="taskCardMeta">
+                            {new Date(item.created_at).toLocaleString()}
+                            {item.detail ? ` · ${item.detail}` : ""}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
+                      {UI.mergeContact}
+                    </div>
+                    <select
+                      className="filterInput"
+                      value={mergeSourceContactId}
+                      onChange={(event) => setMergeSourceContactId(event.target.value)}
+                    >
+                      <option value="">—</option>
+                      {crmContacts
+                        .filter((contact) => contact.id !== selectedContactId)
+                        .map((contact) => (
+                          <option key={contact.id} value={contact.id}>
+                            {contact.name} · {contact.phone}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="primaryButton"
+                      style={{ marginTop: 8 }}
+                      disabled={!mergeSourceContactId}
+                      onClick={() => void mergeSelectedContact()}
+                    >
+                      {UI.mergeContact}
+                    </button>
+                  </>
+                ) : (
+                  <div className="emptyScriptState">{UI.selectChatHint}</div>
+                )}
+              </div>
+            </div>
           </section>
         ) : currentSection === "profile" ? (
           <section className="simpleMobilePage card">
@@ -3594,7 +4135,9 @@ export function App(): JSX.Element {
                     </div>
                     <div className="pipelineBoardCards">
                       {columnConversations.length ? (
-                        columnConversations.map((conversation) => (
+                        columnConversations.map((conversation) => {
+                          const deal = deals.find((item) => item.conversation_id === conversation.id);
+                          return (
                           <button
                             type="button"
                             className="pipelineBoardCard"
@@ -3609,16 +4152,39 @@ export function App(): JSX.Element {
                               setDragOverStageKey("");
                             }}
                             onClick={() => {
+                              if (deal) {
+                                beginEditDeal(deal);
+                              }
                               setCurrentSection("dialogs");
                               void onSelectConversation(conversation.id);
                             }}
                           >
                             <div className="pipelineBoardCardName">{conversation.contact_name}</div>
                             <div className="pipelineBoardCardMeta">{conversation.phone}</div>
+                            {deal ? (
+                              <div className="pipelineBoardCardMeta">
+                                {UI.dealAmount}: {deal.amount}
+                                {deal.next_step_at
+                                  ? ` · ${new Date(deal.next_step_at).toLocaleDateString()}`
+                                  : ""}
+                              </div>
+                            ) : null}
                             <div className="pipelineBoardCardSnippet">
                               {conversation.last_message_body || UI.noMessages}
                             </div>
                             <div className="pipelineBoardCardActions">
+                              {deal ? (
+                                <button
+                                  type="button"
+                                  className="textButton"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    beginEditDeal(deal);
+                                  }}
+                                >
+                                  {UI.editArticle}
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
                                 className="textButton dangerButton"
@@ -3634,7 +4200,8 @@ export function App(): JSX.Element {
                               </button>
                             </div>
                           </button>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="emptyScriptState">{UI.noCardsInStage}</div>
                       )}
@@ -3643,6 +4210,51 @@ export function App(): JSX.Element {
                 );
               })}
             </div>
+            {selectedDealId ? (
+              <div className="knowledgeFormCard" style={{ marginTop: 16 }}>
+                <div className="scriptPanelTitle">{UI.saveDeal}</div>
+                <div className="scriptForm">
+                  <select
+                    className="filterInput"
+                    value={dealStageDraft}
+                    onChange={(event) => setDealStageDraft(event.target.value)}
+                  >
+                    {availableStageNames.map((stageName) => (
+                      <option key={stageName} value={stageName}>
+                        {formatStageLabel(stageName, UI)}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="filterInput"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder={UI.dealAmount}
+                    value={dealAmountDraft}
+                    onChange={(event) => setDealAmountDraft(event.target.value)}
+                  />
+                  <label className="sidebarHint" style={{ display: "block" }}>
+                    {UI.dealNextStep}
+                    <input
+                      className="filterInput"
+                      type="datetime-local"
+                      value={dealNextStepDraft}
+                      onChange={(event) => setDealNextStepDraft(event.target.value)}
+                      style={{ marginTop: 4 }}
+                    />
+                  </label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button type="button" className="primaryButton" onClick={() => void saveSelectedDeal()}>
+                      {UI.saveDeal}
+                    </button>
+                    <button type="button" className="pipelineToggleBtn" onClick={() => setSelectedDealId("")}>
+                      {UI.cancel}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
               </>
             )}
           </section>
