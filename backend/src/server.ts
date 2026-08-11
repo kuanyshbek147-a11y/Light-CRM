@@ -28,6 +28,9 @@ import { ensureUserLoginSchema, ensureDemoIntegrations } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
 import { setRealtimeServer } from "./realtime";
 import { createFollowUpRouter, startFollowUpScanner } from "./modules/follow-up";
+import { createAdsRouter, startAdsMetricsWorker } from "./modules/ads";
+import { createMarketingRouter, startCampaignWorker, startContentScheduler, startSequenceWorker } from "./modules/marketing";
+import { createOpsRouter, startOpsHealthWatcher, backupsAbsoluteDir } from "./modules/ops";
 import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
@@ -70,6 +73,9 @@ app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
 app.use("/api/follow-up", authMiddleware, requireWorkspaceMiddleware, createFollowUpRouter());
+app.use("/api/marketing", authMiddleware, requireWorkspaceMiddleware, createMarketingRouter());
+app.use("/api/ads", authMiddleware, requireWorkspaceMiddleware, createAdsRouter());
+app.use("/api/ops", authMiddleware, requireWorkspaceMiddleware, createOpsRouter());
 app.use("/api/metrics", authMiddleware, requireWorkspaceMiddleware, metricsRouter);
 startSimulator(io);
 startTelegramPolling(io);
@@ -77,6 +83,7 @@ startEmailPolling(io);
 
 const publicDir = path.join(process.cwd(), "public");
 const publicIndex = path.join(publicDir, "index.html");
+app.use("/backups", express.static(backupsAbsoluteDir(), { index: false, maxAge: "1h" }));
 const widgetSourceCandidates = [
   path.join(process.cwd(), "src", "modules", "integrations", "webchat", "widget.js"),
   path.join(__dirname, "modules", "integrations", "webchat", "widget.js"),
@@ -130,6 +137,11 @@ void ensureUserLoginSchema()
     console.log("Database schema ready");
     await ensureDemoIntegrations();
     startFollowUpScanner();
+    startCampaignWorker();
+    startContentScheduler();
+    startSequenceWorker();
+    startOpsHealthWatcher();
+    startAdsMetricsWorker();
   })
   .catch((error) => {
     console.error("Migration failed (will retry on requests):", error);

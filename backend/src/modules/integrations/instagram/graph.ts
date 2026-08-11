@@ -39,7 +39,8 @@ export function getInstagramLoginScopes(): string[] {
   return [
     "instagram_business_basic",
     "instagram_business_manage_messages",
-    "instagram_business_manage_comments"
+    "instagram_business_manage_comments",
+    "instagram_business_content_publish"
   ];
 }
 
@@ -298,6 +299,54 @@ export async function subscribeInstagramPageToApp(
   }
 
   return Boolean(payload.success);
+}
+
+/** Publish image+caption to Instagram feed (Content Publishing API). Requires public image URL. */
+export async function publishInstagramFeedImage(params: {
+  igUserId: string;
+  accessToken: string;
+  imageUrl: string;
+  caption: string;
+}): Promise<string> {
+  const apiVersion = getInstagramApiVersion();
+  const createParams = new URLSearchParams({
+    image_url: params.imageUrl,
+    caption: params.caption.slice(0, 2200),
+    access_token: params.accessToken
+  });
+
+  const createResponse = await fetch(
+    `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(params.igUserId)}/media`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: createParams.toString()
+    }
+  );
+  const createPayload = (await createResponse.json()) as GraphErrorPayload & { id?: string };
+  if (!createResponse.ok || !createPayload.id) {
+    const message = createPayload.error?.message || JSON.stringify(createPayload);
+    throw new Error(`Instagram media create failed: ${createResponse.status} ${message}`);
+  }
+
+  const publishParams = new URLSearchParams({
+    creation_id: createPayload.id,
+    access_token: params.accessToken
+  });
+  const publishResponse = await fetch(
+    `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(params.igUserId)}/media_publish`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: publishParams.toString()
+    }
+  );
+  const publishPayload = (await publishResponse.json()) as GraphErrorPayload & { id?: string };
+  if (!publishResponse.ok || !publishPayload.id) {
+    const message = publishPayload.error?.message || JSON.stringify(publishPayload);
+    throw new Error(`Instagram media publish failed: ${publishResponse.status} ${message}`);
+  }
+  return publishPayload.id;
 }
 
 export { getInstagramAppId, getInstagramAppSecret };

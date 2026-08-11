@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
-export type UserRole = "admin" | "manager" | "superadmin";
+export type UserRole = "admin" | "manager" | "marketer" | "superadmin";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -51,9 +51,17 @@ export function requireWorkspaceAdminMiddleware(req: AuthRequest, res: Response,
     res.status(403).json({ error: "workspace_required" });
     return;
   }
-  if (req.user.role !== "admin") {
+  if (req.user.role !== "admin" && req.user.role !== "superadmin") {
     res.status(403).json({ error: "forbidden" });
     return;
   }
   next();
+}
+
+export function canAccessMarketing(role: UserRole | undefined): boolean {
+  return role === "admin" || role === "marketer" || role === "manager" || role === "superadmin";
+}
+
+export function canManageIntegrations(role: UserRole | undefined): boolean {
+  return role === "admin" || role === "superadmin";
 }

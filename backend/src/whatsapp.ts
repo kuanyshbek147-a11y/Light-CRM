@@ -22,6 +22,7 @@ import {
   listMetaActiveGroups,
   sendMetaFileMessage,
   sendMetaTextMessage,
+  sendMetaTemplateMessage,
   subscribeMetaAppWebhook,
   validateMetaPhoneNumber,
   verifyMetaWebhookChallenge
@@ -467,6 +468,39 @@ export async function sendWhatsAppMessageForConversation(
     return extractOutgoingExternalId(payload);
   } catch (error) {
     console.error("ChatApp send failed with exception", error);
+    return null;
+  }
+}
+
+export async function sendWhatsAppTemplateForConversation(
+  conversationId: string,
+  workspaceId: string,
+  template: { name: string; language?: string; bodyParameters?: string[] }
+): Promise<string | null> {
+  const rows = await query<{ channel: string; external_id: string | null; phone: string }>(
+    `SELECT c.channel, ct.external_id, ct.phone
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     WHERE c.id = $1 AND c.workspace_id = $2`,
+    [conversationId, workspaceId]
+  );
+  const conversation = rows[0];
+  if (!conversation || conversation.channel !== "whatsapp") {
+    return null;
+  }
+  const to = normalizeWhatsAppRecipient(conversation.external_id || conversation.phone);
+  if (!to) {
+    return null;
+  }
+  if (WHATSAPP_PROVIDER !== "meta") {
+    console.error("WhatsApp templates require Meta Cloud provider");
+    return null;
+  }
+  try {
+    const metaConfig = await getMetaCloudConfigForWorkspace(workspaceId);
+    return await sendMetaTemplateMessage(to, template, metaConfig);
+  } catch (error) {
+    console.error("Meta WhatsApp template send failed with exception", error);
     return null;
   }
 }

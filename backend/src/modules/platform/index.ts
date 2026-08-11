@@ -158,7 +158,7 @@ platformRouter.post("/workspaces/:workspaceId/users", async (req: AuthRequest, r
     password?: string;
     role?: string;
   };
-  const role = body.role === "admin" ? "admin" : "manager";
+  const role = body.role === "admin" ? "admin" : body.role === "marketer" ? "marketer" : "manager";
 
   try {
     const result = await createWorkspaceUser(req.params.workspaceId, {

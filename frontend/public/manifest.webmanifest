@@ -1,0 +1,22 @@
+{
+  "name": "Light CRM",
+  "short_name": "Light CRM",
+  "description": "CRM, чаты и маркетинг",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#5b5ce9",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

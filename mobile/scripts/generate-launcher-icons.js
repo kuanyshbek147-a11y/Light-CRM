@@ -8,6 +8,14 @@ const resRoot = path.join(root, "android", "app", "src", "main", "res");
 const previewDir = path.join(root, "resources", "previews");
 const frontendPublic = path.join(root, "..", "frontend", "public");
 
+/**
+ * Wide logo: size by WIDTH, not by diagonal.
+ * ~74% width looks full on squircle; still mostly inside Android safe zone.
+ */
+// Wide enough to look full, with margin so OEM masks don't clip tails.
+const ICON_WIDTH_RATIO = 0.70;
+const WEB_WIDTH_RATIO = 0.78;
+
 const densities = [
   { folder: "mipmap-mdpi", launcher: 48, foreground: 108 },
   { folder: "mipmap-hdpi", launcher: 72, foreground: 162 },
@@ -16,61 +24,71 @@ const densities = [
   { folder: "mipmap-xxxhdpi", launcher: 192, foreground: 432 }
 ];
 
-async function extractMark() {
-  // New logo: mark centered above wordmark on decorative background.
+/** Extract mark and make background truly transparent (no letterbox plate). */
+async function extractMarkTransparent() {
   const cropped = await sharp(sourcePath)
-    .extract({ left: 210, top: 150, width: 600, height: 440 })
+    .extract({ left: 230, top: 165, width: 560, height: 410 })
     .png()
     .toBuffer();
 
-  const trimmed = await sharp(cropped).trim({ threshold: 22 }).png().toBuffer();
+  const trimmed = await sharp(cropped).trim({ threshold: 30 }).png().toBuffer();
 
   const { data, info } = await sharp(trimmed)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  // Flatten near-white / pale decorative background to pure white.
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-    const isPale = min > 210 && max - min < 35;
-    const isNearWhite = r > 232 && g > 232 && b > 235;
+    // Pale / near-white → fully transparent (kills letterbox plate).
+    const isPale = min > 195 && max - min < 50;
+    const isNearWhite = r > 220 && g > 220 && b > 225;
     if (isNearWhite || isPale) {
       data[i] = 255;
       data[i + 1] = 255;
       data[i + 2] = 255;
-      data[i + 3] = 255;
+      data[i + 3] = 0;
     }
   }
 
+  // Trim transparent edges after keying.
   return sharp(data, {
     raw: { width: info.width, height: info.height, channels: 4 }
   })
+    .trim({ threshold: 0 })
     .png()
     .toBuffer();
 }
 
-async function placeOnCanvas(markBuffer, size, padRatio) {
-  const pad = Math.round(size * padRatio);
-  const inner = Math.max(1, size - pad * 2);
+/** Place transparent mark large and centered on pure white square. */
+async function placeLarge(markBuffer, size, widthRatio = ICON_WIDTH_RATIO) {
+  const markMeta = await sharp(markBuffer).metadata();
+  const mw = markMeta.width || 1;
+  const mh = markMeta.height || 1;
+
+  const targetW = Math.max(1, Math.round(size * widthRatio));
+  const targetH = Math.max(1, Math.round((mh / mw) * targetW));
+
+  // If height would overflow, clamp by height instead.
+  const maxH = Math.round(size * 0.78);
+  let finalW = targetW;
+  let finalH = targetH;
+  if (finalH > maxH) {
+    finalH = maxH;
+    finalW = Math.max(1, Math.round((mw / mh) * finalH));
+  }
 
   const resized = await sharp(markBuffer)
-    .resize(inner, inner, {
-      fit: "contain",
-      background: { r: 255, g: 255, b: 255, alpha: 1 }
-    })
+    .resize(finalW, finalH, { fit: "fill" })
     .png()
     .toBuffer();
 
-  const resizedMeta = await sharp(resized).metadata();
-  const rw = resizedMeta.width || inner;
-  const rh = resizedMeta.height || inner;
-  const left = Math.round((size - rw) / 2);
-  const top = Math.round((size - rh) / 2);
+  const left = Math.round((size - finalW) / 2);
+  const top = Math.round((size - finalH) / 2);
 
   return sharp({
     create: {
@@ -100,7 +118,7 @@ async function makeRound(squareBuffer, size) {
 async function makeSquirclePreview(squareBuffer, size) {
   const r = Math.round(size * 0.22);
   const mask = Buffer.from(
-    `<svg width="${size}" height="${size}"><rect x="0" y="0" width="${size}" height="${size}" rx="${r}" ry="${r}" fill="white"/></svg>`
+    `<svg width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="white"/></svg>`
   );
   return sharp(squareBuffer)
     .ensureAlpha()
@@ -112,12 +130,11 @@ async function makeSquirclePreview(squareBuffer, size) {
 async function writeWebAssets(markBuffer) {
   fs.mkdirSync(frontendPublic, { recursive: true });
 
-  const mark512 = await placeOnCanvas(markBuffer, 512, 0.08);
-  const favicon32 = await placeOnCanvas(markBuffer, 32, 0.08);
-  const favicon192 = await placeOnCanvas(markBuffer, 192, 0.08);
-  const brandMark = await placeOnCanvas(markBuffer, 128, 0.06);
+  const mark512 = await placeLarge(markBuffer, 512, WEB_WIDTH_RATIO);
+  const favicon32 = await placeLarge(markBuffer, 32, WEB_WIDTH_RATIO);
+  const favicon192 = await placeLarge(markBuffer, 192, WEB_WIDTH_RATIO);
+  const brandMark = await placeLarge(markBuffer, 128, 0.86);
 
-  // Full branded square for splash / share (source as-is, cleaned).
   const fullLogo = await sharp(sourcePath)
     .resize(512, 512, { fit: "cover" })
     .png()
@@ -131,39 +148,39 @@ async function writeWebAssets(markBuffer) {
   fs.writeFileSync(path.join(root, "resources", "icon-mark.png"), markBuffer);
   fs.writeFileSync(path.join(root, "resources", "logo-mark-512.png"), mark512);
 
-  console.log("Web logo assets written to frontend/public");
+  console.log("Web logo assets written");
 }
 
 async function writePreview(markBuffer) {
   fs.mkdirSync(previewDir, { recursive: true });
 
-  const master = await placeOnCanvas(markBuffer, 512, 0.08);
+  const master = await placeLarge(markBuffer, 512, ICON_WIDTH_RATIO);
   const squircle = await makeSquirclePreview(master, 512);
   const round = await makeRound(master, 512);
 
   const wallpaper = await sharp({
     create: {
       width: 720,
-      height: 1280,
+      height: 980,
       channels: 3,
-      background: { r: 18, g: 22, b: 40 }
+      background: { r: 30, g: 80, b: 120 }
     }
   })
     .png()
     .toBuffer();
 
-  const iconOnHome = await sharp(squircle).resize(168, 168).png().toBuffer();
+  const iconOnHome = await sharp(squircle).resize(180, 180).png().toBuffer();
   const labelSvg = Buffer.from(`
-    <svg width="280" height="40">
-      <text x="140" y="28" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
-        font-size="26" fill="#ffffff" font-weight="600">Light CRM</text>
+    <svg width="300" height="44">
+      <text x="150" y="30" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif"
+        font-size="28" fill="#ffffff" font-weight="600">Light CRM</text>
     </svg>
   `);
 
   const homePreview = await sharp(wallpaper)
     .composite([
-      { input: iconOnHome, left: 276, top: 420 },
-      { input: labelSvg, left: 220, top: 600 }
+      { input: iconOnHome, left: 270, top: 320 },
+      { input: labelSvg, left: 210, top: 520 }
     ])
     .png()
     .toBuffer();
@@ -173,7 +190,7 @@ async function writePreview(markBuffer) {
   fs.writeFileSync(path.join(previewDir, "icon-round.png"), round);
   fs.writeFileSync(path.join(previewDir, "home-preview.png"), homePreview);
 
-  console.log(`Previews written to ${previewDir}`);
+  console.log("Previews written");
 }
 
 async function main() {
@@ -181,7 +198,7 @@ async function main() {
     throw new Error(`Missing source icon: ${sourcePath}`);
   }
 
-  const mark = await extractMark();
+  const mark = await extractMarkTransparent();
   await writePreview(mark);
   await writeWebAssets(mark);
 
@@ -189,9 +206,10 @@ async function main() {
     const dir = path.join(resRoot, density.folder);
     fs.mkdirSync(dir, { recursive: true });
 
-    const launcher = await placeOnCanvas(mark, density.launcher, 0.08);
+    const launcher = await placeLarge(mark, density.launcher, ICON_WIDTH_RATIO);
     const round = await makeRound(launcher, density.launcher);
-    const foreground = await placeOnCanvas(mark, density.foreground, 0.16);
+    // Adaptive foreground: same large placement on white.
+    const foreground = await placeLarge(mark, density.foreground, ICON_WIDTH_RATIO);
 
     fs.writeFileSync(path.join(dir, "ic_launcher.png"), launcher);
     fs.writeFileSync(path.join(dir, "ic_launcher_round.png"), round);
@@ -199,25 +217,19 @@ async function main() {
     console.log(`Updated ${density.folder}`);
   }
 
-  const anyDpi = path.join(resRoot, "mipmap-anydpi-v26");
-  fs.mkdirSync(anyDpi, { recursive: true });
-  const adaptive = `<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-</adaptive-icon>
-`;
-  fs.writeFileSync(path.join(anyDpi, "ic_launcher.xml"), adaptive);
-  fs.writeFileSync(path.join(anyDpi, "ic_launcher_round.xml"), adaptive);
+  // Do NOT write mipmap-anydpi-v26 adaptive XML.
+  // Many OEM launchers cache/composite adaptive icons poorly; baked PNGs are reliable.
 
-  const bgXml = `<?xml version="1.0" encoding="utf-8"?>
+  fs.writeFileSync(
+    path.join(resRoot, "values", "ic_launcher_background.xml"),
+    `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
-`;
-  fs.writeFileSync(path.join(resRoot, "values", "ic_launcher_background.xml"), bgXml);
+`
+  );
 
-  console.log("Launcher icons regenerated.");
+  console.log("Done: large baked PNG icons (no adaptive XML).");
 }
 
 main().catch((error) => {

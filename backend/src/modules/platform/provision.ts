@@ -14,7 +14,7 @@ export type WorkspaceUserInput = {
   email: string;
   login: string;
   password: string;
-  role: "admin" | "manager";
+  role: "admin" | "manager" | "marketer";
 };
 
 function normalizeEmail(email: string): string {

@@ -289,6 +289,62 @@ export async function sendMetaTextMessage(
   return typeof first?.id === "string" ? first.id : null;
 }
 
+/** Send an approved WhatsApp Cloud API template (HSM). */
+export async function sendMetaTemplateMessage(
+  to: string,
+  template: {
+    name: string;
+    language?: string;
+    bodyParameters?: string[];
+  },
+  configOverride?: MetaCloudConfig | null
+): Promise<string | null> {
+  const config = configOverride ?? getMetaCloudConfig();
+  if (!config) {
+    return null;
+  }
+
+  const name = template.name.trim();
+  if (!name) {
+    return null;
+  }
+
+  const components: Array<Record<string, unknown>> = [];
+  const params = (template.bodyParameters || []).map((text) => ({ type: "text", text: String(text) }));
+  if (params.length) {
+    components.push({ type: "body", parameters: params });
+  }
+
+  const response = await fetch(metaMessagesUrl(config), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.accessToken}`
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: normalizeWhatsAppRecipient(to),
+      type: "template",
+      template: {
+        name,
+        language: { code: (template.language || "ru").trim() || "ru" },
+        ...(components.length ? { components } : {})
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Meta WhatsApp template send failed: ${response.status} ${errorText}`);
+    return null;
+  }
+
+  const payload = (await response.json()) as JsonRecord;
+  const messages = Array.isArray(payload.messages) ? payload.messages : [];
+  const first = messages[0] as JsonRecord | undefined;
+  return typeof first?.id === "string" ? first.id : null;
+}
+
 export type MetaFileSendResult =
   | { messageId: string; mediaId: string }
   | { error: string; code: string; mediaId?: string };

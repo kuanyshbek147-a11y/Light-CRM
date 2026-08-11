@@ -82,6 +82,8 @@ import {
   type CreatedMessageResponse
 } from "./features/inbox/model/actions";
 import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
+import { MarketingPanel } from "./features/marketing/MarketingPanel";
+import { OpsPanel } from "./features/ops/OpsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
 import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
 import {
@@ -291,6 +293,8 @@ const UI = {
   sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
   menuAnalytics: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430",
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
+  menuMarketing: "\u041c\u0430\u0440\u043a\u0435\u0442\u0438\u043d\u0433",
+  menuOps: "\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u0438",
   backToChats: "\u041a \u0447\u0430\u0442\u0430\u043c",
   menuIntegrations: "\u0418\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
   menuPlatform: "\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
@@ -586,6 +590,8 @@ export function App(): JSX.Element {
     | "profile"
     | "analytics"
     | "knowledge"
+    | "marketing"
+    | "ops"
     | "integrations"
     | "platform"
   >("dialogs");
@@ -2713,9 +2719,11 @@ export function App(): JSX.Element {
           ? UI.sectionTasks
           : currentSection === "contacts"
             ? UI.sectionContacts
-            : currentSection === "profile"
-              ? UI.sectionProfile
-              : UI.landingBadge;
+            : currentSection === "marketing"
+              ? UI.menuMarketing
+              : currentSection === "profile"
+                ? UI.sectionProfile
+                : UI.landingBadge;
 
   const bottomNavActive: MobileNavSection =
     currentSection === "pipeline"
@@ -3048,6 +3056,30 @@ export function App(): JSX.Element {
             </span>
             <span className="leftMenuButtonLabel">{UI.menuKnowledgeBase}</span>
           </button>
+          <button
+            type="button"
+            className={`leftMenuButton ${currentSection === "marketing" ? "active" : ""}`}
+            onClick={() => setCurrentSection("marketing")}
+            title={UI.menuMarketing}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u2709"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuMarketing}</span>
+          </button>
+          {sessionUser?.role === "admin" ? (
+            <button
+              type="button"
+              className={`leftMenuButton ${currentSection === "ops" ? "active" : ""}`}
+              onClick={() => setCurrentSection("ops")}
+              title={UI.menuOps}
+            >
+              <span className="leftMenuButtonIcon" aria-hidden="true">
+                {"\u26A1"}
+              </span>
+              <span className="leftMenuButtonLabel">{UI.menuOps}</span>
+            </button>
+          ) : null}
           {sessionUser?.role === "admin" ? (
             <button
               type="button"
@@ -3516,6 +3548,19 @@ export function App(): JSX.Element {
               </div>
             </div>
           </section>
+        ) : currentSection === "marketing" ? (
+          token ? <MarketingPanel authToken={token} onToast={showToast} /> : null
+        ) : currentSection === "ops" ? (
+          token ? (
+            <OpsPanel
+              authToken={token}
+              onToast={showToast}
+              onOpenConversation={(conversationId) => {
+                setCurrentSection("dialogs");
+                void onSelectConversation(conversationId);
+              }}
+            />
+          ) : null
         ) : currentSection === "integrations" ? (
           token ? <IntegrationsPanel authToken={token} /> : null
         ) : currentSection === "analytics" ? (

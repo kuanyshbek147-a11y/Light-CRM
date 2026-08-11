@@ -287,6 +287,206 @@ export async function ensureUserLoginSchema(): Promise<void> {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_segments (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      name TEXT NOT NULL,
+      filter_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by_user_id UUID REFERENCES users(id),
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_segments_workspace
+      ON marketing_segments (workspace_id, created_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_campaigns (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      segment_id UUID REFERENCES marketing_segments(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      channel TEXT NOT NULL CHECK (channel IN ('whatsapp', 'telegram')),
+      body TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'queued', 'sending', 'done', 'cancelled', 'failed')),
+      created_by_user_id UUID REFERENCES users(id),
+      started_at TIMESTAMP,
+      finished_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_workspace_status
+      ON marketing_campaigns (workspace_id, status, created_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_campaign_recipients (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      campaign_id UUID NOT NULL REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      contact_id UUID NOT NULL REFERENCES contacts(id),
+      conversation_id UUID REFERENCES conversations(id),
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+      message_id UUID REFERENCES messages(id),
+      error TEXT,
+      sent_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (campaign_id, contact_id)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_recipients_campaign_status
+      ON marketing_campaign_recipients (campaign_id, status)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_content_posts (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'whatsapp'
+        CHECK (channel IN ('whatsapp', 'telegram', 'instagram', 'web', 'other')),
+      status TEXT NOT NULL DEFAULT 'idea'
+        CHECK (status IN ('idea', 'draft', 'ready', 'published', 'cancelled')),
+      planned_at TIMESTAMP,
+      published_at TIMESTAMP,
+      campaign_id UUID REFERENCES marketing_campaigns(id) ON DELETE SET NULL,
+      created_by_user_id UUID REFERENCES users(id),
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_content_posts_workspace_planned
+      ON marketing_content_posts (workspace_id, planned_at ASC NULLS LAST, created_at DESC)
+  `);
+  await pool.query(
+    `ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS auto_broadcast BOOLEAN NOT NULL DEFAULT false`
+  );
+  await pool.query(
+    `ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS auto_publish_social BOOLEAN NOT NULL DEFAULT false`
+  );
+  await pool.query(`ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS segment_id UUID`);
+  await pool.query(`ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS image_url TEXT`);
+  await pool.query(`ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS social_external_id TEXT`);
+  await pool.query(`ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS publish_error TEXT`);
+  await pool.query(
+    `ALTER TABLE marketing_content_posts ADD COLUMN IF NOT EXISTS schedule_processed_at TIMESTAMP`
+  );
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_content_posts_due
+      ON marketing_content_posts (planned_at)
+      WHERE schedule_processed_at IS NULL AND planned_at IS NOT NULL
+  `);
+
+  await pool.query(`
+    ALTER TABLE marketing_campaigns
+      ADD COLUMN IF NOT EXISTS template_name TEXT
+  `);
+  await pool.query(`
+    ALTER TABLE marketing_campaigns
+      ADD COLUMN IF NOT EXISTS template_lang TEXT
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_sequences (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      name TEXT NOT NULL,
+      segment_id UUID REFERENCES marketing_segments(id) ON DELETE SET NULL,
+      channel TEXT NOT NULL DEFAULT 'whatsapp'
+        CHECK (channel IN ('whatsapp', 'telegram')),
+      step0_body TEXT NOT NULL,
+      step3_body TEXT NOT NULL,
+      step7_body TEXT NOT NULL,
+      template_name TEXT,
+      template_lang TEXT,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'active', 'paused', 'done')),
+      created_by_user_id UUID REFERENCES users(id),
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_sequence_runs (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      sequence_id UUID NOT NULL REFERENCES marketing_sequences(id) ON DELETE CASCADE,
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      contact_id UUID NOT NULL REFERENCES contacts(id),
+      conversation_id UUID REFERENCES conversations(id),
+      step_index INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sent', 'failed', 'done', 'skipped')),
+      next_run_at TIMESTAMP NOT NULL DEFAULT now(),
+      last_error TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (sequence_id, contact_id)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_sequence_runs_due
+      ON marketing_sequence_runs (status, next_run_at)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ads_audiences (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      segment_id UUID REFERENCES marketing_segments(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      meta_audience_id TEXT,
+      size INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'syncing', 'ready', 'failed')),
+      last_error TEXT,
+      last_sync_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_ads_audiences_workspace
+      ON ads_audiences (workspace_id, created_at DESC)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ads_campaigns (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      audience_id UUID REFERENCES ads_audiences(id) ON DELETE SET NULL,
+      content_post_id UUID,
+      name TEXT NOT NULL,
+      objective TEXT NOT NULL DEFAULT 'OUTCOME_TRAFFIC',
+      daily_budget_cents INTEGER NOT NULL DEFAULT 1000,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      meta_campaign_id TEXT,
+      meta_adset_id TEXT,
+      meta_ad_id TEXT,
+      meta_creative_id TEXT,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'pending_review', 'active', 'paused', 'failed')),
+      last_error TEXT,
+      metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by_user_id UUID REFERENCES users(id),
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_ads_campaigns_workspace
+      ON ads_campaigns (workspace_id, created_at DESC)
+  `);
+
   await ensureSuperAdminSchema();
   await ensureSuperAdminUser();
 }
@@ -296,7 +496,7 @@ export async function ensureSuperAdminSchema(): Promise<void> {
   await pool.query(`ALTER TABLE users ALTER COLUMN workspace_id DROP NOT NULL`);
   await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await pool.query(
-    `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'manager', 'superadmin'))`
+    `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'manager', 'marketer', 'superadmin'))`
   );
 }
 

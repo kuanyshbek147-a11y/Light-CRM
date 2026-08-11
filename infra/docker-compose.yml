@@ -1,4 +1,4 @@
-services:
+﻿services:
   db:
     image: postgres:16-alpine
     environment:
@@ -31,6 +31,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-telegram-dev-secret}
       TELEGRAM_DELIVERY_MODE: ${TELEGRAM_DELIVERY_MODE:-webhook}
+      EMAIL_CREDENTIALS_KEY: ${EMAIL_CREDENTIALS_KEY:-a9bb135d09f079e20412da0706048cc7a89595f2a7f4a3ca2456c65b75f8f96b}
     ports:
       - "4000:4000"
     depends_on:
