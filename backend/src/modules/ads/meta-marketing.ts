@@ -180,7 +180,9 @@ export async function createTrafficCampaign(
         status: "PAUSED",
         targeting: {
           custom_audiences: [{ id: input.audienceId }],
-          publisher_platforms: ["facebook", "instagram"]
+          publisher_platforms: ["facebook", "instagram"],
+          // Required by Meta: explicitly enable/disable Advantage+ audience
+          targeting_automation: { advantage_audience: 0 }
         },
         promoted_object: { page_id: pageId }
       }
