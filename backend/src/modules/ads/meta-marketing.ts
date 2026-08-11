@@ -157,7 +157,9 @@ export async function createTrafficCampaign(
         name: input.name.slice(0, 120),
         objective: "OUTCOME_TRAFFIC",
         status: "PAUSED",
-        special_ad_categories: []
+        special_ad_categories: [],
+        // Required when budget is set on ad sets (not CBO)
+        is_adset_budget_sharing_enabled: false
       }
     }
   );
