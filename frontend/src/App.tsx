@@ -87,7 +87,9 @@ import { OpsPanel } from "./features/ops/OpsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
 import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
 import { StaffChatPanel } from "./features/staff/StaffChatPanel";
-import { loadStaffUnreadCount } from "./features/staff/api";
+import { TelephonySoftphone } from "./features/telephony/TelephonySoftphone";
+import { requestTelephonyDial, type CallLogResult } from "./features/telephony/api";
+import { loadStaffUnreadCount, shareConversationToStaff } from "./features/staff/api";
 import {
   createCrmTask,
   globalSearch,
@@ -117,11 +119,23 @@ type Deal = {
   contact_id?: string;
 };
 
+type StageOutcome = "open" | "won" | "lost";
+
 type PipelineStage = {
   id: string;
   name: string;
   position: number;
+  outcome?: StageOutcome;
 };
+
+type ContactRequiredFieldKey = "city" | "inquiry_reason" | "client_type" | "category";
+
+const CONTACT_REQUIRED_FIELD_OPTIONS: ContactRequiredFieldKey[] = [
+  "city",
+  "inquiry_reason",
+  "client_type",
+  "category"
+];
 
 type Metrics = {
   sentMessages7d: number;
@@ -263,6 +277,9 @@ const UI = {
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
   menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
   menuStaff: "\u041a\u043e\u043c\u0430\u043d\u0434\u0430",
+  shareToTeam: "\u041f\u0435\u0440\u0435\u0434\u0430\u0442\u044c \u0432 \u041a\u043e\u043c\u0430\u043d\u0434\u0443",
+  shareToTeamShort: "\u0412 \u041a\u043e\u043c\u0430\u043d\u0434\u0443",
+  shareToTeamDone: "\u0414\u0438\u0430\u043b\u043e\u0433 \u043f\u0435\u0440\u0435\u0434\u0430\u043d \u0432 \u041a\u043e\u043c\u0430\u043d\u0434\u0443",
   menuContacts: "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
   menuProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
   sectionDialogsCenter: "Dialogs Center",
@@ -422,6 +439,16 @@ const UI = {
   stageActionFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u044d\u0442\u0430\u043f\u044b \u0432\u043e\u0440\u043e\u043d\u043a\u0438.",
   stageReorderHint: "\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u044d\u0442\u0430\u043f \u043c\u044b\u0448\u043a\u043e\u0439, \u0447\u0442\u043e\u0431\u044b \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u043f\u043e\u0440\u044f\u0434\u043e\u043a.",
   stageReorderFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043d\u043e\u0432\u044b\u0439 \u043f\u043e\u0440\u044f\u0434\u043e\u043a \u044d\u0442\u0430\u043f\u043e\u0432.",
+  stageOutcomeOpen: "\u0412 \u0440\u0430\u0431\u043e\u0442\u0435",
+  stageOutcomeWon: "\u0412\u044b\u0438\u0433\u0440\u0430\u043d\u043e",
+  stageOutcomeLost: "\u041f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043e",
+  stageOutcomeHint: "\u0422\u0438\u043f \u044d\u0442\u0430\u043f\u0430: \u0432 \u0440\u0430\u0431\u043e\u0442\u0435 / \u0432\u044b\u0438\u0433\u0440\u0430\u043d\u043e / \u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043e",
+  requiredFieldsTitle: "\u041e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438",
+  requiredFieldsHint:
+    "\u0418\u043c\u044f \u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d \u0432\u0441\u0435\u0433\u0434\u0430 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b. \u041e\u0441\u0442\u0430\u043b\u044c\u043d\u043e\u0435 \u2014 \u043f\u043e \u0432\u044b\u0431\u043e\u0440\u0443.",
+  requiredFieldsSaved: "\u041e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b",
+  contactFieldsRequired: "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438",
+  stageChangeBlockedFields: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043c\u0435\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f: \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   pipelineBoardHint: "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0441\u0433\u0440\u0443\u043f\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u044b \u043f\u043e \u0448\u0430\u0433\u0430\u043c \u0438\u0437 \u043f\u0440\u043e\u0444\u0438\u043b\u044f \u043a\u043b\u0438\u0435\u043d\u0442\u0430.",
   noCardsInStage: "\u0412 \u044d\u0442\u043e\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a.",
@@ -662,6 +689,7 @@ export function App(): JSX.Element {
   const [reorderingStages, setReorderingStages] = useState<boolean>(false);
   const [editingStageId, setEditingStageId] = useState<string>("");
   const [editingStageName, setEditingStageName] = useState<string>("");
+  const [contactRequiredFields, setContactRequiredFields] = useState<ContactRequiredFieldKey[]>([]);
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
   const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
   const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(true);
@@ -846,6 +874,23 @@ export function App(): JSX.Element {
       }
     });
 
+    socket.on("call:update", (payload: {
+      conversation_id?: string | null;
+      status?: string;
+    }) => {
+      void loadConversations(token, search, filters, setConversations);
+      if (!payload?.conversation_id) {
+        return;
+      }
+      if (payload.conversation_id === selectedConversation) {
+        void loadMessages(token, payload.conversation_id, setMessages);
+      }
+      if (payload.status === "ringing" || payload.status === "started" || payload.status === "answered") {
+        setSelectedConversation(payload.conversation_id);
+        setMobileThreadOpen(true);
+      }
+    });
+
     socket.on("message:updated", (payload: {
       conversationId?: string;
       messageId?: string;
@@ -878,6 +923,7 @@ export function App(): JSX.Element {
       socket.off("message:updated");
       socket.off("task:new");
       socket.off("staff:message");
+      socket.off("call:update");
       socket.disconnect();
     };
   }, [token, search, filters, selectedConversation, currentSection, sessionUser?.id]);
@@ -1204,6 +1250,17 @@ export function App(): JSX.Element {
   async function hydrateWorkspace(authToken: string): Promise<void> {
     const nextConversations = await loadConversations(authToken, "", filters, setConversations);
     await loadQuickActionsMeta(authToken, setQuickManagers, setDealStages);
+    const requiredResponse = await fetch(`${API}/deals/contact-required-fields`, {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (requiredResponse.ok) {
+      const requiredData = (await requiredResponse.json()) as { fields?: string[] };
+      setContactRequiredFields(
+        (requiredData.fields || []).filter((key): key is ContactRequiredFieldKey =>
+          CONTACT_REQUIRED_FIELD_OPTIONS.includes(key as ContactRequiredFieldKey)
+        )
+      );
+    }
     await refreshScripts({ token: authToken, setScripts });
     await refreshKnowledge({ token: authToken, setKnowledgeArticles });
     await loadDeals(authToken, setDeals);
@@ -1451,6 +1508,24 @@ export function App(): JSX.Element {
     await createConversationTask(token, conversationId, title);
     setQuickTaskByConversation((prev) => ({ ...prev, [conversationId]: "" }));
     await refreshConversationList({ token, search, filters, setConversations });
+    if (currentSection === "tasks") {
+      await refreshCrmTasks();
+    }
+  }
+
+  async function shareSelectedConversationToTeam(): Promise<void> {
+    if (!token || !selectedConversation) {
+      return;
+    }
+    const result = await shareConversationToStaff(token, {
+      conversationId: selectedConversation,
+      createTask: true
+    });
+    if (!result) {
+      showToast("Не удалось передать в Команду", "error");
+      return;
+    }
+    showToast(UI.shareToTeamDone, "success");
     if (currentSection === "tasks") {
       await refreshCrmTasks();
     }
@@ -2392,8 +2467,8 @@ export function App(): JSX.Element {
     setScriptFormOpen(false);
   }
 
-  async function updateDealStage(dealId: string, stage: string): Promise<void> {
-    await fetch(`${API}/deals/${dealId}/stage`, {
+  async function updateDealStage(dealId: string, stage: string): Promise<boolean> {
+    const response = await fetch(`${API}/deals/${dealId}/stage`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -2401,13 +2476,22 @@ export function App(): JSX.Element {
       },
       body: JSON.stringify({ stage })
     });
+    if (!response.ok) {
+      const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+      showToast(
+        errorData.error === "contact_fields_required" ? UI.stageChangeBlockedFields : UI.stageActionFailed,
+        "error"
+      );
+      return false;
+    }
 
     await loadDeals(token, setDeals);
     await loadConversations(token, search, filters, setConversations);
+    return true;
   }
 
-  async function upsertDealStageByConversation(conversationId: string, stage: string): Promise<void> {
-    await fetch(`${API}/deals/conversation/${conversationId}/stage`, {
+  async function upsertDealStageByConversation(conversationId: string, stage: string): Promise<boolean> {
+    const response = await fetch(`${API}/deals/conversation/${conversationId}/stage`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -2415,9 +2499,18 @@ export function App(): JSX.Element {
       },
       body: JSON.stringify({ stage })
     });
+    if (!response.ok) {
+      const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+      showToast(
+        errorData.error === "contact_fields_required" ? UI.stageChangeBlockedFields : UI.stageActionFailed,
+        "error"
+      );
+      return false;
+    }
 
     await loadDeals(token, setDeals);
     await loadConversations(token, search, filters, setConversations);
+    return true;
   }
 
   async function setConversationStatus(conversationId: string, status: "open" | "closed"): Promise<void> {
@@ -2576,12 +2669,99 @@ export function App(): JSX.Element {
     await loadDeals(token, setDeals);
   }
 
+  async function updateStageOutcome(stageId: string, outcome: StageOutcome): Promise<void> {
+    if (!token) {
+      return;
+    }
+    setDealStageError("");
+    const response = await fetch(`${API}/deals/stages/${stageId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ outcome })
+    });
+    if (!response.ok) {
+      setDealStageError(UI.stageActionFailed);
+      return;
+    }
+    const data = (await response.json()) as PipelineStage[];
+    if (Array.isArray(data)) {
+      setDealStages(data);
+    } else {
+      await loadDealStages(token, setDealStages);
+    }
+  }
+
+  async function loadContactRequiredFields(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    const response = await fetch(`${API}/deals/contact-required-fields`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      return;
+    }
+    const data = (await response.json()) as { fields?: string[] };
+    const next = (data.fields || []).filter((key): key is ContactRequiredFieldKey =>
+      CONTACT_REQUIRED_FIELD_OPTIONS.includes(key as ContactRequiredFieldKey)
+    );
+    setContactRequiredFields(next);
+  }
+
+  async function saveContactRequiredFields(next: ContactRequiredFieldKey[]): Promise<void> {
+    if (!token) {
+      return;
+    }
+    setContactRequiredFields(next);
+    const response = await fetch(`${API}/deals/contact-required-fields`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ fields: next })
+    });
+    if (!response.ok) {
+      showToast(UI.stageActionFailed, "error");
+      await loadContactRequiredFields();
+      return;
+    }
+    const data = (await response.json()) as { fields?: string[] };
+    const saved = (data.fields || []).filter((key): key is ContactRequiredFieldKey =>
+      CONTACT_REQUIRED_FIELD_OPTIONS.includes(key as ContactRequiredFieldKey)
+    );
+    setContactRequiredFields(saved);
+    showToast(UI.requiredFieldsSaved, "success");
+  }
+
+  function isContactFieldRequired(key: ContactRequiredFieldKey | "name" | "phone"): boolean {
+    if (key === "name" || key === "phone") {
+      return true;
+    }
+    return contactRequiredFields.includes(key);
+  }
+
+  function fieldLabel(key: ContactRequiredFieldKey | "name" | "phone"): string {
+    const labels: Record<ContactRequiredFieldKey | "name" | "phone", string> = {
+      name: UI.name,
+      phone: UI.phone,
+      city: UI.city,
+      inquiry_reason: UI.inquiryReason,
+      client_type: UI.clientType,
+      category: UI.category
+    };
+    return isContactFieldRequired(key) ? `${labels[key]} *` : labels[key];
+  }
+
   async function saveContactCard(): Promise<void> {
     if (!selectedConversation || !contactCard) {
       return;
     }
 
-    await fetch(`${API}/conversations/${selectedConversation}/contact`, {
+    const response = await fetch(`${API}/conversations/${selectedConversation}/contact`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -2596,12 +2776,26 @@ export function App(): JSX.Element {
         category: contactCard.category || ""
       })
     });
+    if (!response.ok) {
+      const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+      showToast(
+        errorData.error === "contact_fields_required" ? UI.contactFieldsRequired : "Не удалось сохранить карточку",
+        "error"
+      );
+      return;
+    }
 
     const currentDeal = deals.find((deal) => deal.conversation_id === selectedConversation);
     if (currentDeal && customerDealStage && currentDeal.stage !== customerDealStage) {
-      await updateDealStage(currentDeal.id, customerDealStage);
+      const ok = await updateDealStage(currentDeal.id, customerDealStage);
+      if (!ok) {
+        return;
+      }
     } else if (!currentDeal && customerDealStage) {
-      await upsertDealStageByConversation(selectedConversation, customerDealStage);
+      const ok = await upsertDealStageByConversation(selectedConversation, customerDealStage);
+      if (!ok) {
+        return;
+      }
     }
 
     await loadConversations(token, search, filters, setConversations);
@@ -3300,6 +3494,13 @@ export function App(): JSX.Element {
             recordingSendReady={recordingSeconds >= 1}
             isNativeApp={isNativeApp()}
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
+            onShareToTeam={() => void shareSelectedConversationToTeam()}
+            shareToTeamLabel={UI.shareToTeamShort}
+            onCallPhone={
+              selectedConversationData?.phone
+                ? () => requestTelephonyDial(selectedConversationData.phone)
+                : undefined
+            }
             onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
             backLabel={UI.backToChats}
             onMessagesDragOver={(event) => {
@@ -4600,6 +4801,7 @@ export function App(): JSX.Element {
             onClick={() => {
               if (currentSection === "pipeline") {
                 setPipelineManagerOpen(true);
+                void loadContactRequiredFields();
               } else {
                 setSearchPanelOpen(true);
               }
@@ -4641,7 +4843,7 @@ export function App(): JSX.Element {
               <p className="clientCardHeroHint">{UI.customerCardHint}</p>
 
               <div className="clientCardField">
-                <label>{UI.name}</label>
+                <label>{fieldLabel("name")}</label>
                 <div className="clientCardInput">
                   <span className="clientCardInputIcon" aria-hidden="true">👤</span>
                   <input
@@ -4651,7 +4853,7 @@ export function App(): JSX.Element {
                 </div>
               </div>
               <div className="clientCardField">
-                <label>{UI.phone}</label>
+                <label>{fieldLabel("phone")}</label>
                 <div className="clientCardInput">
                   <span className="clientCardInputIcon" aria-hidden="true">📞</span>
                   <input
@@ -4659,9 +4861,18 @@ export function App(): JSX.Element {
                     onChange={(event) => setContactCard((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
                   />
                 </div>
+                {contactCard.phone ? (
+                  <button
+                    type="button"
+                    className="secondaryButton clientCardCallBtn"
+                    onClick={() => requestTelephonyDial(contactCard.phone)}
+                  >
+                    Позвонить
+                  </button>
+                ) : null}
               </div>
               <div className="clientCardField">
-                <label>{UI.city}</label>
+                <label>{fieldLabel("city")}</label>
                 <div className="clientCardInput">
                   <span className="clientCardInputIcon" aria-hidden="true">📍</span>
                   <input
@@ -4672,7 +4883,7 @@ export function App(): JSX.Element {
                 </div>
               </div>
               <div className="clientCardField">
-                <label>{UI.inquiryReason}</label>
+                <label>{fieldLabel("inquiry_reason")}</label>
                 <div className="clientCardInput">
                   <span className="clientCardInputIcon" aria-hidden="true">ℹ️</span>
                   <input
@@ -4701,7 +4912,7 @@ export function App(): JSX.Element {
                 </div>
               ) : null}
               <div className="clientCardField">
-                <label>{UI.clientType}</label>
+                <label>{fieldLabel("client_type")}</label>
                 <div className="clientCardInput">
                   <span className="clientCardInputIcon" aria-hidden="true">🏷</span>
                   <select
@@ -4716,7 +4927,7 @@ export function App(): JSX.Element {
                 </div>
               </div>
               <div className="clientCardField">
-                <label>{UI.category}</label>
+                <label>{fieldLabel("category")}</label>
                 <div className="clientCardInput">
                   <span className="clientCardInputIcon" aria-hidden="true">📂</span>
                   <select
@@ -4759,6 +4970,7 @@ export function App(): JSX.Element {
                 onClick={() => {
                   setPipelineManagerOpen(true);
                   setDealStageError("");
+                  void loadContactRequiredFields();
                 }}
               >
                 {UI.manageFunnel}
@@ -4793,6 +5005,13 @@ export function App(): JSX.Element {
                       }
                     >
                       {selectedConversationData.status === "closed" ? UI.reopenCard : UI.closeCard}
+                    </button>
+                    <button
+                      type="button"
+                      className="clientCardTakeBtn"
+                      onClick={() => void shareSelectedConversationToTeam()}
+                    >
+                      {UI.shareToTeam}
                     </button>
                   </div>
                   {selectedConversationData.assigned_manager_name ? (
@@ -4881,6 +5100,7 @@ export function App(): JSX.Element {
               </button>
             </div>
             <div className="sidebarHint">{UI.stageReorderHint}</div>
+            <div className="sidebarHint">{UI.stageOutcomeHint}</div>
             <div className="pipelineStageList">
               {(dealStages.length ? dealStages : []).map((stage) => (
                 <div
@@ -4922,6 +5142,19 @@ export function App(): JSX.Element {
                         />
                       </span>
                       <div className="pipelineStageActions">
+                        <select
+                          className="pipelineOutcomeSelect"
+                          value={stage.outcome || "open"}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            void updateStageOutcome(stage.id, event.target.value as StageOutcome);
+                          }}
+                        >
+                          <option value="open">{UI.stageOutcomeOpen}</option>
+                          <option value="won">{UI.stageOutcomeWon}</option>
+                          <option value="lost">{UI.stageOutcomeLost}</option>
+                        </select>
                         <button
                           type="button"
                           className="textButton"
@@ -4963,20 +5196,56 @@ export function App(): JSX.Element {
                         </span>
                         <span>{formatStageLabel(stage.name, UI)}</span>
                       </span>
-                      <button
-                        type="button"
-                        className="textButton dangerButton"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void deleteDealStage(stage.name);
-                        }}
-                      >
-                        {UI.deleteStep}
-                      </button>
+                      <div className="pipelineStageActions">
+                        <select
+                          className="pipelineOutcomeSelect"
+                          value={stage.outcome || "open"}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            void updateStageOutcome(stage.id, event.target.value as StageOutcome);
+                          }}
+                        >
+                          <option value="open">{UI.stageOutcomeOpen}</option>
+                          <option value="won">{UI.stageOutcomeWon}</option>
+                          <option value="lost">{UI.stageOutcomeLost}</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="textButton dangerButton"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteDealStage(stage.name);
+                          }}
+                        >
+                          {UI.deleteStep}
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
               ))}
+            </div>
+            <div className="requiredFieldsBlock">
+              <div className="sidebarTitle">{UI.requiredFieldsTitle}</div>
+              <div className="sidebarHint">{UI.requiredFieldsHint}</div>
+              <div className="requiredFieldsList">
+                {CONTACT_REQUIRED_FIELD_OPTIONS.map((key) => (
+                  <label key={key} className="requiredFieldToggle">
+                    <input
+                      type="checkbox"
+                      checked={contactRequiredFields.includes(key)}
+                      onChange={(event) => {
+                        const next = event.target.checked
+                          ? [...contactRequiredFields, key]
+                          : contactRequiredFields.filter((item) => item !== key);
+                        void saveContactRequiredFields(next);
+                      }}
+                    />
+                    <span>{fieldLabel(key).replace(/\s\*$/, "")}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             {dealStageError ? <div className="drawerInlineError">{dealStageError}</div> : null}
           </aside>
@@ -5105,6 +5374,23 @@ export function App(): JSX.Element {
             </div>
           </aside>
         </div>
+      ) : null}
+      {token ? (
+        <TelephonySoftphone
+          authToken={token}
+          onToast={showToast}
+          onCallLinked={(result: CallLogResult) => {
+            if (!result.conversation_id) {
+              return;
+            }
+            setSelectedConversation(result.conversation_id);
+            setCurrentSection("dialogs");
+            setMobileThreadOpen(true);
+            void loadConversations(token, search, filters, setConversations);
+            void loadMessages(token, result.conversation_id, setMessages);
+            void loadContactCard(token, result.conversation_id, setContactCard);
+          }}
+        />
       ) : null}
       {toastVisible ? (
         <div

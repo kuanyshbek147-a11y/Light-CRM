@@ -4,6 +4,7 @@ import { InstagramConnect } from "./InstagramConnect";
 import { TelegramConnect } from "./TelegramConnect";
 import { WebChatConnect } from "./WebChatConnect";
 import { WhatsAppEmbeddedSignup } from "./WhatsAppEmbeddedSignup";
+import { TelephonyConnect } from "../telephony/TelephonyConnect";
 
 type Props = {
   authToken: string;
@@ -16,8 +17,8 @@ export function IntegrationsPanel({ authToken }: Props) {
         <div>
           <h2 className="integrationsPanelTitle">Интеграции</h2>
           <p className="integrationsHint">
-            Подключите WhatsApp, Instagram, Telegram, почту и виджет чата на сайте в одном рабочем
-            пространстве.
+            Подключите WhatsApp, Instagram, Telegram, почту, виджет чата и телефонию Asterisk в одном
+            рабочем пространстве.
           </p>
         </div>
       </div>
@@ -27,6 +28,7 @@ export function IntegrationsPanel({ authToken }: Props) {
       <TelegramConnect authToken={authToken} />
       <EmailConnect authToken={authToken} />
       <WebChatConnect authToken={authToken} />
+      <TelephonyConnect authToken={authToken} />
     </section>
   );
 }

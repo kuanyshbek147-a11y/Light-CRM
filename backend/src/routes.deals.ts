@@ -1,107 +1,76 @@
 import { Router } from "express";
 import { AuthRequest } from "./auth";
 import { query } from "./db";
+import {
+  assertConversationContactFields,
+  getContactRequiredFields,
+  setContactRequiredFields
+} from "./modules/contacts/required-fields";
 import { maybeCreateStageFollowUp } from "./modules/follow-up";
+import {
+  inferOutcomeFromName,
+  listPipelineStages,
+  normalizeOutcome,
+  stageExists
+} from "./modules/pipeline/stages";
 
 export const dealsRouter = Router();
 
 dealsRouter.get("/stages", async (req: AuthRequest, res) => {
-  const rows = await query<{ id: string; name: string; position: number }>(
-    `SELECT id, name, position
-     FROM pipeline_stages
-     WHERE workspace_id = $1
-     ORDER BY position ASC, created_at ASC`,
-    [req.user?.workspaceId]
+  res.json(await listPipelineStages(req.user?.workspaceId || ""));
+});
+
+dealsRouter.get("/contact-required-fields", async (req: AuthRequest, res) => {
+  const fields = await getContactRequiredFields(req.user?.workspaceId || "");
+  res.json({ fields });
+});
+
+dealsRouter.put("/contact-required-fields", async (req: AuthRequest, res) => {
+  const fields = await setContactRequiredFields(
+    req.user?.workspaceId || "",
+    (req.body as { fields?: unknown }).fields
   );
-  res.json(rows);
+  res.json({ fields });
 });
 
 dealsRouter.post("/stages", async (req: AuthRequest, res) => {
-  const { name } = req.body as { name: string };
+  const { name, outcome } = req.body as { name: string; outcome?: string };
   const cleanName = (name || "").trim();
   if (!cleanName) {
     res.status(400).json({ error: "stage_name_required" });
     return;
   }
 
+  const workspaceId = req.user?.workspaceId || "";
   const existing = await query<{ id: string }>(
     `SELECT id FROM pipeline_stages
      WHERE workspace_id = $1 AND lower(name) = lower($2)
      LIMIT 1`,
-    [req.user?.workspaceId, cleanName]
+    [workspaceId, cleanName]
   );
   if (existing[0]) {
     res.status(409).json({ error: "stage_already_exists" });
     return;
   }
 
-  const inserted = await query<{ id: string; name: string; position: number }>(
-    `INSERT INTO pipeline_stages (workspace_id, name, position)
+  const nextOutcome = normalizeOutcome(outcome) || inferOutcomeFromName(cleanName);
+  const inserted = await query<{
+    id: string;
+    name: string;
+    position: number;
+    outcome: string;
+  }>(
+    `INSERT INTO pipeline_stages (workspace_id, name, position, outcome)
      VALUES (
        $1,
        $2,
-       COALESCE((SELECT MAX(position) + 10 FROM pipeline_stages WHERE workspace_id = $1), 10)
+       COALESCE((SELECT MAX(position) + 10 FROM pipeline_stages WHERE workspace_id = $1), 10),
+       $3
      )
-     RETURNING id, name, position`,
-    [req.user?.workspaceId, cleanName]
+     RETURNING id, name, position, outcome`,
+    [workspaceId, cleanName, nextOutcome]
   );
   res.status(201).json(inserted[0]);
-});
-
-dealsRouter.patch("/stages/:id", async (req: AuthRequest, res) => {
-  const { name } = req.body as { name: string };
-  const cleanName = (name || "").trim();
-  if (!cleanName) {
-    res.status(400).json({ error: "stage_name_required" });
-    return;
-  }
-
-  const currentRows = await query<{ name: string }>(
-    `SELECT name FROM pipeline_stages WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
-    [req.params.id, req.user?.workspaceId]
-  );
-  const current = currentRows[0];
-  if (!current) {
-    res.status(404).json({ error: "stage_not_found" });
-    return;
-  }
-  if (current.name.toLowerCase() === cleanName.toLowerCase()) {
-    res.json({ ok: true });
-    return;
-  }
-
-  const duplicate = await query<{ id: string }>(
-    `SELECT id FROM pipeline_stages
-     WHERE workspace_id = $1 AND lower(name) = lower($2) AND id <> $3
-     LIMIT 1`,
-    [req.user?.workspaceId, cleanName, req.params.id]
-  );
-  if (duplicate[0]) {
-    res.status(409).json({ error: "stage_already_exists" });
-    return;
-  }
-
-  await query(
-    `UPDATE pipeline_stages
-     SET name = $1
-     WHERE id = $2 AND workspace_id = $3`,
-    [cleanName, req.params.id, req.user?.workspaceId]
-  );
-  await query(
-    `UPDATE deals
-     SET stage = $1, updated_at = now()
-     WHERE workspace_id = $2 AND stage = $3`,
-    [cleanName, req.user?.workspaceId, current.name]
-  );
-
-  const rows = await query<{ id: string; name: string; position: number }>(
-    `SELECT id, name, position
-     FROM pipeline_stages
-     WHERE workspace_id = $1
-     ORDER BY position ASC, created_at ASC`,
-    [req.user?.workspaceId]
-  );
-  res.json(rows);
 });
 
 dealsRouter.patch("/stages/reorder", async (req: AuthRequest, res) => {
@@ -111,9 +80,10 @@ dealsRouter.patch("/stages/reorder", async (req: AuthRequest, res) => {
     return;
   }
 
+  const workspaceId = req.user?.workspaceId || "";
   const existing = await query<{ id: string }>(
     `SELECT id FROM pipeline_stages WHERE workspace_id = $1`,
-    [req.user?.workspaceId]
+    [workspaceId]
   );
   const existingIds = new Set(existing.map((row) => row.id));
   const hasUnknown = orderedStageIds.some((id) => !existingIds.has(id));
@@ -127,18 +97,79 @@ dealsRouter.patch("/stages/reorder", async (req: AuthRequest, res) => {
       `UPDATE pipeline_stages
        SET position = $1
        WHERE id = $2 AND workspace_id = $3`,
-      [(index + 1) * 10, orderedStageIds[index], req.user?.workspaceId]
+      [(index + 1) * 10, orderedStageIds[index], workspaceId]
     );
   }
 
-  const rows = await query<{ id: string; name: string; position: number }>(
-    `SELECT id, name, position
-     FROM pipeline_stages
-     WHERE workspace_id = $1
-     ORDER BY position ASC, created_at ASC`,
-    [req.user?.workspaceId]
+  res.json(await listPipelineStages(workspaceId));
+});
+
+dealsRouter.patch("/stages/:id", async (req: AuthRequest, res) => {
+  const { name, outcome } = req.body as { name?: string; outcome?: string };
+  const workspaceId = req.user?.workspaceId || "";
+  const hasName = name !== undefined;
+  const hasOutcome = outcome !== undefined;
+  if (!hasName && !hasOutcome) {
+    res.status(400).json({ error: "nothing_to_update" });
+    return;
+  }
+
+  const currentRows = await query<{ name: string; outcome: string }>(
+    `SELECT name, outcome FROM pipeline_stages WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
+    [req.params.id, workspaceId]
   );
-  res.json(rows);
+  const current = currentRows[0];
+  if (!current) {
+    res.status(404).json({ error: "stage_not_found" });
+    return;
+  }
+
+  const cleanName = hasName ? String(name || "").trim() : current.name;
+  if (!cleanName) {
+    res.status(400).json({ error: "stage_name_required" });
+    return;
+  }
+
+  let nextOutcome = current.outcome;
+  if (hasOutcome) {
+    const normalized = normalizeOutcome(outcome);
+    if (!normalized) {
+      res.status(400).json({ error: "invalid_outcome" });
+      return;
+    }
+    nextOutcome = normalized;
+  }
+
+  if (cleanName.toLowerCase() !== current.name.toLowerCase()) {
+    const duplicate = await query<{ id: string }>(
+      `SELECT id FROM pipeline_stages
+       WHERE workspace_id = $1 AND lower(name) = lower($2) AND id <> $3
+       LIMIT 1`,
+      [workspaceId, cleanName, req.params.id]
+    );
+    if (duplicate[0]) {
+      res.status(409).json({ error: "stage_already_exists" });
+      return;
+    }
+  }
+
+  await query(
+    `UPDATE pipeline_stages
+     SET name = $1, outcome = $2
+     WHERE id = $3 AND workspace_id = $4`,
+    [cleanName, nextOutcome, req.params.id, workspaceId]
+  );
+
+  if (cleanName !== current.name) {
+    await query(
+      `UPDATE deals
+       SET stage = $1, updated_at = now()
+       WHERE workspace_id = $2 AND stage = $3`,
+      [cleanName, workspaceId, current.name]
+    );
+  }
+
+  res.json(await listPipelineStages(workspaceId));
 });
 
 dealsRouter.delete("/stages/:id", async (req: AuthRequest, res) => {
@@ -161,7 +192,10 @@ dealsRouter.delete("/stages/:id", async (req: AuthRequest, res) => {
     return;
   }
 
-  await query(`DELETE FROM pipeline_stages WHERE id = $1 AND workspace_id = $2`, [req.params.id, req.user?.workspaceId]);
+  await query(`DELETE FROM pipeline_stages WHERE id = $1 AND workspace_id = $2`, [
+    req.params.id,
+    req.user?.workspaceId
+  ]);
   res.status(204).send();
 });
 
@@ -181,6 +215,21 @@ dealsRouter.get("/", async (req: AuthRequest, res) => {
   res.json(rows);
 });
 
+async function ensureStageAndContactReady(
+  workspaceId: string,
+  conversationId: string,
+  stage: string
+): Promise<{ error?: string; missing?: string[] }> {
+  if (!(await stageExists(workspaceId, stage))) {
+    return { error: "stage_not_found" };
+  }
+  const check = await assertConversationContactFields(workspaceId, conversationId);
+  if (!check.ok) {
+    return { error: "contact_fields_required", missing: check.missing };
+  }
+  return {};
+}
+
 dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, res) => {
   const { stage } = req.body as { stage: string };
   const cleanStage = (stage || "").trim();
@@ -189,9 +238,16 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
     return;
   }
 
+  const workspaceId = req.user?.workspaceId || "";
+  const ready = await ensureStageAndContactReady(workspaceId, req.params.conversationId, cleanStage);
+  if (ready.error) {
+    res.status(ready.error === "stage_not_found" ? 404 : 400).json(ready);
+    return;
+  }
+
   const previous = await query<{ id: string; stage: string }>(
     `SELECT id, stage FROM deals WHERE conversation_id = $1 AND workspace_id = $2 LIMIT 1`,
-    [req.params.conversationId, req.user?.workspaceId]
+    [req.params.conversationId, workspaceId]
   );
 
   const rows = await query<{ id: string; conversation_id: string; stage: string; updated_at: string }>(
@@ -206,7 +262,7 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
      SET stage = EXCLUDED.stage,
          updated_at = now()
      RETURNING id, conversation_id, stage, updated_at`,
-    [req.user?.workspaceId, req.params.conversationId, req.user?.id, cleanStage]
+    [workspaceId, req.params.conversationId, req.user?.id, cleanStage]
   );
 
   if (!rows[0]) {
@@ -215,7 +271,7 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
   }
 
   await maybeCreateStageFollowUp({
-    workspaceId: req.user?.workspaceId || "",
+    workspaceId,
     conversationId: rows[0].conversation_id,
     dealId: rows[0].id,
     stage: rows[0].stage,
@@ -229,23 +285,40 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
 dealsRouter.patch("/:id/stage", async (req: AuthRequest, res) => {
   const { stage } = req.body as { stage: string };
   const cleanStage = (stage || "").trim();
+  const workspaceId = req.user?.workspaceId || "";
 
   const previous = await query<{ stage: string; conversation_id: string }>(
     `SELECT stage, conversation_id FROM deals WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
-    [req.params.id, req.user?.workspaceId]
+    [req.params.id, workspaceId]
   );
+  if (!previous[0]) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  if (cleanStage) {
+    const ready = await ensureStageAndContactReady(
+      workspaceId,
+      previous[0].conversation_id,
+      cleanStage
+    );
+    if (ready.error) {
+      res.status(ready.error === "stage_not_found" ? 404 : 400).json(ready);
+      return;
+    }
+  }
 
   const rows = await query<{ id: string; stage: string; conversation_id: string; updated_at: string }>(
     `UPDATE deals
      SET stage = $1, updated_at = now()
      WHERE id = $2 AND workspace_id = $3
      RETURNING id, stage, conversation_id, updated_at`,
-    [cleanStage, req.params.id, req.user?.workspaceId]
+    [cleanStage, req.params.id, workspaceId]
   );
 
   if (rows[0]) {
     await maybeCreateStageFollowUp({
-      workspaceId: req.user?.workspaceId || "",
+      workspaceId,
       conversationId: rows[0].conversation_id,
       dealId: rows[0].id,
       stage: rows[0].stage,
@@ -264,12 +337,25 @@ dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
     next_step_at?: string | null;
   };
 
+  const workspaceId = req.user?.workspaceId || "";
   const previous = await query<{ stage: string; conversation_id: string }>(
     `SELECT stage, conversation_id FROM deals WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
-    [req.params.id, req.user?.workspaceId]
+    [req.params.id, workspaceId]
   );
 
   const cleanStage = stage !== undefined ? String(stage).trim() : undefined;
+  if (cleanStage) {
+    const ready = await ensureStageAndContactReady(
+      workspaceId,
+      previous[0]?.conversation_id || "",
+      cleanStage
+    );
+    if (ready.error) {
+      res.status(ready.error === "stage_not_found" ? 404 : 400).json(ready);
+      return;
+    }
+  }
+
   let cleanAmount: number | undefined;
   if (amount !== undefined && amount !== null && amount !== "") {
     cleanAmount = Number(amount);
@@ -310,7 +396,7 @@ dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
       cleanAmount ?? null,
       nextStep === null ? "__CLEAR__" : nextStep || "",
       req.params.id,
-      req.user?.workspaceId
+      workspaceId
     ]
   );
 
@@ -321,7 +407,7 @@ dealsRouter.patch("/:id", async (req: AuthRequest, res) => {
 
   if (cleanStage) {
     await maybeCreateStageFollowUp({
-      workspaceId: req.user?.workspaceId || "",
+      workspaceId,
       conversationId: rows[0].conversation_id,
       dealId: rows[0].id,
       stage: rows[0].stage,

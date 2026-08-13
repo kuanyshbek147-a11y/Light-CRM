@@ -252,12 +252,44 @@ export async function ensureUserLoginSchema(): Promise<void> {
       workspace_id UUID NOT NULL REFERENCES workspaces(id),
       name TEXT NOT NULL,
       position INTEGER NOT NULL DEFAULT 0,
+      outcome TEXT NOT NULL DEFAULT 'open',
       created_at TIMESTAMP NOT NULL DEFAULT now()
     )
   `);
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_stages_workspace_name_lower
       ON pipeline_stages (workspace_id, lower(name))
+  `);
+  await pool.query(
+    `ALTER TABLE pipeline_stages ADD COLUMN IF NOT EXISTS outcome TEXT NOT NULL DEFAULT 'open'`
+  );
+  await pool.query(`
+    UPDATE pipeline_stages
+    SET outcome = 'won'
+    WHERE outcome = 'open'
+      AND (
+        lower(name) IN ('won', 'выиграно', 'успех', 'closed')
+        OR lower(name) LIKE '%won%'
+        OR lower(name) LIKE '%выиг%'
+        OR lower(name) LIKE '%успех%'
+      )
+  `);
+  await pool.query(`
+    UPDATE pipeline_stages
+    SET outcome = 'lost'
+    WHERE outcome = 'open'
+      AND (
+        lower(name) IN ('lost', 'проиграно', 'отказ')
+        OR lower(name) LIKE '%lost%'
+        OR lower(name) LIKE '%проиг%'
+        OR lower(name) LIKE '%отказ%'
+      )
+  `);
+  await pool.query(`ALTER TABLE pipeline_stages DROP CONSTRAINT IF EXISTS pipeline_stages_outcome_check`);
+  await pool.query(`
+    ALTER TABLE pipeline_stages
+    ADD CONSTRAINT pipeline_stages_outcome_check
+    CHECK (outcome IN ('open', 'won', 'lost'))
   `);
 
   await pool.query(`
@@ -602,6 +634,55 @@ export async function ensureUserLoginSchema(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_staff_messages_thread_created
       ON staff_messages (thread_id, created_at ASC)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS telephony_extensions (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sip_username TEXT NOT NULL,
+      sip_password_enc TEXT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (workspace_id, user_id),
+      UNIQUE (workspace_id, sip_username)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_telephony_extensions_workspace
+      ON telephony_extensions (workspace_id, is_active)
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS call_logs (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+      conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+      contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+      remote_number TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'started'
+        CHECK (status IN ('ringing', 'started', 'answered', 'ended', 'missed', 'failed')),
+      started_at TIMESTAMP NOT NULL DEFAULT now(),
+      ended_at TIMESTAMP,
+      duration_sec INTEGER,
+      sip_call_id TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_call_logs_workspace_started
+      ON call_logs (workspace_id, started_at DESC)
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_call_logs_sip_call_id
+      ON call_logs (workspace_id, sip_call_id)
+      WHERE sip_call_id IS NOT NULL AND sip_call_id <> ''
   `);
 
   await ensureSuperAdminSchema();

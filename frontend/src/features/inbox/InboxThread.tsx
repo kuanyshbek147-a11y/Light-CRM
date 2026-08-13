@@ -61,6 +61,9 @@ type InboxThreadProps = {
   recordingSendReady: boolean;
   isNativeApp: boolean;
   onOpenCustomerCard: () => void;
+  onShareToTeam?: () => void;
+  shareToTeamLabel?: string;
+  onCallPhone?: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onMessagesDragLeave: (event: DragEvent<HTMLDivElement>) => void;
   onMessagesDrop: (event: DragEvent<HTMLDivElement>) => void;
@@ -115,6 +118,9 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     recordingSendReady,
     isNativeApp,
     onOpenCustomerCard,
+    onShareToTeam,
+    shareToTeamLabel,
+    onCallPhone,
     onMessagesDragOver,
     onMessagesDragLeave,
     onMessagesDrop,
@@ -399,6 +405,28 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               </div>
             </div>
             <div className="threadHeaderActions">
+              {onCallPhone ? (
+                <button
+                  type="button"
+                  className="threadIconBtn"
+                  title="Позвонить"
+                  aria-label="Позвонить"
+                  onClick={onCallPhone}
+                >
+                  ☎
+                </button>
+              ) : null}
+              {onShareToTeam ? (
+                <button
+                  type="button"
+                  className="threadIconBtn"
+                  title={shareToTeamLabel || "Передать в Команду"}
+                  aria-label={shareToTeamLabel || "Передать в Команду"}
+                  onClick={onShareToTeam}
+                >
+                  ⇄
+                </button>
+              ) : null}
               <button type="button" className="threadIconBtn" title="Search" aria-label="Search">
                 🔍
               </button>
@@ -516,6 +544,11 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             >
               {ui.knowledgeBase}
             </button>
+            {onShareToTeam ? (
+              <button type="button" className="quickChip outline" onClick={onShareToTeam}>
+                {shareToTeamLabel || "В Команду"}
+              </button>
+            ) : null}
             <button type="button" className="quickChip outline" onClick={onToggleScriptPanel}>
               Template
             </button>

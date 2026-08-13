@@ -2,11 +2,11 @@ import bcrypt from "bcryptjs";
 import { query } from "../../db";
 
 const DEFAULT_PIPELINE_STAGES = [
-  { name: "new", position: 10 },
-  { name: "qualified", position: 20 },
-  { name: "proposal", position: 30 },
-  { name: "won", position: 40 },
-  { name: "lost", position: 50 }
+  { name: "new", position: 10, outcome: "open" },
+  { name: "qualified", position: 20, outcome: "open" },
+  { name: "proposal", position: 30, outcome: "open" },
+  { name: "won", position: 40, outcome: "won" },
+  { name: "lost", position: 50, outcome: "lost" }
 ] as const;
 
 export type WorkspaceUserInput = {
@@ -41,13 +41,13 @@ async function assertUniqueUser(email: string, login: string): Promise<void> {
 async function seedWorkspaceDefaults(workspaceId: string): Promise<void> {
   for (const stage of DEFAULT_PIPELINE_STAGES) {
     await query(
-      `INSERT INTO pipeline_stages (workspace_id, name, position)
-       SELECT $1, $2, $3
+      `INSERT INTO pipeline_stages (workspace_id, name, position, outcome)
+       SELECT $1, $2, $3, $4
        WHERE NOT EXISTS (
          SELECT 1 FROM pipeline_stages
          WHERE workspace_id = $1 AND lower(name) = lower($2)
        )`,
-      [workspaceId, stage.name, stage.position]
+      [workspaceId, stage.name, stage.position, stage.outcome]
     );
   }
 

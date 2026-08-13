@@ -1,4 +1,5 @@
 import { query } from "../../db";
+import { isClosedStage, listClosedStageNames } from "../pipeline/stages";
 
 const KEYS = {
   enabled: "follow_up_enabled",
@@ -112,19 +113,6 @@ export async function setFollowUpSettings(
   return next;
 }
 
-function isClosedStage(stage: string): boolean {
-  const s = stage.toLowerCase();
-  return (
-    s.includes("won") ||
-    s.includes("lost") ||
-    s.includes("выиг") ||
-    s.includes("проиг") ||
-    s.includes("отказ") ||
-    s.includes("успех") ||
-    s.includes("закрыт")
-  );
-}
-
 async function hasOpenFollowUp(workspaceId: string, conversationId: string, titlePrefix: string): Promise<boolean> {
   const rows = await query<{ id: string }>(
     `SELECT id
@@ -193,7 +181,7 @@ export async function maybeCreateStageFollowUp(input: {
   if (!settings.enabled || !settings.onStageChange) {
     return;
   }
-  if (settings.skipClosedStages && isClosedStage(input.stage)) {
+  if (settings.skipClosedStages && (await isClosedStage(input.workspaceId, input.stage))) {
     return;
   }
 
@@ -255,8 +243,16 @@ export async function scanSilenceFollowUps(): Promise<number> {
       [workspaceId, String(settings.silenceHours)]
     );
 
+    const closedStages = settings.skipClosedStages
+      ? await listClosedStageNames(workspaceId)
+      : new Set<string>();
+
     for (const candidate of candidates) {
-      if (settings.skipClosedStages && candidate.stage && isClosedStage(candidate.stage)) {
+      if (
+        settings.skipClosedStages &&
+        candidate.stage &&
+        closedStages.has(candidate.stage.trim().toLowerCase())
+      ) {
         continue;
       }
       const titlePrefix = "Follow-up: нет ответа";

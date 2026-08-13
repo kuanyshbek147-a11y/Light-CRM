@@ -2,5 +2,6 @@ export { createStaffRouter } from "./routes";
 export {
   countStaffUnread,
   listStaffMembers,
-  listStaffThreads
+  listStaffThreads,
+  shareConversationToStaff
 } from "./service";

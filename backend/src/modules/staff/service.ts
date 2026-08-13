@@ -442,3 +442,107 @@ export async function countStaffUnread(workspaceId: string, userId: string): Pro
   );
   return Number(rows[0]?.cnt || 0);
 }
+
+/** Из клиентского диалога → сообщение в канал «Команда» + задача. */
+export async function shareConversationToStaff(input: {
+  workspaceId: string;
+  authorUserId: string;
+  conversationId: string;
+  note?: string;
+  createTask?: boolean;
+  ownerUserId?: string | null;
+}): Promise<{ threadId: string; message: StaffMessage; taskId?: string } | { error: string }> {
+  const conversationId = String(input.conversationId || "").trim();
+  if (!conversationId) {
+    return { error: "conversation_required" };
+  }
+
+  const rows = await query<{
+    id: string;
+    channel: string;
+    status: string;
+    assigned_manager_id: string | null;
+    contact_name: string;
+    phone: string;
+    stage: string | null;
+  }>(
+    `SELECT c.id, c.channel, c.status, c.assigned_manager_id,
+            ct.name AS contact_name, ct.phone, d.stage
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN deals d ON d.conversation_id = c.id
+     WHERE c.id = $1 AND c.workspace_id = $2
+     LIMIT 1`,
+    [conversationId, input.workspaceId]
+  );
+  const conversation = rows[0];
+  if (!conversation) {
+    return { error: "conversation_not_found" };
+  }
+
+  const channel = await ensureTeamChannel(input.workspaceId);
+  await ensureMember(channel.id, input.authorUserId);
+
+  const author = await query<{ full_name: string }>(
+    `SELECT full_name FROM users WHERE id = $1 LIMIT 1`,
+    [input.authorUserId]
+  );
+  const authorName = author[0]?.full_name || "Сотрудник";
+  const note = String(input.note || "").trim().slice(0, 500);
+  const body = [
+    `${authorName} передал(а) диалог в Команду`,
+    `Клиент: ${conversation.contact_name}${conversation.phone ? ` · ${conversation.phone}` : ""}`,
+    `Канал: ${conversation.channel}${conversation.stage ? ` · этап: ${conversation.stage}` : ""}`,
+    note ? `Комментарий: ${note}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const createTask = input.createTask !== false;
+  let taskId: string | undefined;
+
+  if (createTask) {
+    const ownerCandidate =
+      String(input.ownerUserId || "").trim() ||
+      conversation.assigned_manager_id ||
+      input.authorUserId;
+    const owner = await query<{ id: string; full_name: string }>(
+      `SELECT id, full_name FROM users
+       WHERE id = $1 AND workspace_id = $2 AND is_active = true
+         AND role IN ('admin', 'manager', 'marketer')
+       LIMIT 1`,
+      [ownerCandidate, input.workspaceId]
+    );
+    const ownerId = owner[0]?.id || input.authorUserId;
+    if (owner[0]) {
+      await ensureMember(channel.id, ownerId);
+    }
+    const deal = await query<{ id: string }>(
+      `SELECT id FROM deals WHERE conversation_id = $1 AND workspace_id = $2 LIMIT 1`,
+      [conversationId, input.workspaceId]
+    );
+    const taskTitle = `Команда: ${conversation.contact_name}`.slice(0, 160);
+    const insertedTask = await query<{ id: string }>(
+      `INSERT INTO tasks (workspace_id, conversation_id, deal_id, owner_user_id, title, due_at)
+       VALUES ($1, $2, $3, $4, $5, now() + interval '1 hour')
+       RETURNING id`,
+      [input.workspaceId, conversationId, deal[0]?.id || null, ownerId, taskTitle]
+    );
+    taskId = insertedTask[0]?.id;
+  }
+
+  const message = await postStaffMessage({
+    workspaceId: input.workspaceId,
+    threadId: channel.id,
+    authorUserId: input.authorUserId,
+    body,
+    conversationId,
+    taskId: taskId || null,
+    isSystem: true
+  });
+  if ("error" in message) {
+    return { error: message.error };
+  }
+
+  return { threadId: channel.id, message, taskId };
+}

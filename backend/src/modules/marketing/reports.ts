@@ -46,7 +46,12 @@ export async function getCampaignReports(workspaceId: string): Promise<CampaignR
             )::text AS replied,
             COUNT(DISTINCT d.id)::text AS deals_touched,
             COUNT(DISTINCT d.id) FILTER (
-              WHERE LOWER(TRIM(d.stage)) IN ('won', 'выиграно', 'успех', 'closed')
+              WHERE EXISTS (
+                SELECT 1 FROM pipeline_stages ps
+                WHERE ps.workspace_id = c.workspace_id
+                  AND lower(ps.name) = lower(d.stage)
+                  AND ps.outcome = 'won'
+              )
             )::text AS deals_won
      FROM marketing_campaigns c
      LEFT JOIN marketing_campaign_recipients r ON r.campaign_id = c.id

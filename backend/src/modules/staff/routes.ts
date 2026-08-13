@@ -8,7 +8,8 @@ import {
   listStaffThreads,
   markThreadRead,
   openOrCreateDm,
-  postStaffMessage
+  postStaffMessage,
+  shareConversationToStaff
 } from "./service";
 
 export function createStaffRouter(): Router {
@@ -17,6 +18,36 @@ export function createStaffRouter(): Router {
   router.get("/members", async (req: AuthRequest, res) => {
     const workspaceId = req.user?.workspaceId || "";
     res.json(await listStaffMembers(workspaceId));
+  });
+
+  router.post("/share-conversation", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    const userId = req.user?.id || "";
+    const { conversationId, note, createTask, ownerUserId } = req.body as {
+      conversationId?: string;
+      note?: string;
+      createTask?: boolean;
+      ownerUserId?: string | null;
+    };
+    const result = await shareConversationToStaff({
+      workspaceId,
+      authorUserId: userId,
+      conversationId: String(conversationId || ""),
+      note,
+      createTask,
+      ownerUserId
+    });
+    if ("error" in result) {
+      const status =
+        result.error === "conversation_not_found"
+          ? 404
+          : result.error === "forbidden"
+            ? 403
+            : 400;
+      res.status(status).json(result);
+      return;
+    }
+    res.status(201).json(result);
   });
 
   router.get("/unread-count", async (req: AuthRequest, res) => {

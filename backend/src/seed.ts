@@ -75,6 +75,7 @@ async function run(): Promise<void> {
       workspace_id UUID NOT NULL REFERENCES workspaces(id),
       name TEXT NOT NULL,
       position INTEGER NOT NULL DEFAULT 0,
+      outcome TEXT NOT NULL DEFAULT 'open' CHECK (outcome IN ('open', 'won', 'lost')),
       created_at TIMESTAMP NOT NULL DEFAULT now()
     );
 
@@ -341,22 +342,22 @@ async function run(): Promise<void> {
   }
 
   const defaultStages = [
-    { name: "new", position: 10 },
-    { name: "qualified", position: 20 },
-    { name: "proposal", position: 30 },
-    { name: "won", position: 40 },
-    { name: "lost", position: 50 }
+    { name: "new", position: 10, outcome: "open" },
+    { name: "qualified", position: 20, outcome: "open" },
+    { name: "proposal", position: 30, outcome: "open" },
+    { name: "won", position: 40, outcome: "won" },
+    { name: "lost", position: 50, outcome: "lost" }
   ];
   for (const stage of defaultStages) {
     await pool.query(
-      `INSERT INTO pipeline_stages (workspace_id, name, position)
-       SELECT $1, $2, $3
+      `INSERT INTO pipeline_stages (workspace_id, name, position, outcome)
+       SELECT $1, $2, $3, $4
        WHERE NOT EXISTS (
          SELECT 1
          FROM pipeline_stages
          WHERE workspace_id = $1 AND lower(name) = lower($2)
        )`,
-      [workspaceId, stage.name, stage.position]
+      [workspaceId, stage.name, stage.position, stage.outcome]
     );
   }
 

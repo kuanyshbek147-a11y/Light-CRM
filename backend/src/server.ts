@@ -36,6 +36,7 @@ import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
 import { createStaffRouter } from "./modules/staff";
+import { createTelephonyRouter } from "./modules/integrations/telephony";
 
 const app = express();
 app.use(cors());
@@ -70,6 +71,7 @@ app.use("/api/integrations/instagram", createInstagramRouter(io));
 app.use("/api/integrations/webchat", createWebChatRouter(io));
 app.use("/api/integrations/email", createEmailRouter(io));
 app.use("/api/integrations/auto-reply", createAutoReplyRouter());
+app.use("/api/integrations/telephony", createTelephonyRouter(io));
 app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conversationsRouter);
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);

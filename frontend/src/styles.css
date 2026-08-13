@@ -2264,7 +2264,41 @@ button {
 .pipelineStageActions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pipelineOutcomeSelect {
+  min-width: 120px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: #fff;
+  color: #111827;
+}
+
+.requiredFieldsBlock {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.requiredFieldsList {
+  display: grid;
+  gap: 6px;
+}
+
+.requiredFieldToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
 }
 
 .pipelineDragHandle {
@@ -3152,3 +3186,155 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+.telephonyFab {
+  position: fixed;
+  right: 18px;
+  bottom: 88px;
+  z-index: 60;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.telephonyFab.online {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.telephonyFab.busy {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.telephonyPanel {
+  position: fixed;
+  right: 18px;
+  bottom: 148px;
+  z-index: 61;
+  width: min(340px, calc(100vw - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.telephonyPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.telephonyPanelTitle {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.telephonyStatus {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.telephonyStatus.registered {
+  color: #15803d;
+}
+
+.telephonyStatus.error {
+  color: #b91c1c;
+}
+
+.telephonyDialRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.telephonyActiveCall {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.telephonyRemote {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.telephonyTimer {
+  font-variant-numeric: tabular-nums;
+  color: #4b5563;
+}
+
+.telephonyCallActions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.clientCardCallBtn {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.telephonyGuide ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #4b5563;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+
+.telephonyExtensionList {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.telephonyExtensionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.integrationsFormGrid {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.integrationsField {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.integrationsActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.integrationCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 14px;
+  background: #fff;
+}
+

@@ -114,3 +114,18 @@ export async function createStaffThreadTask(
     body: JSON.stringify(payload)
   });
 }
+
+export async function shareConversationToStaff(
+  token: string,
+  payload: {
+    conversationId: string;
+    note?: string;
+    createTask?: boolean;
+    ownerUserId?: string | null;
+  }
+): Promise<{ threadId: string; message: StaffMessage; taskId?: string } | null> {
+  return authJson(token, "/staff/share-conversation", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}

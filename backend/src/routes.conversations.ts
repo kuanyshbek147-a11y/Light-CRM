@@ -20,6 +20,10 @@ import { sendTelegramMessageForConversation } from "./telegram";
 import { sendWhatsAppFileForConversation, sendWhatsAppMessageForConversation } from "./whatsapp";
 import { downloadMetaMediaBuffer, getMetaCloudConfigForWorkspace } from "./modules/integrations/whatsapp/meta-cloud";
 import { getRealtimeServer } from "./realtime";
+import {
+  findMissingContactFields,
+  getContactRequiredFields
+} from "./modules/contacts/required-fields";
 
 export const conversationsRouter = Router();
 const upload = mediaUpload;
@@ -136,8 +140,8 @@ conversationsRouter.get("/quick-actions-meta", async (req: AuthRequest, res) => 
      ORDER BY full_name ASC`,
     [req.user?.workspaceId]
   );
-  const stages = await query<{ id: string; name: string; position: number }>(
-    `SELECT id, name, position
+  const stages = await query<{ id: string; name: string; position: number; outcome: string }>(
+    `SELECT id, name, position, outcome
      FROM pipeline_stages
      WHERE workspace_id = $1
      ORDER BY position ASC, created_at ASC`,
@@ -738,6 +742,24 @@ conversationsRouter.patch("/:id/contact", async (req: AuthRequest, res) => {
     category: string;
   };
 
+  const workspaceId = req.user?.workspaceId || "";
+  const required = await getContactRequiredFields(workspaceId);
+  const missing = findMissingContactFields(
+    {
+      name,
+      phone,
+      city,
+      inquiry_reason: inquiryReason,
+      client_type: clientType,
+      category
+    },
+    required
+  );
+  if (missing.length) {
+    res.status(400).json({ error: "contact_fields_required", missing });
+    return;
+  }
+
   const rows = await query(
     `UPDATE contacts
      SET name = $1,
@@ -751,7 +773,7 @@ conversationsRouter.patch("/:id/contact", async (req: AuthRequest, res) => {
        WHERE id = $7 AND workspace_id = $8
      )
      RETURNING id, name, phone, city, inquiry_reason, client_type, category`,
-    [name, phone, city, inquiryReason, clientType, category, req.params.id, req.user?.workspaceId]
+    [name, phone, city, inquiryReason, clientType, category, req.params.id, workspaceId]
   );
 
   res.json(rows[0] || null);

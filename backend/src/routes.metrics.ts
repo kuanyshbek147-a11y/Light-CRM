@@ -836,26 +836,15 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
   }>(
     `SELECT
        COUNT(*)::text AS total_deals,
-       COUNT(*) FILTER (
-         WHERE lower(stage) LIKE '%won%'
-            OR lower(stage) LIKE '%выиг%'
-            OR lower(stage) LIKE '%успех%'
-            OR lower(stage) LIKE '%закрыт%'
-       )::text AS won_deals,
-       COUNT(*) FILTER (
-         WHERE lower(stage) LIKE '%lost%'
-            OR lower(stage) LIKE '%проиг%'
-            OR lower(stage) LIKE '%отказ%'
-       )::text AS lost_deals,
-       COALESCE(SUM(amount) FILTER (
-         WHERE lower(stage) LIKE '%won%'
-            OR lower(stage) LIKE '%выиг%'
-            OR lower(stage) LIKE '%успех%'
-            OR lower(stage) LIKE '%закрыт%'
-       ), 0)::text AS won_amount,
-       COALESCE(SUM(amount), 0)::text AS pipeline_amount
-     FROM deals
-     WHERE workspace_id = $1
+       COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'won')::text AS won_deals,
+       COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'lost')::text AS lost_deals,
+       COALESCE(SUM(d.amount) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'won'), 0)::text AS won_amount,
+       COALESCE(SUM(d.amount), 0)::text AS pipeline_amount
+     FROM deals d
+     LEFT JOIN pipeline_stages ps
+       ON ps.workspace_id = d.workspace_id
+      AND lower(ps.name) = lower(d.stage)
+     WHERE d.workspace_id = $1
        AND ${dealUpdatedRangeCondition}`,
     rangeParams
   );
