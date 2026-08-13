@@ -77,8 +77,8 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
           </button>
         </div>
         <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Платный Postgres на Render — вручную в Dashboard (Upgrade). Бэкапы сохраняются в /backups на
-          сервере.
+          Сюда же уходят алерты о новых лидах с лендинга (нужен Telegram-бот workspace). Платный
+          Postgres на Render — вручную в Dashboard (Upgrade). Бэкапы — в /backups на сервере.
         </div>
       </div>
 

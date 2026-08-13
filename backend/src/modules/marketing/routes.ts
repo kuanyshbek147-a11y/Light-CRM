@@ -1,5 +1,7 @@
 import { Router } from "express";
+import multer from "multer";
 import { AuthRequest } from "../../auth";
+import { mediaUpload, resolveAttachmentType } from "../media/upload";
 import {
   createCampaign,
   getCampaign,
@@ -8,6 +10,7 @@ import {
 } from "./campaigns";
 import {
   generateMarketingImage,
+  generateMarketingLandingDraft,
   generateMarketingPostText,
   generateMarketingWeekPlan,
   isMarketingAiConfigured,
@@ -41,6 +44,13 @@ import {
   resolveSegmentContacts,
   updateSegment
 } from "./segments";
+import {
+  createLandingPage,
+  deleteLandingPage,
+  duplicateLandingPage,
+  listLandingPages,
+  updateLandingPage
+} from "./landings";
 
 export function createMarketingRouter(): Router {
   const router = Router();
@@ -62,6 +72,29 @@ export function createMarketingRouter(): Router {
       channel,
       tone,
       offer,
+      language
+    });
+    if ("error" in result) {
+      const status = result.error === "openai_not_configured" ? 503 : 400;
+      res.status(status).json(result);
+      return;
+    }
+    res.json(result);
+  });
+
+  router.post("/generate/landing", async (req: AuthRequest, res) => {
+    const { topic, brandName, offer, tone, language } = req.body as {
+      topic?: string;
+      brandName?: string;
+      offer?: string;
+      tone?: string;
+      language?: string;
+    };
+    const result = await generateMarketingLandingDraft({
+      topic: String(topic || ""),
+      brandName,
+      offer,
+      tone,
       language
     });
     if ("error" in result) {
@@ -541,6 +574,117 @@ export function createMarketingRouter(): Router {
     const result = await startSequence(workspaceId, req.params.sequenceId);
     if ("error" in result) {
       res.status(400).json(result);
+      return;
+    }
+    res.json(result);
+  });
+
+  router.get("/landings", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    res.json(await listLandingPages(workspaceId));
+  });
+
+  router.post("/landings/upload-image", (req: AuthRequest, res) => {
+    mediaUpload.single("file")(req, res, (err: unknown) => {
+      void (async () => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          res.status(400).json({ error: "Файл слишком большой (макс. 20 МБ)" });
+          return;
+        }
+        if (err) {
+          res.status(400).json({ error: "Не удалось загрузить файл" });
+          return;
+        }
+        const file = req.file;
+        if (!file) {
+          res.status(400).json({ error: "Выберите изображение" });
+          return;
+        }
+        if (resolveAttachmentType(file.mimetype) !== "image") {
+          res.status(400).json({ error: "Нужно изображение (jpeg/png/webp/gif)" });
+          return;
+        }
+        const publicBase = (
+          process.env.PUBLIC_BASE_URL ||
+          process.env.RENDER_EXTERNAL_URL ||
+          "https://light-crm-backend.onrender.com"
+        ).replace(/\/+$/, "");
+        const relativeUrl = `/uploads/${file.filename}`;
+        res.status(201).json({
+          imageUrl: `${publicBase}${relativeUrl}`,
+          relativeUrl
+        });
+      })();
+    });
+  });
+
+  router.post("/landings", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    const body = req.body || {};
+    const result = await createLandingPage(workspaceId, req.user?.id || null, {
+      title: String(body.title || ""),
+      brandName: body.brandName,
+      headline: body.headline,
+      subheadline: body.subheadline,
+      body: body.body,
+      ctaLabel: body.ctaLabel,
+      ctaUrl: body.ctaUrl,
+      phone: body.phone,
+      heroImageUrl: body.heroImageUrl,
+      ctaPrefill: body.ctaPrefill,
+      status: body.status,
+      slug: body.slug
+    });
+    if ("error" in result) {
+      res.status(400).json(result);
+      return;
+    }
+    res.status(201).json(result);
+  });
+
+  router.patch("/landings/:landingId", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    const body = req.body || {};
+    const result = await updateLandingPage(workspaceId, req.params.landingId, {
+      title: body.title,
+      brandName: body.brandName,
+      headline: body.headline,
+      subheadline: body.subheadline,
+      body: body.body,
+      ctaLabel: body.ctaLabel,
+      ctaUrl: body.ctaUrl,
+      phone: body.phone,
+      heroImageUrl: body.heroImageUrl,
+      ctaPrefill: body.ctaPrefill,
+      status: body.status,
+      slug: body.slug
+    });
+    if ("error" in result) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json(result);
+  });
+
+  router.post("/landings/:landingId/duplicate", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    const result = await duplicateLandingPage(
+      workspaceId,
+      req.params.landingId,
+      req.user?.id || null
+    );
+    if ("error" in result) {
+      res.status(404).json(result);
+      return;
+    }
+    res.status(201).json(result);
+  });
+
+  router.delete("/landings/:landingId", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    const result = await deleteLandingPage(workspaceId, req.params.landingId);
+    if ("error" in result) {
+      res.status(404).json(result);
       return;
     }
     res.json(result);

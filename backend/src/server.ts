@@ -23,6 +23,7 @@ import { createWhatsAppRouter } from "./modules/integrations/whatsapp";
 import { platformRouter } from "./modules/platform";
 import { createAutoReplyRouter } from "./modules/auto-reply";
 import { createPublicKnowledgeRouter } from "./modules/knowledge/public";
+import { createPublicLandingRouter } from "./modules/marketing/public-landing";
 import { startSimulator } from "./simulator";
 import { ensureUserLoginSchema, ensureDemoIntegrations } from "./migrate";
 import { requireWorkspaceMiddleware } from "./auth";
@@ -34,6 +35,7 @@ import { createOpsRouter, startOpsHealthWatcher, backupsAbsoluteDir } from "./mo
 import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
+import { createStaffRouter } from "./modules/staff";
 
 const app = express();
 app.use(cors());
@@ -59,6 +61,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/help", createPublicKnowledgeRouter());
 app.use("/kb", createPublicKnowledgeRouter());
+app.use("/l", createPublicLandingRouter());
 app.use("/api/auth", authRouter);
 app.use("/api/platform", authMiddleware, platformRouter);
 app.use("/api/integrations/telegram", createTelegramRouter(io));
@@ -70,6 +73,7 @@ app.use("/api/integrations/auto-reply", createAutoReplyRouter());
 app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conversationsRouter);
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
+app.use("/api/staff", authMiddleware, requireWorkspaceMiddleware, createStaffRouter());
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
 app.use("/api/follow-up", authMiddleware, requireWorkspaceMiddleware, createFollowUpRouter());

@@ -139,6 +139,11 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                   <span className={`channelBadge ${conversation.channel}`} title={channelLabel(conversation.channel)}>
                     {channelLabel(conversation.channel)}
                   </span>
+                  {conversation.landing_id || conversation.marketing_source === "landing" ? (
+                    <span className="groupBadge" title="Лид с лендинга">
+                      Лендинг
+                    </span>
+                  ) : null}
                   <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
                 </span>
               </span>
@@ -341,6 +346,19 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
               <option value="unread">Только непрочитанные</option>
               <option value="overdue">SLA просроченные</option>
               <option value="escalated">Только SLA-эскалации</option>
+            </select>
+            <select
+              className="filterInput"
+              value={filters.source || ""}
+              onChange={(event) =>
+                onFiltersChange({
+                  ...filters,
+                  source: event.target.value as InboxFilters["source"]
+                })
+              }
+            >
+              <option value="">Источник: все</option>
+              <option value="landing">Лид с лендинга</option>
             </select>
           </div>
 

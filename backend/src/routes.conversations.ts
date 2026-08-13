@@ -394,11 +394,13 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
     clientType = "",
     category = "",
     priority = "",
-    attention = ""
+    attention = "",
+    source = ""
   } = req.query as Record<string, string>;
   const rows = await query(
     `SELECT c.id, c.contact_id, c.assigned_manager_id, c.channel, c.status, c.priority, c.first_response_due_at, c.updated_at,
             ct.name AS contact_name, ct.phone, ct.city, ct.inquiry_reason, ct.client_type, ct.category,
+            ct.marketing_source, ct.landing_id,
             ct.channel AS contact_channel, ct.external_id AS contact_external_id, ct.is_group,
             assignee.full_name AS assigned_manager_name,
             assignee.color AS assigned_manager_color,
@@ -463,8 +465,12 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
            AND c.first_response_due_at < now()
          )
        )
+       AND (
+         $11 = ''
+         OR ($11 = 'landing' AND (ct.landing_id IS NOT NULL OR LOWER(COALESCE(ct.marketing_source, '')) = 'landing'))
+       )
      ORDER BY c.updated_at DESC`,
-    [req.user?.workspaceId, q, managerId, stage, city, inquiryReason, clientType, category, priority, attention]
+    [req.user?.workspaceId, q, managerId, stage, city, inquiryReason, clientType, category, priority, attention, source]
   );
 
   res.json(rows);
@@ -472,7 +478,8 @@ conversationsRouter.get("/", async (req: AuthRequest, res) => {
 
 conversationsRouter.get("/:id/contact", async (req: AuthRequest, res) => {
   const rows = await query(
-    `SELECT ct.id, ct.name, ct.phone, ct.city, ct.inquiry_reason, ct.client_type, ct.category, ct.channel, ct.external_id
+    `SELECT ct.id, ct.name, ct.phone, ct.city, ct.inquiry_reason, ct.client_type, ct.category, ct.channel, ct.external_id,
+            ct.marketing_source, ct.utm_source, ct.utm_medium, ct.utm_campaign, ct.utm_content, ct.landing_id
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      WHERE c.id = $1 AND c.workspace_id = $2

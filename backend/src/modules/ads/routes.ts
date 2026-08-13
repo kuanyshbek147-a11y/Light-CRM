@@ -32,16 +32,18 @@ export function createAdsRouter(): Router {
       return;
     }
     const workspaceId = req.user?.workspaceId || "";
-    const { accessToken, adAccountId, pageId } = req.body as {
+    const { accessToken, adAccountId, pageId, defaultLinkUrl } = req.body as {
       accessToken?: string;
       adAccountId?: string;
       pageId?: string;
+      defaultLinkUrl?: string;
     };
     res.json(
       await saveMetaAdsCredentials(workspaceId, {
         accessToken,
         adAccountId,
-        pageId
+        pageId,
+        defaultLinkUrl
       })
     );
   });

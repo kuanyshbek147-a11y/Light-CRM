@@ -27,7 +27,8 @@ export async function loadConversations(
     clientType: filters.clientType,
     category: filters.category,
     priority: filters.priority,
-    attention: filters.attention
+    attention: filters.attention,
+    source: filters.source || ""
   });
   try {
     const response = await fetch(`${API}/conversations?${params.toString()}`, fetchOpts(token));

@@ -2,4 +2,5 @@
 /uploads/*  https://light-crm-backend.onrender.com/uploads/:splat  200!
 /help/*  https://light-crm-backend.onrender.com/help/:splat  200!
 /kb/*  https://light-crm-backend.onrender.com/help/:splat  200!
+/l/*  https://light-crm-backend.onrender.com/l/:splat  200!
 /*  /index.html  200

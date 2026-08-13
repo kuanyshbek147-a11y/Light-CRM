@@ -487,6 +487,123 @@ export async function ensureUserLoginSchema(): Promise<void> {
       ON ads_campaigns (workspace_id, created_at DESC)
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_landing_pages (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      slug TEXT NOT NULL,
+      title TEXT NOT NULL,
+      brand_name TEXT NOT NULL DEFAULT '',
+      headline TEXT NOT NULL DEFAULT '',
+      subheadline TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      cta_label TEXT NOT NULL DEFAULT 'Написать в WhatsApp',
+      cta_url TEXT,
+      phone TEXT,
+      hero_image_url TEXT,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'published')),
+      view_count INTEGER NOT NULL DEFAULT 0,
+      created_by_user_id UUID REFERENCES users(id),
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (slug)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_landing_pages_workspace
+      ON marketing_landing_pages (workspace_id, updated_at DESC)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_landing_pages_status
+      ON marketing_landing_pages (status, slug)
+  `);
+  await pool.query(
+    `ALTER TABLE marketing_landing_pages ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0`
+  );
+  await pool.query(
+    `ALTER TABLE marketing_landing_pages ADD COLUMN IF NOT EXISTS cta_prefill TEXT NOT NULL DEFAULT ''`
+  );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS marketing_landing_clicks (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      landing_id UUID NOT NULL REFERENCES marketing_landing_pages(id) ON DELETE CASCADE,
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      utm_source TEXT,
+      utm_medium TEXT,
+      utm_campaign TEXT,
+      utm_content TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_landing_clicks_landing
+      ON marketing_landing_clicks (landing_id, created_at DESC)
+  `);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS marketing_source TEXT`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS utm_source TEXT`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS utm_medium TEXT`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS utm_campaign TEXT`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS utm_content TEXT`);
+  await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS landing_id UUID`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS staff_threads (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      kind TEXT NOT NULL CHECK (kind IN ('channel', 'dm')),
+      title TEXT NOT NULL DEFAULT '',
+      dm_key TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_threads_channel_one
+      ON staff_threads (workspace_id)
+      WHERE kind = 'channel'
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_threads_dm_key
+      ON staff_threads (workspace_id, dm_key)
+      WHERE kind = 'dm' AND dm_key IS NOT NULL
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_staff_threads_workspace_updated
+      ON staff_threads (workspace_id, updated_at DESC)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS staff_thread_members (
+      thread_id UUID NOT NULL REFERENCES staff_threads(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last_read_at TIMESTAMP,
+      joined_at TIMESTAMP NOT NULL DEFAULT now(),
+      PRIMARY KEY (thread_id, user_id)
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_staff_thread_members_user
+      ON staff_thread_members (user_id, thread_id)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS staff_messages (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      thread_id UUID NOT NULL REFERENCES staff_threads(id) ON DELETE CASCADE,
+      workspace_id UUID NOT NULL REFERENCES workspaces(id),
+      author_user_id UUID REFERENCES users(id),
+      body TEXT NOT NULL,
+      task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+      conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+      is_system BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_staff_messages_thread_created
+      ON staff_messages (thread_id, created_at ASC)
+  `);
+
   await ensureSuperAdminSchema();
   await ensureSuperAdminUser();
 }

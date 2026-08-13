@@ -28,6 +28,38 @@ export async function setOpsAlertChatId(workspaceId: string, chatId: string): Pr
   );
 }
 
+/** Telegram-алерт workspace без throttle (лиды, задачи). Ops health — через sendAlert. */
+export async function sendWorkspaceTelegramAlert(
+  workspaceId: string,
+  text: string
+): Promise<boolean> {
+  const rows = await query<{ value: string }>(
+    `SELECT value FROM workspace_settings
+     WHERE workspace_id = $1 AND key = $2
+     LIMIT 1`,
+    [workspaceId, KEY]
+  );
+  const chatId = (rows[0]?.value || process.env.OPS_ALERT_TELEGRAM_CHAT_ID || "").trim();
+  if (!chatId) {
+    return false;
+  }
+
+  const credentials = await getTelegramCredentialsForWorkspace(workspaceId);
+  const botToken = (credentials?.botToken || process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  if (!botToken) {
+    console.error("Workspace Telegram alert skipped: no bot token", workspaceId);
+    return false;
+  }
+
+  try {
+    await sendTelegramTextMessage(botToken, chatId, text);
+    return true;
+  } catch (error) {
+    console.error("Workspace Telegram alert failed", error);
+    return false;
+  }
+}
+
 async function sendAlert(text: string): Promise<void> {
   const now = Date.now();
   if (now - lastAlertAt < 10 * 60_000) {

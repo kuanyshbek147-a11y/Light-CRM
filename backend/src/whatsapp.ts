@@ -5,6 +5,12 @@ import { resolveAutoAssignedManager } from "./auto-assignment";
 import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./modules/auth";
 import { maybeAutoReply } from "./modules/auto-reply";
+import {
+  applyLandingAttributionToContact,
+  ensureLandingLeadFollowUpTask,
+  parseLandingAttributionFromBody,
+  type LandingAttributionResult
+} from "./modules/marketing/landings";
 import { finalizeEmbeddedSignupConnection, subscribeWabaToApp } from "./modules/integrations/whatsapp/embedded-signup";
 import {
   downloadMetaMediaToUploads,
@@ -706,8 +712,23 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       );
     }
 
-    const conversationRows = await query<{ id: string }>(
-      `SELECT id
+    let incomingBody = message.body || "";
+    let landingAttribution: LandingAttributionResult | null = null;
+    if (!message.isGroup && incomingBody) {
+      const attribution = parseLandingAttributionFromBody(incomingBody);
+      if (attribution) {
+        incomingBody = attribution.cleanedBody || incomingBody;
+        landingAttribution = await applyLandingAttributionToContact({
+          workspaceId,
+          contactId,
+          slug: attribution.slug,
+          utm: attribution.utm
+        });
+      }
+    }
+
+    const conversationRows = await query<{ id: string; assigned_manager_id: string | null }>(
+      `SELECT id, assigned_manager_id
        FROM conversations
        WHERE workspace_id = $1 AND contact_id = $2
        LIMIT 1`,
@@ -719,9 +740,14 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       (
         await query<{ id: string }>(
           `INSERT INTO conversations (workspace_id, contact_id, assigned_manager_id, channel, priority, first_response_due_at)
-           VALUES ($1, $2, $3, 'whatsapp', 'normal', now() + interval '15 minutes')
+           VALUES ($1, $2, $3, 'whatsapp', $4, now() + interval '15 minutes')
            RETURNING id`,
-          [workspaceId, contactId, managerId ?? null]
+          [
+            workspaceId,
+            contactId,
+            managerId ?? null,
+            landingAttribution?.isFirstLandingLead ? "high" : "normal"
+          ]
         )
       )[0].id;
 
@@ -747,7 +773,7 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       [
         conversationId,
         workspaceId,
-        message.body,
+        incomingBody,
         message.externalMessageId,
         message.attachmentUrl,
         message.attachmentType,
@@ -764,11 +790,25 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       [conversationId]
     );
 
+    if (landingAttribution?.isFirstLandingLead) {
+      await ensureLandingLeadFollowUpTask({
+        workspaceId,
+        conversationId,
+        ownerUserId: conversationRows[0]?.assigned_manager_id || managerId,
+        landingTitle: landingAttribution.landingTitle,
+        utmCampaign: landingAttribution.utm.campaign,
+        contactName: message.contactName,
+        contactPhone: message.isGroup
+          ? null
+          : message.externalContactId || null
+      });
+    }
+
     io.emit("message:new", {
       conversationId,
       messageId: inserted[0].id,
       direction: "incoming",
-      body: message.body,
+      body: incomingBody,
       attachmentUrl: message.attachmentUrl,
       attachmentType: message.attachmentType,
       attachmentName: message.attachmentName,
@@ -780,7 +820,7 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
       workspaceId,
       conversationId,
       channel: "whatsapp",
-      incomingBody: message.body,
+      incomingBody,
       io
     });
   }

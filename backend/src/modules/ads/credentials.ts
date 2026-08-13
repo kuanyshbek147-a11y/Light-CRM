@@ -11,7 +11,8 @@ const KEYS = {
   accessToken: "meta_ads_access_token",
   adAccountId: "meta_ads_ad_account_id",
   pageId: "meta_ads_page_id",
-  connectedAt: "meta_ads_connected_at"
+  connectedAt: "meta_ads_connected_at",
+  defaultLinkUrl: "meta_ads_default_link_url"
 } as const;
 
 async function getSetting(workspaceId: string, key: string): Promise<string | null> {
@@ -85,23 +86,39 @@ export type MetaAdsSettingsPublic = {
   pageId: string;
   connectedAt: string | null;
   hasToken: boolean;
+  defaultLinkUrl: string;
 };
 
 export async function getMetaAdsSettingsPublic(workspaceId: string): Promise<MetaAdsSettingsPublic> {
-  const creds = await getMetaAdsCredentialsForWorkspace(workspaceId);
+  const [creds, defaultLinkUrl] = await Promise.all([
+    getMetaAdsCredentialsForWorkspace(workspaceId),
+    getSetting(workspaceId, KEYS.defaultLinkUrl)
+  ]);
   return {
     connected: Boolean(creds?.accessToken && creds.adAccountId),
     adAccountId: creds?.adAccountId || "",
     pageId: creds?.pageId || "",
     connectedAt: creds?.connectedAt || null,
-    hasToken: Boolean(creds?.accessToken)
+    hasToken: Boolean(creds?.accessToken),
+    defaultLinkUrl: (defaultLinkUrl || process.env.ADS_DEFAULT_LINK_URL || "").trim()
   };
 }
 
 export async function saveMetaAdsCredentials(
   workspaceId: string,
-  input: { accessToken?: string; adAccountId?: string; pageId?: string }
+  input: { accessToken?: string; adAccountId?: string; pageId?: string; defaultLinkUrl?: string }
 ): Promise<MetaAdsSettingsPublic> {
+  const onlyDefaultLink =
+    input.defaultLinkUrl !== undefined &&
+    input.accessToken === undefined &&
+    input.adAccountId === undefined &&
+    input.pageId === undefined;
+
+  if (onlyDefaultLink) {
+    await setSetting(workspaceId, KEYS.defaultLinkUrl, String(input.defaultLinkUrl || "").trim());
+    return getMetaAdsSettingsPublic(workspaceId);
+  }
+
   const current = await getWorkspaceMetaAdsCredentials(workspaceId);
   const accessToken = (input.accessToken ?? current?.accessToken ?? "").trim();
   const adAccountId = normalizeAdAccountId(input.adAccountId ?? current?.adAccountId ?? "");
@@ -115,6 +132,9 @@ export async function saveMetaAdsCredentials(
   }
   await setSetting(workspaceId, KEYS.pageId, pageId);
   await setSetting(workspaceId, KEYS.connectedAt, new Date().toISOString());
+  if (input.defaultLinkUrl !== undefined) {
+    await setSetting(workspaceId, KEYS.defaultLinkUrl, String(input.defaultLinkUrl || "").trim());
+  }
 
   return getMetaAdsSettingsPublic(workspaceId);
 }

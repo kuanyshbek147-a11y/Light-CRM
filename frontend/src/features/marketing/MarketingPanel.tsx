@@ -46,6 +46,7 @@ import {
   type MarketingSequence,
   type MarketingSocialSettings
 } from "./api";
+import { LandingPagesPanel } from "./LandingPagesPanel";
 
 type Props = {
   authToken: string;
@@ -103,7 +104,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [reports, setReports] = useState<CampaignReport[]>([]);
   const [sequences, setSequences] = useState<MarketingSequence[]>([]);
   const [marketingTab, setMarketingTab] = useState<
-    "plan" | "calendar" | "series" | "reports" | "ads"
+    "plan" | "calendar" | "series" | "reports" | "ads" | "landings"
   >("plan");
   const [campaignTemplateName, setCampaignTemplateName] = useState("");
   const [seqName, setSeqName] = useState("Серия 0/3/7");
@@ -197,6 +198,9 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       setAdsSettings(nextAdsSettings);
       setAdsAccountDraft(nextAdsSettings.adAccountId || "");
       setAdsPageDraft(nextAdsSettings.pageId || "");
+      if (nextAdsSettings.defaultLinkUrl) {
+        setAdsLinkUrl((prev) => prev || nextAdsSettings.defaultLinkUrl);
+      }
     }
     setAiConfigured(Boolean(nextAi?.configured));
     if (!campaignSegmentId && nextSegments[0]) {
@@ -782,7 +786,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         <div>
           <div className="sidebarTitle">Маркетинг</div>
           <div className="sidebarHint">
-            Контент-план, ИИ, серии 0/3/7, HSM, отчёты, таргет Meta Ads и автопубликация.
+            Контент-план, лендинги, ИИ, серии 0/3/7, отчёты, таргет Meta Ads и автопубликация.
             {aiConfigured ? " · ИИ доступен" : " · ИИ: задайте OPENAI_API_KEY на backend"}
           </div>
         </div>
@@ -792,6 +796,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         {(
           [
             ["plan", "План"],
+            ["landings", "Лендинг"],
             ["calendar", "Календарь"],
             ["series", "Серии 0/3/7"],
             ["reports", "Отчёты"],
@@ -808,6 +813,29 @@ export function MarketingPanel({ authToken, onToast }: Props) {
           </button>
         ))}
       </div>
+
+      {marketingTab === "landings" ? (
+        <LandingPagesPanel
+          authToken={authToken}
+          onToast={onToast}
+          onUseInAds={(publicUrl, meta) => {
+            setAdsLinkUrl(publicUrl);
+            if (meta?.title) {
+              setAdsCampaignName((prev) => prev.trim() || meta.title || "");
+            }
+            setMarketingTab("ads");
+            void (async () => {
+              const saved = await saveAdsSettings(authToken, { defaultLinkUrl: publicUrl });
+              if (saved) {
+                setAdsSettings(saved);
+                onToast?.("Ссылка с UTM вставлена в Ads", "success");
+                return;
+              }
+              onToast?.("Ссылка с UTM вставлена в форму Ads", "success");
+            })();
+          }}
+        />
+      ) : null}
 
       {marketingTab === "ads" ? (
         <div style={{ marginBottom: 24 }}>
@@ -951,10 +979,15 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               </select>
               <input
                 className="filterInput"
-                placeholder="Ссылка объявления (опционально)"
+                placeholder="Ссылка объявления (с UTM из лендинга)"
                 value={adsLinkUrl}
                 onChange={(event) => setAdsLinkUrl(event.target.value)}
               />
+              {adsLinkUrl ? (
+                <div className="sidebarHint">
+                  Для атрибуции в CRM ссылка должна содержать utm_source / utm_campaign
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="primaryButton"

@@ -86,6 +86,8 @@ import { MarketingPanel } from "./features/marketing/MarketingPanel";
 import { OpsPanel } from "./features/ops/OpsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
 import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
+import { StaffChatPanel } from "./features/staff/StaffChatPanel";
+import { loadStaffUnreadCount } from "./features/staff/api";
 import {
   createCrmTask,
   globalSearch,
@@ -200,7 +202,8 @@ const DEFAULT_INBOX_FILTERS: InboxFilters = {
   clientType: "",
   category: "",
   priority: "",
-  attention: ""
+  attention: "",
+  source: ""
 };
 const EMOJI_BUTTON_ICON = "\uD83D\uDE42";
 const EMOJI_OPTIONS = [
@@ -259,11 +262,13 @@ const UI = {
   funnelKpiTab: "KPI \u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
   menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+  menuStaff: "\u041a\u043e\u043c\u0430\u043d\u0434\u0430",
   menuContacts: "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
   menuProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
   sectionDialogsCenter: "Dialogs Center",
   sectionFunnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   sectionTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
+  sectionStaff: "\u041a\u043e\u043c\u0430\u043d\u0434\u0430",
   sectionContacts: "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
   sectionProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
   globalSearchPlaceholder: "\u041f\u043e\u0438\u0441\u043a: \u0434\u0438\u0430\u043b\u043e\u0433\u0438, \u043a\u043b\u0438\u0435\u043d\u0442\u044b, \u0441\u0434\u0435\u043b\u043a\u0438...",
@@ -586,6 +591,7 @@ export function App(): JSX.Element {
     | "dialogs"
     | "pipeline"
     | "tasks"
+    | "staff"
     | "contacts"
     | "profile"
     | "analytics"
@@ -595,6 +601,7 @@ export function App(): JSX.Element {
     | "integrations"
     | "platform"
   >("dialogs");
+  const [staffUnreadCount, setStaffUnreadCount] = useState(0);
   const [crmTasks, setCrmTasks] = useState<CrmTask[]>([]);
   const [taskStatusFilter, setTaskStatusFilter] = useState<"open" | "done">("open");
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -788,6 +795,57 @@ export function App(): JSX.Element {
       });
     });
 
+    socket.on("task:new", (payload: {
+      kind?: string;
+      title?: string;
+      conversationId?: string;
+    }) => {
+      if (payload?.kind === "landing_lead") {
+        setToastKind("success");
+        setToastMessage(payload.title || "Новый лид с лендинга");
+        setToastVisible(true);
+        if (toastTimerRef.current) {
+          window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => {
+          setToastVisible(false);
+        }, 3500);
+        void loadConversations(token, search, filters, setConversations);
+      }
+    });
+
+    socket.on("staff:message", (payload: {
+      workspaceId?: string;
+      threadId?: string;
+      message?: {
+        id: string;
+        author_user_id?: string | null;
+        body?: string;
+        is_system?: boolean;
+      };
+    }) => {
+      if (!payload?.threadId || !payload.message) {
+        return;
+      }
+      window.dispatchEvent(new CustomEvent("staff:message", { detail: payload }));
+      if (payload.message.author_user_id && payload.message.author_user_id === sessionUser?.id) {
+        return;
+      }
+      if (currentSection !== "staff") {
+        setStaffUnreadCount((prev) => prev + 1);
+        playIncomingMessageSound();
+        setToastKind("success");
+        setToastMessage("Новое сообщение в Команде");
+        setToastVisible(true);
+        if (toastTimerRef.current) {
+          window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => {
+          setToastVisible(false);
+        }, 2800);
+      }
+    });
+
     socket.on("message:updated", (payload: {
       conversationId?: string;
       messageId?: string;
@@ -818,9 +876,11 @@ export function App(): JSX.Element {
       socket.off("connect", onSocketReady);
       socket.off("message:new");
       socket.off("message:updated");
+      socket.off("task:new");
+      socket.off("staff:message");
       socket.disconnect();
     };
-  }, [token, search, filters, selectedConversation]);
+  }, [token, search, filters, selectedConversation, currentSection, sessionUser?.id]);
 
   useEffect(() => {
     if (!token) {
@@ -895,6 +955,17 @@ export function App(): JSX.Element {
     void loadMetrics(token, setMetrics, metricsQuery);
     void loadMetricSnapshots(token, setMetricSnapshots);
   }, [token, analyticsPeriod, analyticsMode, analyticsFrom, analyticsTo, isCustomRangeValid]);
+
+  useEffect(() => {
+    if (!token) {
+      setStaffUnreadCount(0);
+      return;
+    }
+    void (async () => {
+      const count = await loadStaffUnreadCount(token);
+      setStaffUnreadCount(count);
+    })();
+  }, [token]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 768px)");
@@ -1227,8 +1298,13 @@ export function App(): JSX.Element {
   }
 
   async function applyFilterPreset(preset: SavedInboxFilterPreset): Promise<void> {
-    setFilters(preset.filters);
-    await loadConversations(token, search, preset.filters, setConversations);
+    const nextFilters: InboxFilters = {
+      ...DEFAULT_INBOX_FILTERS,
+      ...preset.filters,
+      source: preset.filters.source || ""
+    };
+    setFilters(nextFilters);
+    await loadConversations(token, search, nextFilters, setConversations);
   }
 
   function removeFilterPreset(presetId: string): void {
@@ -2717,13 +2793,15 @@ export function App(): JSX.Element {
           : UI.pipelineBoardHint
         : currentSection === "tasks"
           ? UI.sectionTasks
-          : currentSection === "contacts"
-            ? UI.sectionContacts
-            : currentSection === "marketing"
-              ? UI.menuMarketing
-              : currentSection === "profile"
-                ? UI.sectionProfile
-                : UI.landingBadge;
+          : currentSection === "staff"
+            ? UI.sectionStaff
+            : currentSection === "contacts"
+              ? UI.sectionContacts
+              : currentSection === "marketing"
+                ? UI.menuMarketing
+                : currentSection === "profile"
+                  ? UI.sectionProfile
+                  : UI.landingBadge;
 
   const bottomNavActive: MobileNavSection =
     currentSection === "pipeline"
@@ -3016,6 +3094,23 @@ export function App(): JSX.Element {
               {"\u2611"}
             </span>
             <span className="leftMenuButtonLabel">{UI.menuTasks}</span>
+          </button>
+          <button
+            type="button"
+            className={`leftMenuButton ${currentSection === "staff" ? "active" : ""}`}
+            onClick={() => {
+              setCurrentSection("staff");
+              setStaffUnreadCount(0);
+            }}
+            title={UI.menuStaff}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u2630"}
+            </span>
+            <span className="leftMenuButtonLabel">
+              {UI.menuStaff}
+              {staffUnreadCount > 0 ? ` (${staffUnreadCount})` : ""}
+            </span>
           </button>
           <button
             type="button"
@@ -4061,6 +4156,22 @@ export function App(): JSX.Element {
               </div>
             </div>
           </section>
+        ) : currentSection === "staff" ? (
+          token ? (
+            <StaffChatPanel
+              authToken={token}
+              currentUserId={sessionUser?.id || ""}
+              onToast={showToast}
+              onThreadsChanged={(threads) => {
+                const unread = threads.reduce((sum, thread) => sum + (thread.unread_count || 0), 0);
+                setStaffUnreadCount(unread);
+              }}
+              onOpenConversation={(conversationId) => {
+                setCurrentSection("dialogs");
+                void onSelectConversation(conversationId);
+              }}
+            />
+          ) : null
         ) : currentSection === "contacts" ? (
           <section className="knowledgePage card">
             <div className="railHeader">
@@ -4196,6 +4307,20 @@ export function App(): JSX.Element {
               </div>
               <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("knowledge")}>
                 <span>{UI.menuKnowledgeBase}</span>
+                <span>›</span>
+              </button>
+              <button
+                type="button"
+                className="profileMenuBtn"
+                onClick={() => {
+                  setCurrentSection("staff");
+                  setStaffUnreadCount(0);
+                }}
+              >
+                <span>
+                  {UI.menuStaff}
+                  {staffUnreadCount > 0 ? ` (${staffUnreadCount})` : ""}
+                </span>
                 <span>›</span>
               </button>
               <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("analytics")}>
@@ -4559,6 +4684,22 @@ export function App(): JSX.Element {
                   />
                 </div>
               </div>
+              {contactCard.marketing_source || contactCard.utm_source || contactCard.utm_campaign ? (
+                <div className="clientCardField">
+                  <label>Источник</label>
+                  <div className="sidebarHint" style={{ marginTop: 4 }}>
+                    {[
+                      contactCard.marketing_source,
+                      contactCard.utm_source,
+                      contactCard.utm_medium,
+                      contactCard.utm_campaign,
+                      contactCard.utm_content
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                </div>
+              ) : null}
               <div className="clientCardField">
                 <label>{UI.clientType}</label>
                 <div className="clientCardInput">

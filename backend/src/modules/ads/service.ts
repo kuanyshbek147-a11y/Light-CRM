@@ -1,7 +1,7 @@
 import { query } from "../../db";
 import { getContentPost } from "../marketing/posts";
 import { getSegment, resolveSegmentContacts } from "../marketing/segments";
-import { getMetaAdsCredentialsForWorkspace } from "./credentials";
+import { getMetaAdsCredentialsForWorkspace, getMetaAdsSettingsPublic } from "./credentials";
 import {
   createCustomAudience,
   createTrafficCampaign,
@@ -225,8 +225,10 @@ export async function createAdsCampaign(input: {
     }
   }
 
+  const workspaceDefaultLink = (await getMetaAdsSettingsPublic(input.workspaceId)).defaultLinkUrl.trim();
   const linkUrl =
     (input.linkUrl || "").trim() ||
+    workspaceDefaultLink ||
     process.env.ADS_DEFAULT_LINK_URL ||
     "https://light-crm-kz.netlify.app";
 

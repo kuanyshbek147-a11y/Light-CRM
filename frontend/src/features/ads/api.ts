@@ -8,6 +8,7 @@ export type AdsSettings = {
   pageId: string;
   connectedAt: string | null;
   hasToken: boolean;
+  defaultLinkUrl: string;
 };
 
 export type AdsAudience = {
@@ -66,7 +67,12 @@ export async function loadAdsSettings(token: string): Promise<AdsSettings | null
 
 export async function saveAdsSettings(
   token: string,
-  payload: { accessToken?: string; adAccountId?: string; pageId?: string }
+  payload: {
+    accessToken?: string;
+    adAccountId?: string;
+    pageId?: string;
+    defaultLinkUrl?: string;
+  }
 ): Promise<AdsSettings | null> {
   return authJson<AdsSettings>(token, "/ads/settings", {
     method: "PUT",

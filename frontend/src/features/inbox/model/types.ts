@@ -7,6 +7,8 @@ export type Conversation = {
   inquiry_reason?: string | null;
   client_type?: string | null;
   category?: string | null;
+  marketing_source?: string | null;
+  landing_id?: string | null;
   channel: "whatsapp" | "telegram" | "instagram" | "web" | "email";
   status: "open" | "closed";
   priority?: "low" | "normal" | "high" | "urgent";
@@ -79,6 +81,12 @@ export type ContactCard = {
   category: string | null;
   channel: "whatsapp" | "telegram" | "instagram" | "web" | "email";
   external_id: string | null;
+  marketing_source?: string | null;
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  landing_id?: string | null;
 };
 
 export type InboxFilters = {
@@ -88,6 +96,7 @@ export type InboxFilters = {
   category: string;
   priority: string;
   attention: "" | "unread" | "overdue" | "escalated";
+  source: "" | "landing";
 };
 
 export type SavedInboxFilterPreset = {

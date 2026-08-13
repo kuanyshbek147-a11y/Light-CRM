@@ -11,6 +11,16 @@ export type GeneratedPostDraft = {
   imagePrompt: string;
 };
 
+export type GeneratedLandingDraft = {
+  title: string;
+  brandName: string;
+  headline: string;
+  subheadline: string;
+  body: string;
+  ctaLabel: string;
+  ctaPrefill: string;
+};
+
 function getOpenAiConfig(): { apiKey: string; baseUrl: string; model: string } | null {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
@@ -155,6 +165,128 @@ export async function generateMarketingPostText(input: {
     return draft;
   } catch (error) {
     console.error("Marketing text generate error", error);
+    return { error: "openai_text_failed" };
+  }
+}
+
+function parseGeneratedLandingJson(raw: string): GeneratedLandingDraft {
+  const cleaned = raw
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/, "");
+  try {
+    const parsed = JSON.parse(cleaned) as Partial<GeneratedLandingDraft>;
+    return {
+      title: String(parsed.title || "Лендинг").trim().slice(0, 120),
+      brandName: String(parsed.brandName || parsed.title || "Бренд").trim().slice(0, 80),
+      headline: String(parsed.headline || parsed.title || "").trim().slice(0, 160),
+      subheadline: String(parsed.subheadline || "").trim().slice(0, 280),
+      body: String(parsed.body || "").trim().slice(0, 3500),
+      ctaLabel: String(parsed.ctaLabel || "Написать в WhatsApp").trim().slice(0, 60),
+      ctaPrefill: String(parsed.ctaPrefill || "").trim().slice(0, 900)
+    };
+  } catch {
+    return {
+      title: "Лендинг",
+      brandName: "Бренд",
+      headline: "Готовы помочь вам",
+      subheadline: cleaned.slice(0, 280),
+      body: cleaned.slice(0, 3500),
+      ctaLabel: "Написать в WhatsApp",
+      ctaPrefill: "Здравствуйте! Хочу узнать подробнее."
+    };
+  }
+}
+
+export async function generateMarketingLandingDraft(input: {
+  topic: string;
+  brandName?: string;
+  offer?: string;
+  tone?: string;
+  language?: string;
+}): Promise<GeneratedLandingDraft | { error: string }> {
+  const config = getOpenAiConfig();
+  if (!config) {
+    return { error: "openai_not_configured" };
+  }
+
+  const topic = input.topic.trim();
+  if (!topic) {
+    return { error: "topic_required" };
+  }
+
+  const brandName = (input.brandName || "").trim();
+  const offer = (input.offer || "").trim();
+  const tone = (input.tone || "уверенный, понятный, без воды").trim();
+  const language = (input.language || "ru").trim();
+
+  try {
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: config.model,
+        temperature: 0.65,
+        max_tokens: 900,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Ты performance-маркетолог для малого бизнеса в Казахстане/СНГ. " +
+              "Пишешь одноэкранный лендинг под трафик из Meta Ads с CTA в WhatsApp. " +
+              "Верни ТОЛЬКО JSON без markdown: " +
+              '{"title":"внутр. название","brandName":"...","headline":"...","subheadline":"...","body":"2-4 абзаца через \\n\\n","ctaLabel":"...","ctaPrefill":"текст первого сообщения в WhatsApp"}. ' +
+              "Правила: бренд — сильный герой; headline короткий и конкретный; без клише AI; " +
+              "без эмодзи; без markdown; CTA ведёт в WhatsApp; ctaPrefill — 1–2 предложения от клиента."
+          },
+          {
+            role: "user",
+            content: [
+              `Язык: ${language}`,
+              `Тон: ${tone}`,
+              brandName ? `Бренд (если уместно сохрани): ${brandName}` : "",
+              offer ? `Оффер/условия: ${offer}` : "",
+              `Тема / бизнес / услуга: ${topic}`
+            ]
+              .filter(Boolean)
+              .join("\n")
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Marketing landing generate failed", response.status, errText.slice(0, 400));
+      return { error: "openai_text_failed" };
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = payload.choices?.[0]?.message?.content?.trim();
+    if (!content) {
+      return { error: "openai_empty_response" };
+    }
+
+    const draft = parseGeneratedLandingJson(content);
+    if (!draft.headline && !draft.body) {
+      return { error: "openai_empty_response" };
+    }
+    if (!draft.headline) draft.headline = draft.title;
+    if (!draft.ctaPrefill) {
+      draft.ctaPrefill = `Здравствуйте! Пишу со страницы «${draft.headline}». Хочу узнать подробнее.`;
+    }
+    if (brandName && !draft.brandName) {
+      draft.brandName = brandName;
+    }
+    return draft;
+  } catch (error) {
+    console.error("Marketing landing generate error", error);
     return { error: "openai_text_failed" };
   }
 }

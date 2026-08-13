@@ -237,6 +237,26 @@ export async function generateMarketingText(
   });
 }
 
+export type GeneratedLandingDraft = {
+  title: string;
+  brandName: string;
+  headline: string;
+  subheadline: string;
+  body: string;
+  ctaLabel: string;
+  ctaPrefill: string;
+};
+
+export async function generateMarketingLanding(
+  token: string,
+  payload: { topic: string; brandName?: string; offer?: string; tone?: string }
+): Promise<GeneratedLandingDraft | null> {
+  return authJson<GeneratedLandingDraft>(token, "/marketing/generate/landing", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function generateMarketingImage(
   token: string,
   payload: { prompt: string; title?: string }
@@ -348,4 +368,103 @@ export async function startMarketingSequence(
     method: "POST",
     body: "{}"
   });
+}
+
+export type MarketingLandingPage = {
+  id: string;
+  workspace_id: string;
+  slug: string;
+  title: string;
+  brand_name: string;
+  headline: string;
+  subheadline: string;
+  body: string;
+  cta_label: string;
+  cta_url: string | null;
+  phone: string | null;
+  hero_image_url: string | null;
+  cta_prefill: string;
+  status: "draft" | "published";
+  view_count: number;
+  click_count: number;
+  leads_count?: number;
+  conversations_count?: number;
+  public_url: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MarketingLandingInput = {
+  title: string;
+  brandName?: string;
+  headline?: string;
+  subheadline?: string;
+  body?: string;
+  ctaLabel?: string;
+  ctaUrl?: string | null;
+  phone?: string | null;
+  heroImageUrl?: string | null;
+  ctaPrefill?: string;
+  status?: "draft" | "published";
+  slug?: string;
+};
+
+export async function loadMarketingLandings(token: string): Promise<MarketingLandingPage[]> {
+  return (await authJson<MarketingLandingPage[]>(token, "/marketing/landings")) || [];
+}
+
+export async function createMarketingLanding(
+  token: string,
+  payload: MarketingLandingInput
+): Promise<MarketingLandingPage | null> {
+  return authJson(token, "/marketing/landings", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateMarketingLanding(
+  token: string,
+  landingId: string,
+  payload: Partial<MarketingLandingInput>
+): Promise<MarketingLandingPage | null> {
+  return authJson(token, `/marketing/landings/${landingId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteMarketingLanding(token: string, landingId: string): Promise<boolean> {
+  const response = await fetch(`${API}/marketing/landings/${landingId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return response.ok;
+}
+
+export async function duplicateMarketingLanding(
+  token: string,
+  landingId: string
+): Promise<MarketingLandingPage | null> {
+  return authJson(token, `/marketing/landings/${landingId}/duplicate`, {
+    method: "POST",
+    body: "{}"
+  });
+}
+
+export async function uploadMarketingLandingImage(
+  token: string,
+  file: File
+): Promise<{ imageUrl: string; relativeUrl: string } | null> {
+  const payload = new FormData();
+  payload.append("file", file);
+  const response = await fetch(`${API}/marketing/landings/upload-image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: payload
+  });
+  if (!response.ok) {
+    return null;
+  }
+  return (await response.json()) as { imageUrl: string; relativeUrl: string };
 }
