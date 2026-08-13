@@ -854,12 +854,22 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     manager_name: string;
     dialogs_handled: string;
     outgoing_messages: string;
+    won_deals: string;
+    lost_deals: string;
+    won_amount: string;
+    avg_first_response_minutes: string;
+    overdue_sla_count: string;
   }>(
     `SELECT
        u.id AS manager_id,
        u.full_name AS manager_name,
        COALESCE(handled.dialogs_handled, 0)::text AS dialogs_handled,
-       COALESCE(msg.outgoing_messages, 0)::text AS outgoing_messages
+       COALESCE(msg.outgoing_messages, 0)::text AS outgoing_messages,
+       COALESCE(deals.won_deals, 0)::text AS won_deals,
+       COALESCE(deals.lost_deals, 0)::text AS lost_deals,
+       COALESCE(deals.won_amount, 0)::text AS won_amount,
+       COALESCE(frt.avg_minutes, 0)::text AS avg_first_response_minutes,
+       COALESCE(sla.overdue_sla_count, 0)::text AS overdue_sla_count
      FROM users u
      LEFT JOIN (
        SELECT c.assigned_manager_id AS manager_id, COUNT(*)::int AS dialogs_handled
@@ -878,10 +888,85 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
          AND ${messageRangeCondition}
        GROUP BY m.author_user_id
      ) msg ON msg.manager_id = u.id
+     LEFT JOIN (
+       SELECT COALESCE(d.owner_user_id, c.assigned_manager_id) AS manager_id,
+              COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'won')::int AS won_deals,
+              COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'lost')::int AS lost_deals,
+              COALESCE(SUM(d.amount) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'won'), 0)::float8 AS won_amount
+       FROM deals d
+       JOIN conversations c ON c.id = d.conversation_id
+       LEFT JOIN pipeline_stages ps
+         ON ps.workspace_id = d.workspace_id
+        AND lower(ps.name) = lower(d.stage)
+       WHERE d.workspace_id = $1
+         AND ${dealUpdatedRangeCondition}
+         AND COALESCE(d.owner_user_id, c.assigned_manager_id) IS NOT NULL
+       GROUP BY 1
+     ) deals ON deals.manager_id = u.id
+     LEFT JOIN (
+       WITH first_incoming AS (
+         SELECT conversation_id, MIN(created_at) AS in_time
+         FROM messages
+         WHERE workspace_id = $1 AND direction = 'incoming'
+         GROUP BY conversation_id
+       ), first_outgoing AS (
+         SELECT m.conversation_id, MIN(m.created_at) AS out_time
+         FROM messages m
+         JOIN first_incoming fi ON fi.conversation_id = m.conversation_id
+         WHERE m.workspace_id = $1 AND m.direction = 'outgoing' AND m.created_at > fi.in_time
+         GROUP BY m.conversation_id
+       )
+       SELECT c.assigned_manager_id AS manager_id,
+              COALESCE(ROUND(AVG(EXTRACT(EPOCH FROM (fo.out_time - fi.in_time)) / 60)), 0)::int AS avg_minutes
+       FROM conversations c
+       JOIN first_incoming fi ON fi.conversation_id = c.id
+       JOIN first_outgoing fo ON fo.conversation_id = c.id
+       WHERE c.workspace_id = $1
+         AND c.assigned_manager_id IS NOT NULL
+       GROUP BY c.assigned_manager_id
+     ) frt ON frt.manager_id = u.id
+     LEFT JOIN (
+       SELECT c.assigned_manager_id AS manager_id, COUNT(*)::int AS overdue_sla_count
+       FROM conversations c
+       WHERE c.workspace_id = $1
+         AND c.assigned_manager_id IS NOT NULL
+         AND c.status = 'open'
+         AND c.first_response_due_at IS NOT NULL
+         AND c.first_response_due_at < now()
+         AND EXISTS (
+           SELECT 1
+           FROM messages mi
+           WHERE mi.conversation_id = c.id
+             AND mi.direction = 'incoming'
+             AND mi.created_at > COALESCE((
+               SELECT MAX(mo.created_at)
+               FROM messages mo
+               WHERE mo.conversation_id = c.id
+                 AND mo.direction = 'outgoing'
+             ), '1970-01-01'::timestamp)
+         )
+       GROUP BY c.assigned_manager_id
+     ) sla ON sla.manager_id = u.id
      WHERE u.workspace_id = $1
        AND u.role = 'manager'
        AND u.is_active = true
-     ORDER BY COALESCE(handled.dialogs_handled, 0) DESC, COALESCE(msg.outgoing_messages, 0) DESC, u.full_name ASC`,
+     ORDER BY COALESCE(deals.won_amount, 0) DESC,
+              COALESCE(handled.dialogs_handled, 0) DESC,
+              u.full_name ASC`,
+    rangeParams
+  );
+
+  const [leadsInPeriod] = await query<{ count: string }>(
+    hasCustomRange
+      ? `SELECT COUNT(*)::text AS count
+         FROM conversations
+         WHERE workspace_id = $1
+           AND created_at >= $2::date
+           AND created_at < ($3::date + interval '1 day')`
+      : `SELECT COUNT(*)::text AS count
+         FROM conversations
+         WHERE workspace_id = $1
+           AND created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')`,
     rangeParams
   );
 
@@ -989,7 +1074,14 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
   );
 
   const dailyRows = hasCustomRange
-    ? await query<{ day: string; messages: string; dialogs: string; closed: string }>(
+    ? await query<{
+        day: string;
+        messages: string;
+        dialogs: string;
+        closed: string;
+        won: string;
+        lost: string;
+      }>(
         `WITH days AS (
            SELECT generate_series($2::date, $3::date, interval '1 day') AS day
          ),
@@ -1010,19 +1102,42 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
            FROM conversations
            WHERE workspace_id = $1 AND status = 'closed' AND updated_at >= $2::date AND updated_at < ($3::date + interval '1 day')
            GROUP BY 1
+         ),
+         deals_by_day AS (
+           SELECT date_trunc('day', d.updated_at) AS day,
+                  COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'won')::int AS won,
+                  COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'lost')::int AS lost
+           FROM deals d
+           LEFT JOIN pipeline_stages ps
+             ON ps.workspace_id = d.workspace_id
+            AND lower(ps.name) = lower(d.stage)
+           WHERE d.workspace_id = $1
+             AND d.updated_at >= $2::date
+             AND d.updated_at < ($3::date + interval '1 day')
+           GROUP BY 1
          )
          SELECT to_char(days.day, 'DD.MM') AS day,
                 COALESCE(msg.cnt, 0)::text AS messages,
                 COALESCE(conv.cnt, 0)::text AS dialogs,
-                COALESCE(cls.cnt, 0)::text AS closed
+                COALESCE(cls.cnt, 0)::text AS closed,
+                COALESCE(deals_by_day.won, 0)::text AS won,
+                COALESCE(deals_by_day.lost, 0)::text AS lost
          FROM days
          LEFT JOIN msg ON msg.day = days.day
          LEFT JOIN conv ON conv.day = days.day
          LEFT JOIN cls ON cls.day = days.day
+         LEFT JOIN deals_by_day ON deals_by_day.day = days.day
          ORDER BY days.day ASC`,
         [workspaceId, rawFrom, rawTo]
       )
-    : await query<{ day: string; messages: string; dialogs: string; closed: string }>(
+    : await query<{
+        day: string;
+        messages: string;
+        dialogs: string;
+        closed: string;
+        won: string;
+        lost: string;
+      }>(
         `WITH days AS (
            SELECT generate_series(
              date_trunc('day', now()) - (($2::int - 1) * interval '1 day'),
@@ -1047,18 +1162,189 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
            FROM conversations
            WHERE workspace_id = $1 AND status = 'closed' AND updated_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
            GROUP BY 1
+         ),
+         deals_by_day AS (
+           SELECT date_trunc('day', d.updated_at) AS day,
+                  COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'won')::int AS won,
+                  COUNT(*) FILTER (WHERE COALESCE(ps.outcome, 'open') = 'lost')::int AS lost
+           FROM deals d
+           LEFT JOIN pipeline_stages ps
+             ON ps.workspace_id = d.workspace_id
+            AND lower(ps.name) = lower(d.stage)
+           WHERE d.workspace_id = $1
+             AND d.updated_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
+           GROUP BY 1
          )
          SELECT to_char(days.day, 'DD.MM') AS day,
                 COALESCE(msg.cnt, 0)::text AS messages,
                 COALESCE(conv.cnt, 0)::text AS dialogs,
-                COALESCE(cls.cnt, 0)::text AS closed
+                COALESCE(cls.cnt, 0)::text AS closed,
+                COALESCE(deals_by_day.won, 0)::text AS won,
+                COALESCE(deals_by_day.lost, 0)::text AS lost
          FROM days
          LEFT JOIN msg ON msg.day = days.day
          LEFT JOIN conv ON conv.day = days.day
          LEFT JOIN cls ON cls.day = days.day
+         LEFT JOIN deals_by_day ON deals_by_day.day = days.day
          ORDER BY days.day ASC`,
         [workspaceId, rangeDays]
       );
+
+  const managersLoadRows = hasCustomRange
+    ? await query<{
+        day: string;
+        manager_id: string;
+        manager_name: string;
+        dialogs_handled: string;
+        outgoing_messages: string;
+      }>(
+        `WITH days AS (
+           SELECT generate_series($2::date, $3::date, interval '1 day') AS day
+         ),
+         managers AS (
+           SELECT id, full_name
+           FROM users
+           WHERE workspace_id = $1 AND role = 'manager' AND is_active = true
+         ),
+         grid AS (
+           SELECT days.day, managers.id AS manager_id, managers.full_name AS manager_name
+           FROM days CROSS JOIN managers
+         ),
+         handled AS (
+           SELECT date_trunc('day', c.updated_at) AS day,
+                  c.assigned_manager_id AS manager_id,
+                  COUNT(*)::int AS cnt
+           FROM conversations c
+           WHERE c.workspace_id = $1
+             AND c.assigned_manager_id IS NOT NULL
+             AND c.updated_at >= $2::date
+             AND c.updated_at < ($3::date + interval '1 day')
+           GROUP BY 1, 2
+         ),
+         outgoing AS (
+           SELECT date_trunc('day', m.created_at) AS day,
+                  m.author_user_id AS manager_id,
+                  COUNT(*)::int AS cnt
+           FROM messages m
+           WHERE m.workspace_id = $1
+             AND m.direction = 'outgoing'
+             AND m.author_user_id IS NOT NULL
+             AND m.created_at >= $2::date
+             AND m.created_at < ($3::date + interval '1 day')
+           GROUP BY 1, 2
+         )
+         SELECT to_char(grid.day, 'DD.MM') AS day,
+                grid.manager_id::text AS manager_id,
+                grid.manager_name,
+                COALESCE(handled.cnt, 0)::text AS dialogs_handled,
+                COALESCE(outgoing.cnt, 0)::text AS outgoing_messages
+         FROM grid
+         LEFT JOIN handled ON handled.day = grid.day AND handled.manager_id = grid.manager_id
+         LEFT JOIN outgoing ON outgoing.day = grid.day AND outgoing.manager_id = grid.manager_id
+         ORDER BY grid.day ASC, grid.manager_name ASC`,
+        [workspaceId, rawFrom, rawTo]
+      )
+    : await query<{
+        day: string;
+        manager_id: string;
+        manager_name: string;
+        dialogs_handled: string;
+        outgoing_messages: string;
+      }>(
+        `WITH days AS (
+           SELECT generate_series(
+             date_trunc('day', now()) - (($2::int - 1) * interval '1 day'),
+             date_trunc('day', now()),
+             interval '1 day'
+           ) AS day
+         ),
+         managers AS (
+           SELECT id, full_name
+           FROM users
+           WHERE workspace_id = $1 AND role = 'manager' AND is_active = true
+         ),
+         grid AS (
+           SELECT days.day, managers.id AS manager_id, managers.full_name AS manager_name
+           FROM days CROSS JOIN managers
+         ),
+         handled AS (
+           SELECT date_trunc('day', c.updated_at) AS day,
+                  c.assigned_manager_id AS manager_id,
+                  COUNT(*)::int AS cnt
+           FROM conversations c
+           WHERE c.workspace_id = $1
+             AND c.assigned_manager_id IS NOT NULL
+             AND c.updated_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
+           GROUP BY 1, 2
+         ),
+         outgoing AS (
+           SELECT date_trunc('day', m.created_at) AS day,
+                  m.author_user_id AS manager_id,
+                  COUNT(*)::int AS cnt
+           FROM messages m
+           WHERE m.workspace_id = $1
+             AND m.direction = 'outgoing'
+             AND m.author_user_id IS NOT NULL
+             AND m.created_at >= date_trunc('day', now()) - (($2::int - 1) * interval '1 day')
+           GROUP BY 1, 2
+         )
+         SELECT to_char(grid.day, 'DD.MM') AS day,
+                grid.manager_id::text AS manager_id,
+                grid.manager_name,
+                COALESCE(handled.cnt, 0)::text AS dialogs_handled,
+                COALESCE(outgoing.cnt, 0)::text AS outgoing_messages
+         FROM grid
+         LEFT JOIN handled ON handled.day = grid.day AND handled.manager_id = grid.manager_id
+         LEFT JOIN outgoing ON outgoing.day = grid.day AND outgoing.manager_id = grid.manager_id
+         ORDER BY grid.day ASC, grid.manager_name ASC`,
+        [workspaceId, rangeDays]
+      );
+
+  const dailySeries = dailyRows.map((row) => {
+    const won = Number(row.won || 0);
+    const lost = Number(row.lost || 0);
+    const decided = won + lost;
+    return {
+      day: row.day,
+      messages: Number(row.messages || 0),
+      dialogs: Number(row.dialogs || 0),
+      closed: Number(row.closed || 0),
+      won,
+      lost,
+      winRate: decided > 0 ? Math.round((won / decided) * 100) : 0
+    };
+  });
+
+  const weeklyMap = new Map<
+    string,
+    { week: string; messages: number; dialogs: number; closed: number; won: number; lost: number }
+  >();
+  for (let index = 0; index < dailySeries.length; index += 1) {
+    const row = dailySeries[index];
+    const weekIndex = Math.floor(index / 7) + 1;
+    const key = `W${weekIndex}`;
+    const current = weeklyMap.get(key) || {
+      week: key,
+      messages: 0,
+      dialogs: 0,
+      closed: 0,
+      won: 0,
+      lost: 0
+    };
+    current.messages += row.messages;
+    current.dialogs += row.dialogs;
+    current.closed += row.closed;
+    current.won += row.won;
+    current.lost += row.lost;
+    weeklyMap.set(key, current);
+  }
+  const weeklySeries = Array.from(weeklyMap.values()).map((row) => {
+    const decided = row.won + row.lost;
+    return {
+      ...row,
+      winRate: decided > 0 ? Math.round((row.won / decided) * 100) : 0
+    };
+  });
 
   res.json({
     sentMessages7d: Number(sent?.count || 0),
@@ -1090,12 +1376,82 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
             )
           : 0
     },
-    managersKpi: managersKpi.map((row) => ({
-      managerId: row.manager_id,
-      managerName: row.manager_name,
-      dialogsHandled: Number(row.dialogs_handled || 0),
-      outgoingMessages: Number(row.outgoing_messages || 0)
-    })),
+    managersKpi: (() => {
+      const mapped = managersKpi.map((row) => {
+        const wonDeals = Number(row.won_deals || 0);
+        const lostDeals = Number(row.lost_deals || 0);
+        const decided = wonDeals + lostDeals;
+        return {
+          managerId: row.manager_id,
+          managerName: row.manager_name,
+          dialogsHandled: Number(row.dialogs_handled || 0),
+          outgoingMessages: Number(row.outgoing_messages || 0),
+          wonDeals,
+          lostDeals,
+          wonAmount: Number(row.won_amount || 0),
+          winRate: decided > 0 ? Math.round((wonDeals / decided) * 100) : 0,
+          avgFirstResponseMinutes: Number(row.avg_first_response_minutes || 0),
+          overdueSlaCount: Number(row.overdue_sla_count || 0)
+        };
+      });
+      mapped.sort((a, b) => {
+        if (b.wonAmount !== a.wonAmount) {
+          return b.wonAmount - a.wonAmount;
+        }
+        if (b.winRate !== a.winRate) {
+          return b.winRate - a.winRate;
+        }
+        return a.avgFirstResponseMinutes - b.avgFirstResponseMinutes;
+      });
+      return mapped;
+    })(),
+    ownerKpi: {
+      revenueWon: Number(salesTotals?.won_amount || 0),
+      pipelineAmount: Number(salesTotals?.pipeline_amount || 0),
+      winRate:
+        Number(salesTotals?.won_deals || 0) + Number(salesTotals?.lost_deals || 0) > 0
+          ? Math.round(
+              (Number(salesTotals?.won_deals || 0) /
+                (Number(salesTotals?.won_deals || 0) + Number(salesTotals?.lost_deals || 0))) *
+                100
+            )
+          : 0,
+      avgFirstResponseMinutes: Number(frt?.avg_minutes || 0),
+      leads: Number(leadsInPeriod?.count || 0),
+      wonDeals: Number(salesTotals?.won_deals || 0),
+      conversion:
+        Number(leadsInPeriod?.count || 0) > 0
+          ? Math.round((Number(salesTotals?.won_deals || 0) / Number(leadsInPeriod?.count || 0)) * 1000) / 10
+          : 0
+    },
+    laggingManagers: (() => {
+      const mapped = managersKpi.map((row) => {
+        const wonDeals = Number(row.won_deals || 0);
+        const lostDeals = Number(row.lost_deals || 0);
+        const decided = wonDeals + lostDeals;
+        return {
+          managerId: row.manager_id,
+          managerName: row.manager_name,
+          wonAmount: Number(row.won_amount || 0),
+          winRate: decided > 0 ? Math.round((wonDeals / decided) * 100) : 0,
+          avgFirstResponseMinutes: Number(row.avg_first_response_minutes || 0),
+          overdueSlaCount: Number(row.overdue_sla_count || 0),
+          dialogsHandled: Number(row.dialogs_handled || 0)
+        };
+      });
+      if (!mapped.length) {
+        return [];
+      }
+      const byRevenue = [...mapped].sort((a, b) => a.wonAmount - b.wonAmount);
+      const cut = Math.max(1, Math.ceil(mapped.length * 0.3));
+      const totalRevenue = mapped.reduce((sum, row) => sum + row.wonAmount, 0);
+      if (totalRevenue <= 0) {
+        return [...mapped]
+          .sort((a, b) => a.winRate - b.winRate || b.avgFirstResponseMinutes - a.avgFirstResponseMinutes)
+          .slice(0, cut);
+      }
+      return byRevenue.slice(0, cut);
+    })(),
     stageKpi: stageKpi.map((row) => ({
       stageName: row.stage_name,
       dealsCount: Number(row.deals_count || 0),
@@ -1110,11 +1466,14 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
       avgDelayMinutes: Number(row.avg_delay_minutes || 0)
     })),
     periodDays: rangeDays,
-    dailySeries: dailyRows.map((row) => ({
+    dailySeries,
+    weeklySeries,
+    managersLoadSeries: managersLoadRows.map((row) => ({
       day: row.day,
-      messages: Number(row.messages || 0),
-      dialogs: Number(row.dialogs || 0),
-      closed: Number(row.closed || 0)
+      managerId: row.manager_id,
+      managerName: row.manager_name,
+      dialogsHandled: Number(row.dialogs_handled || 0),
+      outgoingMessages: Number(row.outgoing_messages || 0)
     }))
   });
 });

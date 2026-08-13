@@ -37,6 +37,7 @@ import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
 import { createStaffRouter } from "./modules/staff";
 import { createTelephonyRouter } from "./modules/integrations/telephony";
+import { createPresetsRouter } from "./modules/presets";
 
 const app = express();
 app.use(cors());
@@ -76,6 +77,7 @@ app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conver
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
 app.use("/api/staff", authMiddleware, requireWorkspaceMiddleware, createStaffRouter());
+app.use("/api/presets", authMiddleware, requireWorkspaceMiddleware, createPresetsRouter());
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
 app.use("/api/follow-up", authMiddleware, requireWorkspaceMiddleware, createFollowUpRouter());

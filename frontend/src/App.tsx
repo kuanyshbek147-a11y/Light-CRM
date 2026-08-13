@@ -58,7 +58,8 @@ import {
   updateKnowledgeArticleApi,
   removeScript,
   sendConversationTextMessage,
-  upsertScript
+  upsertScript,
+  loadScripts
 } from "./features/inbox/api/contentApi";
 import type {
   ContactCard,
@@ -86,6 +87,8 @@ import { MarketingPanel } from "./features/marketing/MarketingPanel";
 import { OpsPanel } from "./features/ops/OpsPanel";
 import { PlatformPanel } from "./features/platform/PlatformPanel";
 import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
+import { AnalyticsCharts } from "./features/analytics/AnalyticsCharts";
+import { OwnerDashboard } from "./features/analytics/OwnerDashboard";
 import { StaffChatPanel } from "./features/staff/StaffChatPanel";
 import { TelephonySoftphone } from "./features/telephony/TelephonySoftphone";
 import { requestTelephonyDial, type CallLogResult } from "./features/telephony/api";
@@ -165,6 +168,30 @@ type Metrics = {
     managerName: string;
     dialogsHandled: number;
     outgoingMessages: number;
+    wonDeals?: number;
+    lostDeals?: number;
+    wonAmount?: number;
+    winRate?: number;
+    avgFirstResponseMinutes?: number;
+    overdueSlaCount?: number;
+  }>;
+  ownerKpi?: {
+    revenueWon: number;
+    pipelineAmount: number;
+    winRate: number;
+    avgFirstResponseMinutes: number;
+    leads?: number;
+    wonDeals?: number;
+    conversion?: number;
+  };
+  laggingManagers?: Array<{
+    managerId: string;
+    managerName: string;
+    wonAmount?: number;
+    winRate?: number;
+    avgFirstResponseMinutes?: number;
+    overdueSlaCount?: number;
+    dialogsHandled?: number;
   }>;
   stageKpi?: Array<{
     stageName: string;
@@ -185,6 +212,25 @@ type Metrics = {
     messages: number;
     dialogs: number;
     closed: number;
+    won?: number;
+    lost?: number;
+    winRate?: number;
+  }>;
+  weeklySeries?: Array<{
+    week: string;
+    messages: number;
+    dialogs: number;
+    closed: number;
+    won: number;
+    lost: number;
+    winRate: number;
+  }>;
+  managersLoadSeries?: Array<{
+    day: string;
+    managerId: string;
+    managerName: string;
+    dialogsHandled: number;
+    outgoingMessages: number;
   }>;
 };
 
@@ -447,6 +493,12 @@ const UI = {
   requiredFieldsHint:
     "\u0418\u043c\u044f \u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d \u0432\u0441\u0435\u0433\u0434\u0430 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b. \u041e\u0441\u0442\u0430\u043b\u044c\u043d\u043e\u0435 \u2014 \u043f\u043e \u0432\u044b\u0431\u043e\u0440\u0443.",
   requiredFieldsSaved: "\u041e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b",
+  applyRePresetTitle: "Пресет: Недвижимость KZ",
+  applyRePresetHint:
+    "Этапы RU, 8 скриптов, обязательные город и повод обращения, черновик лендинга.",
+  applyRePresetButton: "Применить пресет",
+  applyRePresetDone: "Пресет «Недвижимость KZ» применён",
+  applyRePresetFailed: "Не удалось применить пресет",
   contactFieldsRequired: "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438",
   stageChangeBlockedFields: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043c\u0435\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f: \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
@@ -690,6 +742,7 @@ export function App(): JSX.Element {
   const [editingStageId, setEditingStageId] = useState<string>("");
   const [editingStageName, setEditingStageName] = useState<string>("");
   const [contactRequiredFields, setContactRequiredFields] = useState<ContactRequiredFieldKey[]>([]);
+  const [applyingRePreset, setApplyingRePreset] = useState(false);
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
   const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
   const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(true);
@@ -2737,6 +2790,40 @@ export function App(): JSX.Element {
     showToast(UI.requiredFieldsSaved, "success");
   }
 
+  async function applyRealEstateKzPreset(): Promise<void> {
+    if (!token || applyingRePreset) {
+      return;
+    }
+    if (!window.confirm(`${UI.applyRePresetTitle}\n\n${UI.applyRePresetHint}`)) {
+      return;
+    }
+    setApplyingRePreset(true);
+    setDealStageError("");
+    try {
+      const response = await fetch(`${API}/presets/real-estate-kz/apply`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ createLanding: true })
+      });
+      if (!response.ok) {
+        setDealStageError(UI.applyRePresetFailed);
+        showToast(UI.applyRePresetFailed, "error");
+        return;
+      }
+      await Promise.all([
+        loadDealStages(token, setDealStages),
+        loadContactRequiredFields(),
+        loadScripts(token, setScripts)
+      ]);
+      showToast(UI.applyRePresetDone, "success");
+    } finally {
+      setApplyingRePreset(false);
+    }
+  }
+
   function isContactFieldRequired(key: ContactRequiredFieldKey | "name" | "phone"): boolean {
     if (key === "name" || key === "phone") {
       return true;
@@ -3968,6 +4055,26 @@ export function App(): JSX.Element {
               </div>
             ) : null}
             <div className="analyticsGrid">
+              <div className="analyticsCard analyticsCardChart">
+                <OwnerDashboard
+                  ownerKpi={metrics?.ownerKpi || metrics?.salesKpi
+                    ? {
+                        revenueWon: metrics?.ownerKpi?.revenueWon ?? metrics?.salesKpi?.wonAmount ?? 0,
+                        pipelineAmount:
+                          metrics?.ownerKpi?.pipelineAmount ?? metrics?.salesKpi?.pipelineAmount ?? 0,
+                        winRate: metrics?.ownerKpi?.winRate ?? metrics?.salesKpi?.winRate ?? 0,
+                        avgFirstResponseMinutes:
+                          metrics?.ownerKpi?.avgFirstResponseMinutes ?? metrics?.firstResponseMinutes ?? 0,
+                        leads: metrics?.ownerKpi?.leads,
+                        wonDeals: metrics?.ownerKpi?.wonDeals ?? metrics?.salesKpi?.wonDeals,
+                        conversion: metrics?.ownerKpi?.conversion
+                      }
+                    : null}
+                  managersKpi={metrics?.managersKpi || []}
+                  laggingManagers={metrics?.laggingManagers || []}
+                  periodLabel={metricsPeriodLabel}
+                />
+              </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.totalConversations ?? 0}</div>
                 <div className="analyticsLabel">{UI.totalDialogs}</div>
@@ -4115,24 +4222,13 @@ export function App(): JSX.Element {
                 </div>
               </div>
               <div className="analyticsCard analyticsCardChart">
-                <div className="analyticsLabel">{`\u0414\u0438\u043d\u0430\u043c\u0438\u043a\u0430: ${metricsPeriodLabel}`}</div>
-                <div className="analyticsMiniCharts">
-                  <MiniBars
-                    title={UI.dynamicsMessages}
-                    values={(metrics?.dailySeries || []).map((item) => item.messages)}
-                    labels={(metrics?.dailySeries || []).map((item) => item.day)}
-                  />
-                  <MiniBars
-                    title={UI.dynamicsDialogs}
-                    values={(metrics?.dailySeries || []).map((item) => item.dialogs)}
-                    labels={(metrics?.dailySeries || []).map((item) => item.day)}
-                  />
-                  <MiniBars
-                    title={UI.dynamicsClosed}
-                    values={(metrics?.dailySeries || []).map((item) => item.closed)}
-                    labels={(metrics?.dailySeries || []).map((item) => item.day)}
-                  />
-                </div>
+                <div className="analyticsLabel">{`\u0413\u0440\u0430\u0444\u0438\u043a\u0438: ${metricsPeriodLabel}`}</div>
+                <AnalyticsCharts
+                  dailySeries={metrics?.dailySeries || []}
+                  weeklySeries={metrics?.weeklySeries || []}
+                  managersLoadSeries={metrics?.managersLoadSeries || []}
+                  periodLabel={metricsPeriodLabel}
+                />
               </div>
               <div className="analyticsCard analyticsCardWide">
                 <div className="analyticsLabel">{UI.snapshotsTitle}</div>
@@ -5226,6 +5322,21 @@ export function App(): JSX.Element {
                 </div>
               ))}
             </div>
+            {sessionUser?.role === "admin" ? (
+              <div className="requiredFieldsBlock" style={{ marginBottom: 14 }}>
+                <div className="sidebarTitle">{UI.applyRePresetTitle}</div>
+                <div className="sidebarHint">{UI.applyRePresetHint}</div>
+                <button
+                  type="button"
+                  className="primaryButton"
+                  style={{ marginTop: 10 }}
+                  disabled={applyingRePreset}
+                  onClick={() => void applyRealEstateKzPreset()}
+                >
+                  {applyingRePreset ? "…" : UI.applyRePresetButton}
+                </button>
+              </div>
+            ) : null}
             <div className="requiredFieldsBlock">
               <div className="sidebarTitle">{UI.requiredFieldsTitle}</div>
               <div className="sidebarHint">{UI.requiredFieldsHint}</div>
@@ -5576,28 +5687,4 @@ function formatStageLabel(stage: string, ui: typeof UI): string {
     default:
       return stage;
   }
-}
-
-function MiniBars({ title, values, labels }: { title: string; values: number[]; labels: string[] }): JSX.Element {
-  const maxValue = Math.max(1, ...values);
-  const pointsCount = Math.max(1, values.length);
-  return (
-    <div className="miniBars">
-      <div className="miniBarsTitle">{title}</div>
-      <div className="miniBarsTrack" style={{ gridTemplateColumns: `repeat(${pointsCount}, minmax(0, 1fr))` }}>
-        {values.map((value, index) => (
-          <div
-            key={`${title}-${labels[index] || index}`}
-            className="miniBar"
-            title={`${labels[index] || ""}: ${value}`}
-            style={{ height: `${Math.max(6, Math.round((value / maxValue) * 56))}px` }}
-          />
-        ))}
-      </div>
-      <div className="miniBarsFooter">
-        <span>{labels[0] || ""}</span>
-        <span>{labels[labels.length - 1] || ""}</span>
-      </div>
-    </div>
-  );
 }

@@ -1,13 +1,6 @@
 import bcrypt from "bcryptjs";
 import { query } from "../../db";
-
-const DEFAULT_PIPELINE_STAGES = [
-  { name: "new", position: 10, outcome: "open" },
-  { name: "qualified", position: 20, outcome: "open" },
-  { name: "proposal", position: 30, outcome: "open" },
-  { name: "won", position: 40, outcome: "won" },
-  { name: "lost", position: 50, outcome: "lost" }
-] as const;
+import { applyRealEstateKzPreset } from "../presets/real-estate-kz";
 
 export type WorkspaceUserInput = {
   fullName: string;
@@ -39,31 +32,12 @@ async function assertUniqueUser(email: string, login: string): Promise<void> {
 }
 
 async function seedWorkspaceDefaults(workspaceId: string): Promise<void> {
-  for (const stage of DEFAULT_PIPELINE_STAGES) {
-    await query(
-      `INSERT INTO pipeline_stages (workspace_id, name, position, outcome)
-       SELECT $1, $2, $3, $4
-       WHERE NOT EXISTS (
-         SELECT 1 FROM pipeline_stages
-         WHERE workspace_id = $1 AND lower(name) = lower($2)
-       )`,
-      [workspaceId, stage.name, stage.position, stage.outcome]
-    );
-  }
-
-  await query(
-    `INSERT INTO message_scripts (workspace_id, title, category, body)
-     SELECT $1, $2, $3, $4
-     WHERE NOT EXISTS (
-       SELECT 1 FROM message_scripts WHERE workspace_id = $1 AND title = $2
-     )`,
-    [
-      workspaceId,
-      "Первый ответ",
-      "Первичный контакт",
-      "Здравствуйте! Спасибо за ваше сообщение. Я изучу ваш запрос и скоро вернусь с дальнейшими шагами."
-    ]
-  );
+  // Ниша по умолчанию: Недвижимость KZ (этапы, скрипты, required fields, лендинг).
+  await applyRealEstateKzPreset({
+    workspaceId,
+    userId: null,
+    createLanding: true
+  });
 }
 
 export async function createWorkspaceUser(

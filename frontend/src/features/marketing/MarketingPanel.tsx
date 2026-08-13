@@ -25,6 +25,7 @@ import {
   generateMarketingText,
   generateMarketingWeek,
   loadCampaignReports,
+  loadMarketingRoiReport,
   loadMarketingAiStatus,
   loadMarketingCampaigns,
   loadMarketingPosts,
@@ -41,6 +42,7 @@ import {
   type CampaignReport,
   type MarketingCampaign,
   type MarketingContentPost,
+  type MarketingRoiReport,
   type MarketingSegment,
   type MarketingSegmentFilter,
   type MarketingSequence,
@@ -102,6 +104,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [posts, setPosts] = useState<MarketingContentPost[]>([]);
   const [reports, setReports] = useState<CampaignReport[]>([]);
+  const [roiReport, setRoiReport] = useState<MarketingRoiReport>({ ads: [], landings: [] });
   const [sequences, setSequences] = useState<MarketingSequence[]>([]);
   const [marketingTab, setMarketingTab] = useState<
     "plan" | "calendar" | "series" | "reports" | "ads" | "landings"
@@ -170,7 +173,8 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       nextSequences,
       nextAdsSettings,
       nextAdsAudiences,
-      nextAdsCampaigns
+      nextAdsCampaigns,
+      nextRoi
     ] = await Promise.all([
       loadMarketingSegments(authToken),
       loadMarketingCampaigns(authToken),
@@ -181,12 +185,14 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       loadMarketingSequences(authToken),
       loadAdsSettings(authToken),
       loadAdsAudiences(authToken),
-      loadAdsCampaigns(authToken)
+      loadAdsCampaigns(authToken),
+      loadMarketingRoiReport(authToken)
     ]);
     setSegments(nextSegments);
     setCampaigns(nextCampaigns);
     setPosts(nextPosts);
     setReports(nextReports);
+    setRoiReport(nextRoi);
     setSequences(nextSequences);
     setAdsAudiences(nextAdsAudiences);
     setAdsCampaigns(nextAdsCampaigns);
@@ -1123,7 +1129,67 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
       {marketingTab === "reports" ? (
         <div style={{ marginBottom: 24 }}>
-          <div className="scriptPanelTitle">Отчёты кампаний</div>
+          <div className="scriptPanelTitle">Реклама → деньги</div>
+          <div className="sidebarHint" style={{ marginBottom: 10 }}>
+            Сквозная связка: Meta spend / лендинги → лиды → won → CPA / ROAS
+          </div>
+          <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
+            <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1.4fr repeat(6, 0.7fr)" }}>
+              <span>Ads кампания</span>
+              <span>Spend</span>
+              <span>Clicks</span>
+              <span>Лиды</span>
+              <span>Won</span>
+              <span>Revenue</span>
+              <span>ROAS</span>
+            </div>
+            {roiReport.ads.map((row) => (
+              <div
+                key={row.campaign_id}
+                className="analyticsManagersRow"
+                style={{ gridTemplateColumns: "1.4fr repeat(6, 0.7fr)" }}
+              >
+                <span>{row.name}</span>
+                <strong>{row.spend}</strong>
+                <strong>{row.clicks}</strong>
+                <strong>{row.leads}</strong>
+                <strong>{row.won_deals}</strong>
+                <strong>{row.revenue}</strong>
+                <strong>{row.roas != null ? row.roas : "—"}</strong>
+              </div>
+            ))}
+            {roiReport.ads.length ? null : (
+              <div className="analyticsManagersEmpty">Нет Ads кампаний</div>
+            )}
+          </div>
+
+          <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
+            <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1.4fr repeat(4, 0.7fr)" }}>
+              <span>Лендинг</span>
+              <span>Клики</span>
+              <span>Лиды</span>
+              <span>Won</span>
+              <span>Revenue</span>
+            </div>
+            {roiReport.landings.map((row) => (
+              <div
+                key={row.landing_id}
+                className="analyticsManagersRow"
+                style={{ gridTemplateColumns: "1.4fr repeat(4, 0.7fr)" }}
+              >
+                <span>{row.title}</span>
+                <strong>{row.clicks}</strong>
+                <strong>{row.leads}</strong>
+                <strong>{row.won_deals}</strong>
+                <strong>{row.revenue}</strong>
+              </div>
+            ))}
+            {roiReport.landings.length ? null : (
+              <div className="analyticsManagersEmpty">Нет лендингов</div>
+            )}
+          </div>
+
+          <div className="scriptPanelTitle">Отчёты кампаний (broadcast)</div>
           {reports.length ? (
             reports.map((report) => (
               <div key={report.campaign_id} className="taskCard">
@@ -1135,7 +1201,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               </div>
             ))
           ) : (
-            <div className="emptyScriptState">Отчётов пока нет</div>
+            <div className="emptyScriptState">Отчётов broadcast пока нет</div>
           )}
         </div>
       ) : null}

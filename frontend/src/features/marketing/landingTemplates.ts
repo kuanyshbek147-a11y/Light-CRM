@@ -3,7 +3,8 @@ export type LandingTemplateId =
   | "clinic"
   | "course"
   | "delivery"
-  | "auto";
+  | "auto"
+  | "real-estate";
 
 export type LandingTemplate = {
   id: LandingTemplateId;
@@ -22,6 +23,26 @@ export type LandingTemplate = {
 };
 
 export const LANDING_TEMPLATES: LandingTemplate[] = [
+  {
+    id: "real-estate",
+    label: "Недвижимость",
+    hint: "Агентства KZ: покупка, аренда, продажа",
+    aiTopic: "агентство недвижимости в Казахстане: заявки в WhatsApp на подбор и показ",
+    form: {
+      title: "Недвижимость KZ — лендинг",
+      brandName: "Агентство недвижимости",
+      headline: "Квартиры и дома под ваш бюджет — ответ в WhatsApp",
+      subheadline:
+        "Алматы, Астана и регионы. Подберём 3–5 вариантов, организуем показ и проведём до договора.",
+      body: [
+        "Работаем с покупкой, продажей и арендой. Сразу уточняем бюджет, район и срок — без лишних звонков.",
+        "Что получаете: короткая квалификация в чате, подборка объектов, показ и сопровождение сделки.",
+        "Напишите в WhatsApp город и что ищете — менеджер ответит в рабочее время и предложит ближайшие варианты."
+      ].join("\n\n"),
+      ctaLabel: "Написать в WhatsApp",
+      ctaPrefill: "Здравствуйте! Ищу недвижимость. Город: … Цель: покупка/аренда/продажа. Бюджет: …"
+    }
+  },
   {
     id: "services",
     label: "Услуги",

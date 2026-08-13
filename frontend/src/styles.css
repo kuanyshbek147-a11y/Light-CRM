@@ -1306,8 +1306,83 @@ button {
   grid-column: span 2;
 }
 
+.ownerDashboard {
+  display: grid;
+  gap: 14px;
+}
+
+.ownerKpiGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ownerKpiCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.ownerMetaLine {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.ownerLagging {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff7f7;
+}
+
+.ownerLaggingList {
+  display: grid;
+  gap: 6px;
+}
+
+.ownerLaggingRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ownerManagersHead,
+.ownerManagersRow {
+  grid-template-columns: 36px 1.4fr repeat(5, 0.8fr);
+}
+
+@media (max-width: 960px) {
+  .ownerKpiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .analyticsCardChart {
   grid-column: 1 / -1;
+}
+
+.analyticsChartsStack {
+  display: grid;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.analyticsChartCard {
+  display: grid;
+  gap: 8px;
+}
+
+.analyticsChartFrame {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 8px 4px 4px;
+  background: #fff;
 }
 
 .analyticsValue {

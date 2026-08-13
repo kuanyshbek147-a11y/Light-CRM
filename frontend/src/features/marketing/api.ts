@@ -323,6 +323,41 @@ export async function loadCampaignReports(token: string): Promise<CampaignReport
   return (await authJson<CampaignReport[]>(token, "/marketing/reports/campaigns")) || [];
 }
 
+export type MarketingRoiReport = {
+  landings: Array<{
+    landing_id: string;
+    title: string;
+    slug: string;
+    clicks: number;
+    leads: number;
+    won_deals: number;
+    revenue: number;
+    cpa: number | null;
+    roas: number | null;
+  }>;
+  ads: Array<{
+    campaign_id: string;
+    name: string;
+    status: string;
+    spend: number;
+    clicks: number;
+    leads: number;
+    won_deals: number;
+    revenue: number;
+    cpa: number | null;
+    roas: number | null;
+  }>;
+};
+
+export async function loadMarketingRoiReport(token: string): Promise<MarketingRoiReport> {
+  return (
+    (await authJson<MarketingRoiReport>(token, "/marketing/reports/roi")) || {
+      landings: [],
+      ads: []
+    }
+  );
+}
+
 export async function approveMarketingPost(
   token: string,
   postId: string
