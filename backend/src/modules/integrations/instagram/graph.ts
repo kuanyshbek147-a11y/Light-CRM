@@ -335,8 +335,33 @@ export async function publishInstagramFeedImage(params: {
     throw new Error(`Instagram media create failed: ${createResponse.status} ${message}`);
   }
 
+  const creationId = createPayload.id;
+  // Container must finish processing before media_publish.
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const statusUrl = new URL(`${host}/${encodeURIComponent(creationId)}`);
+    statusUrl.searchParams.set("fields", "status_code,status");
+    statusUrl.searchParams.set("access_token", params.accessToken);
+    const statusResponse = await fetch(statusUrl.toString());
+    const statusPayload = (await statusResponse.json()) as GraphErrorPayload & {
+      status_code?: string;
+      status?: string;
+    };
+    const code = String(statusPayload.status_code || "").toUpperCase();
+    if (code === "FINISHED" || code === "PUBLISHED") {
+      break;
+    }
+    if (code === "ERROR" || code === "EXPIRED") {
+      const message = statusPayload.error?.message || statusPayload.status || code;
+      throw new Error(`Instagram media processing failed: ${message}`);
+    }
+    if (attempt === 11) {
+      throw new Error(`Instagram media not ready (last status: ${code || "unknown"})`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
   const publishParams = new URLSearchParams({
-    creation_id: createPayload.id,
+    creation_id: creationId,
     access_token: params.accessToken
   });
   const publishResponse = await fetch(
