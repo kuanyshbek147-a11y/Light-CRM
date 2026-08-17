@@ -92,11 +92,15 @@ export async function publishPostToSocial(input: {
     if (!credentials?.pageAccessToken || !credentials.igUserId) {
       throw new Error("Instagram не подключён");
     }
+    // Instagram Login stores igUserId as pageId; Page tokens have distinct pageId.
+    const apiHost =
+      credentials.pageId && credentials.pageId !== credentials.igUserId ? "facebook" : "instagram";
     const mediaId = await publishInstagramFeedImage({
       igUserId: credentials.igUserId,
       accessToken: credentials.pageAccessToken,
       imageUrl,
-      caption: text
+      caption: text,
+      apiHost
     });
     return { externalId: mediaId, target: `instagram:${credentials.igUserId}` };
   }

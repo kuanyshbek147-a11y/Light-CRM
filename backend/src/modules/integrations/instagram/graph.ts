@@ -307,8 +307,14 @@ export async function publishInstagramFeedImage(params: {
   accessToken: string;
   imageUrl: string;
   caption: string;
+  /** Instagram Login tokens must use graph.instagram.com; Page tokens use graph.facebook.com */
+  apiHost?: "instagram" | "facebook";
 }): Promise<string> {
   const apiVersion = getInstagramApiVersion();
+  const host =
+    params.apiHost === "facebook"
+      ? `https://graph.facebook.com/${apiVersion}`
+      : `https://graph.instagram.com/${apiVersion}`;
   const createParams = new URLSearchParams({
     image_url: params.imageUrl,
     caption: params.caption.slice(0, 2200),
@@ -316,7 +322,7 @@ export async function publishInstagramFeedImage(params: {
   });
 
   const createResponse = await fetch(
-    `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(params.igUserId)}/media`,
+    `${host}/${encodeURIComponent(params.igUserId)}/media`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -334,7 +340,7 @@ export async function publishInstagramFeedImage(params: {
     access_token: params.accessToken
   });
   const publishResponse = await fetch(
-    `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(params.igUserId)}/media_publish`,
+    `${host}/${encodeURIComponent(params.igUserId)}/media_publish`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
