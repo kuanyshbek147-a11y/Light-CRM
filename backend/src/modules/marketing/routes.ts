@@ -16,7 +16,7 @@ import {
   isMarketingAiConfigured,
   plannedAtForWeekDay
 } from "./generate";
-import { getCampaignReports, getMarketingRoiReport } from "./reports";
+import { getCampaignReports, getMarketingInboundReport, getMarketingRoiReport } from "./reports";
 import {
   createSequence,
   listSequences,
@@ -535,6 +535,12 @@ export function createMarketingRouter(): Router {
   router.get("/reports/roi", async (req: AuthRequest, res) => {
     const workspaceId = req.user?.workspaceId || "";
     res.json(await getMarketingRoiReport(workspaceId));
+  });
+
+  router.get("/reports/inbound", async (req: AuthRequest, res) => {
+    const workspaceId = req.user?.workspaceId || "";
+    const daysRaw = typeof req.query.days === "string" ? Number(req.query.days) : 14;
+    res.json(await getMarketingInboundReport(workspaceId, daysRaw));
   });
 
   router.get("/sequences", async (req: AuthRequest, res) => {

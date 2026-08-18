@@ -26,6 +26,7 @@ import {
   generateMarketingWeek,
   loadCampaignReports,
   loadMarketingRoiReport,
+  loadMarketingInboundReport,
   loadMarketingAiStatus,
   loadMarketingCampaigns,
   loadMarketingPosts,
@@ -42,6 +43,7 @@ import {
   type CampaignReport,
   type MarketingCampaign,
   type MarketingContentPost,
+  type MarketingInboundReport,
   type MarketingRoiReport,
   type MarketingSegment,
   type MarketingSegmentFilter,
@@ -105,6 +107,20 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [posts, setPosts] = useState<MarketingContentPost[]>([]);
   const [reports, setReports] = useState<CampaignReport[]>([]);
   const [roiReport, setRoiReport] = useState<MarketingRoiReport>({ ads: [], landings: [] });
+  const [inboundReport, setInboundReport] = useState<MarketingInboundReport>({
+    periodDays: 14,
+    posts: { total: 0, published: 0, ready: 0, withError: 0, items: [] },
+    inbound: {
+      instagramDialogs: 0,
+      whatsappDialogs: 0,
+      telegramDialogs: 0,
+      demoRequests: 0,
+      dealsOpen: 0,
+      dealsWon: 0,
+      revenueWon: 0
+    },
+    demos: []
+  });
   const [sequences, setSequences] = useState<MarketingSequence[]>([]);
   const [marketingTab, setMarketingTab] = useState<
     "plan" | "calendar" | "series" | "reports" | "ads" | "landings"
@@ -174,7 +190,8 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       nextAdsSettings,
       nextAdsAudiences,
       nextAdsCampaigns,
-      nextRoi
+      nextRoi,
+      nextInbound
     ] = await Promise.all([
       loadMarketingSegments(authToken),
       loadMarketingCampaigns(authToken),
@@ -186,13 +203,15 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       loadAdsSettings(authToken),
       loadAdsAudiences(authToken),
       loadAdsCampaigns(authToken),
-      loadMarketingRoiReport(authToken)
+      loadMarketingRoiReport(authToken),
+      loadMarketingInboundReport(authToken, 14)
     ]);
     setSegments(nextSegments);
     setCampaigns(nextCampaigns);
     setPosts(nextPosts);
     setReports(nextReports);
     setRoiReport(nextRoi);
+    setInboundReport(nextInbound);
     setSequences(nextSequences);
     setAdsAudiences(nextAdsAudiences);
     setAdsCampaigns(nextAdsCampaigns);
@@ -1129,6 +1148,109 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
       {marketingTab === "reports" ? (
         <div style={{ marginBottom: 24 }}>
+          <div className="scriptPanelTitle">Воронка контента → демо</div>
+          <div className="sidebarHint" style={{ marginBottom: 10 }}>
+            За {inboundReport.periodDays} дн.: посты Instagram, входящие диалоги и заявки «ДЕМО / пилот»
+          </div>
+          <div className="ownerKpiGrid" style={{ marginBottom: 14 }}>
+            <div className="ownerKpiCard">
+              <div className="analyticsValue">{inboundReport.posts.published}</div>
+              <div className="analyticsLabel">IG опубликовано</div>
+            </div>
+            <div className="ownerKpiCard">
+              <div className="analyticsValue">{inboundReport.posts.ready}</div>
+              <div className="analyticsLabel">IG в очереди</div>
+            </div>
+            <div className="ownerKpiCard">
+              <div className="analyticsValue">{inboundReport.inbound.demoRequests}</div>
+              <div className="analyticsLabel">Заявки ДЕМО</div>
+            </div>
+            <div className="ownerKpiCard">
+              <div className="analyticsValue">
+                {inboundReport.inbound.instagramDialogs}/{inboundReport.inbound.whatsappDialogs}/
+                {inboundReport.inbound.telegramDialogs}
+              </div>
+              <div className="analyticsLabel">Диалоги IG / WA / TG</div>
+            </div>
+            <div className="ownerKpiCard">
+              <div className="analyticsValue">{inboundReport.inbound.dealsWon}</div>
+              <div className="analyticsLabel">Won по демо</div>
+            </div>
+            <div className="ownerKpiCard">
+              <div className="analyticsValue">
+                {new Intl.NumberFormat("ru-KZ").format(inboundReport.inbound.revenueWon)} ₸
+              </div>
+              <div className="analyticsLabel">Выручка по демо</div>
+            </div>
+          </div>
+
+          {inboundReport.posts.withError ? (
+            <div className="integrationsError" style={{ marginBottom: 12 }}>
+              Ошибки публикации IG: {inboundReport.posts.withError}
+            </div>
+          ) : null}
+
+          <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
+            <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1.6fr 0.7fr 1fr 1.2fr" }}>
+              <span>Пост IG</span>
+              <span>Статус</span>
+              <span>План / публикация</span>
+              <span>Ошибка</span>
+            </div>
+            {inboundReport.posts.items.map((row) => (
+              <div
+                key={row.id}
+                className="analyticsManagersRow"
+                style={{ gridTemplateColumns: "1.6fr 0.7fr 1fr 1.2fr" }}
+              >
+                <span>{row.title}</span>
+                <strong>{postStatusLabel[row.status as MarketingContentPost["status"]] || row.status}</strong>
+                <span>
+                  {row.published_at
+                    ? new Date(row.published_at).toLocaleString()
+                    : row.planned_at
+                      ? new Date(row.planned_at).toLocaleString()
+                      : "—"}
+                </span>
+                <span>{row.publish_error || "—"}</span>
+              </div>
+            ))}
+            {inboundReport.posts.items.length ? null : (
+              <div className="analyticsManagersEmpty">Нет Instagram-постов</div>
+            )}
+          </div>
+
+          <div className="scriptPanelTitle">Заявки ДЕМО</div>
+          <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
+            <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1fr 0.6fr 1.4fr 0.7fr" }}>
+              <span>Контакт</span>
+              <span>Канал</span>
+              <span>Сообщение</span>
+              <span>Сделка</span>
+            </div>
+            {inboundReport.demos.map((row) => (
+              <div
+                key={`${row.conversation_id}-${row.created_at}`}
+                className="analyticsManagersRow"
+                style={{ gridTemplateColumns: "1fr 0.6fr 1.4fr 0.7fr" }}
+              >
+                <span>{row.contact_name}</span>
+                <strong>{row.channel}</strong>
+                <span>{row.preview || "—"}</span>
+                <span>
+                  {row.deal_stage
+                    ? `${row.deal_stage}${row.deal_outcome && row.deal_outcome !== "open" ? ` (${row.deal_outcome})` : ""}`
+                    : "—"}
+                </span>
+              </div>
+            ))}
+            {inboundReport.demos.length ? null : (
+              <div className="analyticsManagersEmpty">
+                Пока нет входящих с текстом «демо / пилот / записаться»
+              </div>
+            )}
+          </div>
+
           <div className="scriptPanelTitle">Реклама → деньги</div>
           <div className="sidebarHint" style={{ marginBottom: 10 }}>
             Сквозная связка: Meta spend / лендинги → лиды → won → CPA / ROAS

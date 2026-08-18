@@ -358,6 +358,65 @@ export async function loadMarketingRoiReport(token: string): Promise<MarketingRo
   );
 }
 
+export type MarketingInboundReport = {
+  periodDays: number;
+  posts: {
+    total: number;
+    published: number;
+    ready: number;
+    withError: number;
+    items: Array<{
+      id: string;
+      title: string;
+      status: string;
+      planned_at: string | null;
+      published_at: string | null;
+      publish_error: string | null;
+      social_external_id: string | null;
+    }>;
+  };
+  inbound: {
+    instagramDialogs: number;
+    whatsappDialogs: number;
+    telegramDialogs: number;
+    demoRequests: number;
+    dealsOpen: number;
+    dealsWon: number;
+    revenueWon: number;
+  };
+  demos: Array<{
+    conversation_id: string;
+    contact_name: string;
+    channel: string;
+    preview: string;
+    created_at: string;
+    deal_stage: string | null;
+    deal_outcome: string | null;
+  }>;
+};
+
+export async function loadMarketingInboundReport(
+  token: string,
+  days = 14
+): Promise<MarketingInboundReport> {
+  return (
+    (await authJson<MarketingInboundReport>(token, `/marketing/reports/inbound?days=${days}`)) || {
+      periodDays: days,
+      posts: { total: 0, published: 0, ready: 0, withError: 0, items: [] },
+      inbound: {
+        instagramDialogs: 0,
+        whatsappDialogs: 0,
+        telegramDialogs: 0,
+        demoRequests: 0,
+        dealsOpen: 0,
+        dealsWon: 0,
+        revenueWon: 0
+      },
+      demos: []
+    }
+  );
+}
+
 export async function approveMarketingPost(
   token: string,
   postId: string
