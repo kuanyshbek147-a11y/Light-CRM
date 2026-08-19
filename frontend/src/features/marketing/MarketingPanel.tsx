@@ -208,15 +208,28 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     const nextAdsSettings = value(7, null as Awaited<ReturnType<typeof loadAdsSettings>>);
     const nextAdsAudiences = value(8, [] as Awaited<ReturnType<typeof loadAdsAudiences>>);
     const nextAdsCampaigns = value(9, [] as Awaited<ReturnType<typeof loadAdsCampaigns>>);
-    const nextRoi = value(10, null as Awaited<ReturnType<typeof loadMarketingRoiReport>>);
-    const nextInbound = value(11, null as Awaited<ReturnType<typeof loadMarketingInboundReport>>);
+    const nextRoi = value(10, { ads: [], landings: [] } as MarketingRoiReport);
+    const nextInbound = value(11, {
+      periodDays: 14,
+      posts: { total: 0, published: 0, ready: 0, withError: 0, items: [] },
+      inbound: {
+        instagramDialogs: 0,
+        whatsappDialogs: 0,
+        telegramDialogs: 0,
+        demoRequests: 0,
+        dealsOpen: 0,
+        dealsWon: 0,
+        revenueWon: 0
+      },
+      demos: []
+    } as MarketingInboundReport);
 
     setSegments(nextSegments);
     setCampaigns(nextCampaigns);
     setPosts(nextPosts);
     setReports(nextReports);
-    if (nextRoi) setRoiReport(nextRoi);
-    if (nextInbound) setInboundReport(nextInbound);
+    setRoiReport(nextRoi);
+    setInboundReport(nextInbound);
     setSequences(nextSequences);
     setAdsAudiences(nextAdsAudiences);
     setAdsCampaigns(nextAdsCampaigns);
