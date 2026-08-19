@@ -125,6 +125,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [marketingTab, setMarketingTab] = useState<
     "plan" | "calendar" | "series" | "reports" | "ads" | "landings"
   >("plan");
+  const [selectedCalendarDayKey, setSelectedCalendarDayKey] = useState<string | null>(null);
   const [campaignTemplateName, setCampaignTemplateName] = useState("");
   const [seqName, setSeqName] = useState("Серия 0/3/7");
   const [seqStep0, setSeqStep0] = useState("Здравствуйте, {{name}}! Это первое касание.");
@@ -810,7 +811,12 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     return `${year}-${month}-${day}`;
   }
 
-  function weekCalendarDays(): Array<{ key: string; label: string; items: MarketingContentPost[] }> {
+  function weekCalendarDays(): Array<{
+    key: string;
+    label: string;
+    fullLabel: string;
+    items: MarketingContentPost[];
+  }> {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const dayNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
@@ -819,17 +825,36 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       day.setDate(start.getDate() + index);
       // Use local calendar date — toISOString() shifts the day in UTC+ timezones.
       const key = localDateKey(day);
-      const items = posts.filter((post) => {
-        if (!post.planned_at) return false;
-        return localDateKey(new Date(post.planned_at)) === key;
-      });
+      const items = posts
+        .filter((post) => {
+          if (!post.planned_at) return false;
+          return localDateKey(new Date(post.planned_at)) === key;
+        })
+        .sort((a, b) => {
+          const aTime = a.planned_at ? new Date(a.planned_at).getTime() : 0;
+          const bTime = b.planned_at ? new Date(b.planned_at).getTime() : 0;
+          return aTime - bTime;
+        });
       return {
         key,
         label: `${dayNames[day.getDay()]} ${day.getDate()}.${day.getMonth() + 1}`,
+        fullLabel: day.toLocaleDateString("ru-RU", {
+          weekday: "long",
+          day: "numeric",
+          month: "long"
+        }),
         items
       };
     });
   }
+
+  const calendarDays = weekCalendarDays();
+  const activeCalendarDayKey =
+    selectedCalendarDayKey && calendarDays.some((day) => day.key === selectedCalendarDayKey)
+      ? selectedCalendarDayKey
+      : calendarDays[0]?.key || null;
+  const selectedCalendarDay =
+    calendarDays.find((day) => day.key === activeCalendarDayKey) || null;
 
   return (
     <section className="knowledgePage card">
@@ -1101,6 +1126,9 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       {marketingTab === "calendar" ? (
         <div style={{ marginBottom: 24 }}>
           <div className="scriptPanelTitle">Календарь на 7 дней</div>
+          <div className="sidebarHint" style={{ marginTop: 4 }}>
+            Нажмите на день, чтобы открыть детали постов и действий.
+          </div>
           <div
             style={{
               display: "grid",
@@ -1109,32 +1137,155 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               marginTop: 12
             }}
           >
-            {weekCalendarDays().map((day) => (
-              <div key={day.key} className="taskCard" style={{ minHeight: 120 }}>
-                <div className="taskCardTitle">{day.label}</div>
-                {day.items.length ? (
-                  day.items.map((post) => (
-                    <div key={post.id} className="sidebarHint" style={{ marginTop: 6 }}>
-                      {postStatusLabel[post.status]} · {post.title}
-                      {post.planned_at ? (
-                        <div style={{ opacity: 0.75 }}>
-                          {new Date(post.planned_at).toLocaleTimeString("ru-RU", {
+            {calendarDays.map((day) => {
+              const selected = day.key === activeCalendarDayKey;
+              return (
+                <button
+                  key={day.key}
+                  type="button"
+                  className={`taskCard ${selected ? "active" : ""}`}
+                  onClick={() => setSelectedCalendarDayKey(day.key)}
+                  style={{
+                    minHeight: 120,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    border: selected ? "1px solid #5b5ce9" : undefined,
+                    background: selected ? "rgba(91, 92, 233, 0.06)" : undefined
+                  }}
+                >
+                  <div className="taskCardTitle">{day.label}</div>
+                  <div className="sidebarHint" style={{ marginTop: 4 }}>
+                    {day.items.length
+                      ? `${day.items.length} ${day.items.length === 1 ? "пост" : day.items.length < 5 ? "поста" : "постов"}`
+                      : "Пусто"}
+                  </div>
+                  {day.items.length ? (
+                    day.items.slice(0, 2).map((post) => (
+                      <div key={post.id} className="sidebarHint" style={{ marginTop: 6 }}>
+                        {postStatusLabel[post.status]} · {post.title}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="sidebarHint" style={{ marginTop: 8 }}>
+                      Нет постов
+                    </div>
+                  )}
+                  {day.items.length > 2 ? (
+                    <div className="sidebarHint" style={{ marginTop: 6, opacity: 0.75 }}>
+                      + ещё {day.items.length - 2}
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedCalendarDay ? (
+            <div className="knowledgeFormCard" style={{ marginTop: 16 }}>
+              <div className="scriptPanelTitle" style={{ textTransform: "capitalize" }}>
+                {selectedCalendarDay.fullLabel}
+              </div>
+              <div className="sidebarHint" style={{ marginBottom: 12 }}>
+                {selectedCalendarDay.items.length
+                  ? `Запланировано: ${selectedCalendarDay.items.length}`
+                  : "На этот день в контент-плане ничего нет"}
+              </div>
+
+              {selectedCalendarDay.items.length ? (
+                selectedCalendarDay.items.map((post) => (
+                  <div key={post.id} className="taskCard" style={{ marginBottom: 12 }}>
+                    <div className="taskCardTitle">{post.title}</div>
+                    <div className="taskCardMeta">
+                      {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
+                      {post.planned_at
+                        ? ` · ${new Date(post.planned_at).toLocaleTimeString("ru-RU", {
                             hour: "2-digit",
                             minute: "2-digit"
-                          })}
-                          {post.auto_publish_social ? " · авто IG" : ""}
-                        </div>
-                      ) : null}
+                          })}`
+                        : ""}
+                      {post.auto_publish_social ? " · авто-соцсеть" : ""}
+                      {post.auto_broadcast ? " · авто-рассылка" : ""}
+                      {post.social_external_id ? " · уже опубликовано" : ""}
                     </div>
-                  ))
-                ) : (
-                  <div className="sidebarHint" style={{ marginTop: 8 }}>
-                    Нет постов
+                    {post.image_url ? (
+                      <img
+                        src={post.image_url}
+                        alt=""
+                        style={{
+                          marginTop: 10,
+                          width: "100%",
+                          maxWidth: 360,
+                          borderRadius: 10,
+                          objectFit: "cover",
+                          aspectRatio: "1 / 1"
+                        }}
+                      />
+                    ) : null}
+                    {post.publish_error ? (
+                      <div className="sidebarHint" style={{ marginTop: 8, color: "#b91c1c" }}>
+                        Ошибка: {post.publish_error}
+                      </div>
+                    ) : null}
+                    <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                      {post.body}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      <select
+                        className="filterInput"
+                        style={{ maxWidth: 160 }}
+                        value={post.status}
+                        disabled={busy}
+                        onChange={(event) =>
+                          void changePostStatus(
+                            post.id,
+                            event.target.value as MarketingContentPost["status"]
+                          )
+                        }
+                      >
+                        <option value="idea">Идея</option>
+                        <option value="draft">Черновик</option>
+                        <option value="ready">Готов</option>
+                        <option value="published">Опубликован</option>
+                        <option value="cancelled">Отменён</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="dialogActionBtn primary"
+                        disabled={busy}
+                        onClick={() => void publishSocialNow(post.id)}
+                      >
+                        В соцсеть сейчас
+                      </button>
+                      {post.status === "draft" || post.status === "idea" ? (
+                        <button
+                          type="button"
+                          className="dialogActionBtn primary"
+                          disabled={busy}
+                          onClick={() => void approvePost(post.id)}
+                        >
+                          Утвердить
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="dialogActionBtn"
+                        disabled={busy}
+                        onClick={() => {
+                          setMarketingTab("plan");
+                        }}
+                      >
+                        Открыть в плане
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                ))
+              ) : (
+                <div className="emptyScriptState">
+                  Добавьте пост во вкладке «План» с датой на этот день.
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
