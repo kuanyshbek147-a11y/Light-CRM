@@ -179,20 +179,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [adsLinkUrl, setAdsLinkUrl] = useState("");
 
   const refresh = useCallback(async () => {
-    const [
-      nextSegments,
-      nextCampaigns,
-      nextPosts,
-      nextSocial,
-      nextAi,
-      nextReports,
-      nextSequences,
-      nextAdsSettings,
-      nextAdsAudiences,
-      nextAdsCampaigns,
-      nextRoi,
-      nextInbound
-    ] = await Promise.all([
+    const settled = await Promise.allSettled([
       loadMarketingSegments(authToken),
       loadMarketingCampaigns(authToken),
       loadMarketingPosts(authToken),
@@ -206,12 +193,30 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       loadMarketingRoiReport(authToken),
       loadMarketingInboundReport(authToken, 14)
     ]);
+    const value = <T,>(index: number, fallback: T): T => {
+      const item = settled[index];
+      return item?.status === "fulfilled" ? (item.value as T) : fallback;
+    };
+
+    const nextSegments = value(0, [] as Awaited<ReturnType<typeof loadMarketingSegments>>);
+    const nextCampaigns = value(1, [] as Awaited<ReturnType<typeof loadMarketingCampaigns>>);
+    const nextPosts = value(2, [] as Awaited<ReturnType<typeof loadMarketingPosts>>);
+    const nextSocial = value(3, null as Awaited<ReturnType<typeof loadMarketingSocialSettings>>);
+    const nextAi = value(4, null as Awaited<ReturnType<typeof loadMarketingAiStatus>>);
+    const nextReports = value(5, [] as Awaited<ReturnType<typeof loadCampaignReports>>);
+    const nextSequences = value(6, [] as Awaited<ReturnType<typeof loadMarketingSequences>>);
+    const nextAdsSettings = value(7, null as Awaited<ReturnType<typeof loadAdsSettings>>);
+    const nextAdsAudiences = value(8, [] as Awaited<ReturnType<typeof loadAdsAudiences>>);
+    const nextAdsCampaigns = value(9, [] as Awaited<ReturnType<typeof loadAdsCampaigns>>);
+    const nextRoi = value(10, null as Awaited<ReturnType<typeof loadMarketingRoiReport>>);
+    const nextInbound = value(11, null as Awaited<ReturnType<typeof loadMarketingInboundReport>>);
+
     setSegments(nextSegments);
     setCampaigns(nextCampaigns);
     setPosts(nextPosts);
     setReports(nextReports);
-    setRoiReport(nextRoi);
-    setInboundReport(nextInbound);
+    if (nextRoi) setRoiReport(nextRoi);
+    if (nextInbound) setInboundReport(nextInbound);
     setSequences(nextSequences);
     setAdsAudiences(nextAdsAudiences);
     setAdsCampaigns(nextAdsCampaigns);
@@ -785,6 +790,13 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     }
   }
 
+  function localDateKey(value: Date): string {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   function weekCalendarDays(): Array<{ key: string; label: string; items: MarketingContentPost[] }> {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -792,10 +804,11 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     return Array.from({ length: 7 }).map((_, index) => {
       const day = new Date(start);
       day.setDate(start.getDate() + index);
-      const key = day.toISOString().slice(0, 10);
+      // Use local calendar date — toISOString() shifts the day in UTC+ timezones.
+      const key = localDateKey(day);
       const items = posts.filter((post) => {
         if (!post.planned_at) return false;
-        return new Date(post.planned_at).toISOString().slice(0, 10) === key;
+        return localDateKey(new Date(post.planned_at)) === key;
       });
       return {
         key,
@@ -1090,11 +1103,20 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                   day.items.map((post) => (
                     <div key={post.id} className="sidebarHint" style={{ marginTop: 6 }}>
                       {postStatusLabel[post.status]} · {post.title}
+                      {post.planned_at ? (
+                        <div style={{ opacity: 0.75 }}>
+                          {new Date(post.planned_at).toLocaleTimeString("ru-RU", {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                          {post.auto_publish_social ? " · авто IG" : ""}
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (
                   <div className="sidebarHint" style={{ marginTop: 8 }}>
-                    —
+                    Нет постов
                   </div>
                 )}
               </div>
