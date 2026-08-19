@@ -857,7 +857,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     calendarDays.find((day) => day.key === activeCalendarDayKey) || null;
 
   return (
-    <section className="knowledgePage card">
+    <section className="knowledgePage card marketingPage">
       <div className="railHeader">
         <div>
           <div className="sidebarTitle">Маркетинг</div>
@@ -868,6 +868,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         </div>
       </div>
 
+      <div className="marketingPageBody">
       <div className="pipelineFilterButtons" style={{ marginBottom: 16, flexWrap: "wrap" }}>
         {(
           [
@@ -1181,7 +1182,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
           </div>
 
           {selectedCalendarDay ? (
-            <div className="knowledgeFormCard" style={{ marginTop: 16 }}>
+            <div className="knowledgeFormCard marketingDayDetail" style={{ marginTop: 16 }}>
               <div className="scriptPanelTitle" style={{ textTransform: "capitalize" }}>
                 {selectedCalendarDay.fullLabel}
               </div>
@@ -1193,43 +1194,43 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
               {selectedCalendarDay.items.length ? (
                 selectedCalendarDay.items.map((post) => (
-                  <div key={post.id} className="taskCard" style={{ marginBottom: 12 }}>
+                  <div key={post.id} className="taskCard marketingPostPreview" style={{ marginBottom: 16 }}>
                     <div className="taskCardTitle">{post.title}</div>
                     <div className="taskCardMeta">
                       {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
                       {post.planned_at
-                        ? ` · ${new Date(post.planned_at).toLocaleTimeString("ru-RU", {
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })}`
+                        ? ` · ${new Date(post.planned_at).toLocaleString("ru-RU")}`
                         : ""}
                       {post.auto_publish_social ? " · авто-соцсеть" : ""}
                       {post.auto_broadcast ? " · авто-рассылка" : ""}
                       {post.social_external_id ? " · уже опубликовано" : ""}
                     </div>
-                    {post.image_url ? (
-                      <img
-                        src={post.image_url}
-                        alt=""
-                        style={{
-                          marginTop: 10,
-                          width: "100%",
-                          maxWidth: 360,
-                          borderRadius: 10,
-                          objectFit: "cover",
-                          aspectRatio: "1 / 1"
-                        }}
-                      />
-                    ) : null}
+
+                    <div className="marketingPostPreviewLayout">
+                      {post.image_url ? (
+                        <div className="marketingPostPreviewMedia">
+                          <img src={post.image_url} alt={post.title} />
+                        </div>
+                      ) : (
+                        <div className="marketingPostPreviewMedia marketingPostPreviewMediaEmpty">
+                          Нет изображения
+                        </div>
+                      )}
+                      <div className="marketingPostPreviewText">
+                        <div className="sidebarHint" style={{ marginBottom: 6, fontWeight: 600 }}>
+                          Как будет выглядеть текст
+                        </div>
+                        <div className="marketingPostPreviewBody">{post.body}</div>
+                      </div>
+                    </div>
+
                     {post.publish_error ? (
                       <div className="sidebarHint" style={{ marginTop: 8, color: "#b91c1c" }}>
                         Ошибка: {post.publish_error}
                       </div>
                     ) : null}
-                    <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                      {post.body}
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                       <select
                         className="filterInput"
                         style={{ maxWidth: 160 }}
@@ -2005,6 +2006,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       </div>
         </>
       ) : null}
+      </div>
     </section>
   );
 }
