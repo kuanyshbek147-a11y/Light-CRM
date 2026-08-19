@@ -4,6 +4,7 @@
 
 | Файл | Назначение |
 |------|------------|
+| [instagram-inbound-plan.md](./instagram-inbound-plan.md) | Посты IG → демо → пилот → Kaspi (основной GTM сейчас) |
 | [offer-and-pricing.md](./offer-and-pricing.md) | Оффер «Пилот 14 дней» + цена 29 900 ₸/мес |
 | [one-pager.md](./one-pager.md) | Короткий текст клиенту |
 | [demo-script-and-objections.md](./demo-script-and-objections.md) | Демо 20 мин + 5 возражений |

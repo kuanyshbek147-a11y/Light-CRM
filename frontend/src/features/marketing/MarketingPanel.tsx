@@ -126,6 +126,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     "plan" | "calendar" | "series" | "reports" | "ads" | "landings"
   >("plan");
   const [selectedCalendarDayKey, setSelectedCalendarDayKey] = useState<string | null>(null);
+  const [calendarRangeDays, setCalendarRangeDays] = useState<7 | 30>(7);
   const [campaignTemplateName, setCampaignTemplateName] = useState("");
   const [seqName, setSeqName] = useState("Серия 0/3/7");
   const [seqStep0, setSeqStep0] = useState("Здравствуйте, {{name}}! Это первое касание.");
@@ -811,7 +812,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     return `${year}-${month}-${day}`;
   }
 
-  function weekCalendarDays(): Array<{
+  function buildCalendarDays(rangeDays: number): Array<{
     key: string;
     label: string;
     fullLabel: string;
@@ -820,7 +821,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const dayNames = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
-    return Array.from({ length: 7 }).map((_, index) => {
+    return Array.from({ length: rangeDays }).map((_, index) => {
       const day = new Date(start);
       day.setDate(start.getDate() + index);
       // Use local calendar date — toISOString() shifts the day in UTC+ timezones.
@@ -848,7 +849,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     });
   }
 
-  const calendarDays = weekCalendarDays();
+  const calendarDays = buildCalendarDays(calendarRangeDays);
   const activeCalendarDayKey =
     selectedCalendarDayKey && calendarDays.some((day) => day.key === selectedCalendarDayKey)
       ? selectedCalendarDayKey
@@ -1126,14 +1127,48 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
       {marketingTab === "calendar" ? (
         <div style={{ marginBottom: 24 }}>
-          <div className="scriptPanelTitle">Календарь на 7 дней</div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 4
+            }}
+          >
+            <div className="scriptPanelTitle" style={{ margin: 0 }}>
+              Календарь контента
+            </div>
+            <div className="pipelineFilterButtons" style={{ margin: 0 }}>
+              {(
+                [
+                  [7, "7 дней"],
+                  [30, "Месяц"]
+                ] as const
+              ).map(([days, label]) => (
+                <button
+                  key={days}
+                  type="button"
+                  className={`leftMenuButton ${calendarRangeDays === days ? "active" : ""}`}
+                  onClick={() => {
+                    setCalendarRangeDays(days);
+                    setSelectedCalendarDayKey(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="sidebarHint" style={{ marginTop: 4 }}>
+            Период: {calendarRangeDays === 7 ? "ближайшие 7 дней" : "ближайшие 30 дней"}.
             Нажмите на день, чтобы открыть детали постов и действий.
           </div>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gridTemplateColumns: `repeat(auto-fill, minmax(${calendarRangeDays === 30 ? "108px" : "140px"}, 1fr))`,
               gap: 10,
               marginTop: 12
             }}

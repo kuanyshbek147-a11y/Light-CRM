@@ -1,0 +1,12 @@
+---
+description: Never deploy or push to production without explicit user permission
+alwaysApply: true
+---
+
+# Deploy and production push
+
+- Do **not** `git push` to `main` / production remotes unless the user explicitly says to deploy or push.
+- Do **not** trigger Netlify, Render, or other production deploys unless the user explicitly approves.
+- After finishing code changes, say that work is ready locally and **ask**: «Задеплоить?» / «Пушить в main?»
+- Local commits are OK only when the user asked to commit; still do not push/deploy without a separate yes.
+- If the user already said «задеплой» / «пушь» / «давай на прод» for the current change set, that counts as permission for that set only.
