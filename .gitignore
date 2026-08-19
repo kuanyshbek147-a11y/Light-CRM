@@ -8,6 +8,7 @@ frontend/.env
 infra/.env
 infra/meta.secrets.env
 infra/platform.secrets.env
+infra/users.passwords.env
 npm-debug.log*
 backups/
 

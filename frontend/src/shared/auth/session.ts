@@ -50,10 +50,15 @@ export type SessionValidationResult =
   | { status: "invalid" }
   | { status: "unreachable" };
 
+const SESSION_VALIDATE_TIMEOUT_MS = 45_000;
+
 export async function validateStoredSession(token: string): Promise<SessionValidationResult> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), SESSION_VALIDATE_TIMEOUT_MS);
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal
     });
 
     if (response.status === 401 || response.status === 403) {
@@ -72,5 +77,7 @@ export async function validateStoredSession(token: string): Promise<SessionValid
     return { status: "valid", user: data.user };
   } catch {
     return { status: "unreachable" };
+  } finally {
+    window.clearTimeout(timer);
   }
 }

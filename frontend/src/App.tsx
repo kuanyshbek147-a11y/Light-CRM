@@ -310,7 +310,7 @@ const UI = {
   demoOperatorHint: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440: \u043b\u043e\u0433\u0438\u043d operator, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
   demoAdminHint: "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
   demoSuperAdminHint: "\u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
-  sessionRestoring: "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...",
+  sessionRestoring: "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u2026 \u043e\u0431\u044b\u0447\u043d\u043e 30\u201360 \u0441\u0435\u043a",
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
   workspaceMenu: "\u041c\u0435\u043d\u044e",
@@ -2909,6 +2909,9 @@ export function App(): JSX.Element {
         <div className="integrationsCard" style={{ maxWidth: 360, textAlign: "center" }}>
           <div className="integrationsTitle">Light CRM</div>
           <p className="integrationsHint">{UI.sessionRestoring}</p>
+          <p className="integrationsHint" style={{ marginTop: 8 }}>
+            Backend на бесплатном Render иногда засыпает — первый заход после паузы дольше обычного.
+          </p>
         </div>
       </main>
     );
