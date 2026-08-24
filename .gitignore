@@ -3,6 +3,10 @@ dist
 releases/*.apk
 mobile/node_modules
 mobile/android
+mobile/ios/App/Pods
+mobile/ios/App/App/public
+mobile/ios/**/xcuserdata
+mobile/ios/**/DerivedData
 .env
 frontend/.env
 infra/.env

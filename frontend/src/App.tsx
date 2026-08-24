@@ -21,6 +21,7 @@ import {
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { LandingWebChat } from "./features/landing/LandingWebChat";
+import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 import {
@@ -3057,6 +3058,7 @@ export function App(): JSX.Element {
                 <strong>Супер-админ:</strong> superadmin / superadmin123
               </p>
             </div>
+            <IosHomeScreenHint />
           </div>
         </aside>
         <LandingWebChat />

@@ -4,13 +4,17 @@
   "private": true,
   "scripts": {
     "cap:sync": "cap sync android",
+    "cap:sync:ios": "cap sync ios",
+    "cap:sync:all": "cap sync",
     "android:debug": "cd android && gradlew.bat assembleDebug",
-    "apk": "powershell -ExecutionPolicy Bypass -File scripts/apply-android-permissions.ps1 && powershell -ExecutionPolicy Bypass -File scripts/patch-android-gradle.ps1 && npm run cap:sync && npm run android:debug"
+    "apk": "powershell -ExecutionPolicy Bypass -File scripts/apply-android-permissions.ps1 && powershell -ExecutionPolicy Bypass -File scripts/patch-android-gradle.ps1 && npm run cap:sync && npm run android:debug",
+    "ios:prepare": "powershell -ExecutionPolicy Bypass -File scripts/apply-ios-permissions.ps1 && npm run cap:sync:ios"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
     "@capacitor/camera": "^6.1.2",
     "@capacitor/core": "^6.2.1",
+    "@capacitor/ios": "^6.2.1",
     "@capacitor/splash-screen": "^6.0.4",
     "@capacitor/status-bar": "^6.0.2",
     "@mozartec/capacitor-microphone": "^6.0.0"

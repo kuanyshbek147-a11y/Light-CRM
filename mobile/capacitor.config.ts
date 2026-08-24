@@ -5,11 +5,18 @@ const config: CapacitorConfig = {
   appName: "Light CRM",
   webDir: "www",
   server: {
+    // Live CRM shell (same as Android). Offline fallback is www/index.html.
     url: "https://light-crm-kz.netlify.app",
-    androidScheme: "https"
+    androidScheme: "https",
+    iosScheme: "https"
   },
   android: {
     allowMixedContent: false
+  },
+  ios: {
+    contentInset: "automatic",
+    preferredContentMode: "mobile",
+    scrollEnabled: true
   },
   plugins: {
     SplashScreen: {
