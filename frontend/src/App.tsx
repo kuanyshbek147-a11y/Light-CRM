@@ -19,6 +19,7 @@ import {
   type SessionUser
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
+import { InboxConnectChecklist } from "./features/inbox/InboxConnectChecklist";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { LandingWebChat } from "./features/landing/LandingWebChat";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
@@ -329,7 +330,7 @@ const UI = {
   shareToTeamDone: "\u0414\u0438\u0430\u043b\u043e\u0433 \u043f\u0435\u0440\u0435\u0434\u0430\u043d \u0432 \u041a\u043e\u043c\u0430\u043d\u0434\u0443",
   menuContacts: "\u041a\u043b\u0438\u0435\u043d\u0442\u044b",
   menuProfile: "\u041f\u0440\u043e\u0444\u0438\u043b\u044c",
-  sectionDialogsCenter: "Dialogs Center",
+  sectionDialogsCenter: "Центр диалогов",
   sectionFunnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   sectionTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
   sectionStaff: "\u041a\u043e\u043c\u0430\u043d\u0434\u0430",
@@ -342,21 +343,30 @@ const UI = {
   openTasksTab: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   doneTasksTab: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435",
   noTasks: "\u0417\u0430\u0434\u0430\u0447 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
-  followUpSettings: "\u0410\u0432\u0442\u043e follow-up",
+  followUpSettings: "Автонапоминания",
   followUpEnabled: "\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f",
   followUpOnStage: "\u041f\u0440\u0438 \u0441\u043c\u0435\u043d\u0435 \u044d\u0442\u0430\u043f\u0430 \u0441\u0434\u0435\u043b\u043a\u0438",
   followUpStageHours: "\u0427\u0435\u0440\u0435\u0437 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0430\u0441\u043e\u0432 \u043d\u0430\u043f\u043e\u043c\u043d\u0438\u0442\u044c (\u044d\u0442\u0430\u043f)",
   followUpOnSilence: "\u0415\u0441\u043b\u0438 \u0434\u043e\u043b\u0433\u043e \u043d\u0435\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0432 \u0434\u0438\u0430\u043b\u043e\u0433\u0435",
   followUpSilenceHours: "\u0422\u0438\u0448\u0438\u043d\u0430, \u0447\u0430\u0441\u043e\u0432",
   followUpSkipClosed: "\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u0432\u044b\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445/\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445 \u044d\u0442\u0430\u043f\u0430\u0445",
-  saveFollowUp: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c follow-up",
+  saveFollowUp: "Сохранить напоминания",
+  followUpSettingsHint:
+    "Система сама создаст задачу-напоминание: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
   mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
   dealNextStep: "\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433",
   saveDeal: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0434\u0435\u043b\u043a\u0443",
   salesConversion: "\u041a\u043e\u043d\u0432\u0435\u0440\u0441\u0438\u044f \u043f\u0440\u043e\u0434\u0430\u0436",
-  winRate: "Win rate",
+  winRate: "Доля побед",
+  noContacts: "Клиентов пока нет. Они появятся из диалогов WhatsApp, Telegram и других каналов.",
+  selectContactHint: "Выберите клиента слева, чтобы открыть карточку, сделки и историю.",
+  noSearchResults: "Ничего не найдено. Измените запрос или сбросьте фильтры.",
+  fabSearchFilters: "Поиск и фильтры",
+  fabNewTask: "Новая задача",
+  fabSearchClients: "Поиск клиентов",
+  slaFollowUpTitle: "Напоминания SLA",
   wonAmount: "\u0412\u044b\u0440\u0443\u0447\u043a\u0430",
   pipelineAmountLabel: "\u0412 \u0432\u043e\u0440\u043e\u043d\u043a\u0435",
   sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
@@ -636,6 +646,8 @@ export function App(): JSX.Element {
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const loginInputRef = useRef<HTMLInputElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const newTaskInputRef = useRef<HTMLInputElement | null>(null);
+  const contactsSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [token, setToken] = useState<string>(initialSession.token);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialSession.user);
   const [sessionRestoring, setSessionRestoring] = useState<boolean>(Boolean(initialSession.token));
@@ -643,6 +655,7 @@ export function App(): JSX.Element {
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<string>("");
   const [selectedConversationData, setSelectedConversationData] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1302,37 +1315,49 @@ export function App(): JSX.Element {
   }));
 
   async function hydrateWorkspace(authToken: string): Promise<void> {
-    const nextConversations = await loadConversations(authToken, "", filters, setConversations);
-    await loadQuickActionsMeta(authToken, setQuickManagers, setDealStages);
-    const requiredResponse = await fetch(`${API}/deals/contact-required-fields`, {
-      headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (requiredResponse.ok) {
-      const requiredData = (await requiredResponse.json()) as { fields?: string[] };
-      setContactRequiredFields(
-        (requiredData.fields || []).filter((key): key is ContactRequiredFieldKey =>
-          CONTACT_REQUIRED_FIELD_OPTIONS.includes(key as ContactRequiredFieldKey)
-        )
-      );
-    }
-    await refreshScripts({ token: authToken, setScripts });
-    await refreshKnowledge({ token: authToken, setKnowledgeArticles });
-    await loadDeals(authToken, setDeals);
-    await loadMetrics(authToken, setMetrics, metricsQuery);
-    await loadMetricSnapshots(authToken, setMetricSnapshots);
+    setConversationsLoading(true);
+    try {
+      const nextConversations = await loadConversations(authToken, "", filters, setConversations);
+      await loadQuickActionsMeta(authToken, setQuickManagers, setDealStages);
+      const requiredResponse = await fetch(`${API}/deals/contact-required-fields`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (requiredResponse.ok) {
+        const requiredData = (await requiredResponse.json()) as { fields?: string[] };
+        setContactRequiredFields(
+          (requiredData.fields || []).filter((key): key is ContactRequiredFieldKey =>
+            CONTACT_REQUIRED_FIELD_OPTIONS.includes(key as ContactRequiredFieldKey)
+          )
+        );
+      }
+      await refreshScripts({ token: authToken, setScripts });
+      await refreshKnowledge({ token: authToken, setKnowledgeArticles });
+      await loadDeals(authToken, setDeals);
+      await loadMetrics(authToken, setMetrics, metricsQuery);
+      await loadMetricSnapshots(authToken, setMetricSnapshots);
 
-    if (nextConversations[0]) {
-      setSelectedConversation(nextConversations[0].id);
-      setSelectedConversationData(nextConversations[0]);
-      await loadMessages(authToken, nextConversations[0].id, setMessages);
-      await loadContactCard(authToken, nextConversations[0].id, setContactCard);
+      if (nextConversations[0]) {
+        setSelectedConversation(nextConversations[0].id);
+        setSelectedConversationData(nextConversations[0]);
+        await loadMessages(authToken, nextConversations[0].id, setMessages);
+        await loadContactCard(authToken, nextConversations[0].id, setContactCard);
+      }
+    } finally {
+      setConversationsLoading(false);
     }
   }
 
-  async function login(): Promise<void> {
+  async function login(override?: { login?: string; password?: string }): Promise<void> {
     setLoginError("");
-    const loginValue = (loginInput || loginInputRef.current?.value || "").trim();
-    const passwordValue = passwordInput || passwordInputRef.current?.value || "";
+    const loginValue = (
+      override?.login !== undefined ? override.login : loginInput || loginInputRef.current?.value || ""
+    ).trim();
+    const passwordValue =
+      override?.password !== undefined
+        ? override.password
+        : passwordInput || passwordInputRef.current?.value || "";
+    if (override?.login !== undefined) setLoginInput(override.login);
+    if (override?.password !== undefined) setPasswordInput(override.password);
     if (!loginValue || !passwordValue) {
       setLoginError(UI.loginFailed);
       return;
@@ -1380,7 +1405,12 @@ export function App(): JSX.Element {
           setCurrentSection("platform");
           return;
         }
-        await hydrateWorkspace(data.token);
+        setConversationsLoading(true);
+        try {
+          await hydrateWorkspace(data.token);
+        } finally {
+          setConversationsLoading(false);
+        }
         return;
       } catch {
         if (attempt < maxAttempts) {
@@ -1629,6 +1659,26 @@ export function App(): JSX.Element {
     setSelectedContactId(contactId);
     setContactDetails(await loadCrmContactDetails(token, contactId));
     setCurrentSection("contacts");
+  }
+
+  async function createTaskFromSelectedChat(): Promise<void> {
+    if (!token || !selectedConversation || !selectedConversationData) {
+      showToast("Сначала выберите диалог", "error");
+      return;
+    }
+    const title = `Связаться: ${selectedConversationData.contact_name || "клиент"}`;
+    const created = await createCrmTask(token, {
+      title,
+      conversationId: selectedConversation
+    });
+    if (!created) {
+      showToast("Не удалось создать задачу", "error");
+      return;
+    }
+    showToast("Задача создана", "success");
+    if (currentSection === "tasks") {
+      await refreshCrmTasks();
+    }
   }
 
   async function submitNewCrmTask(): Promise<void> {
@@ -3048,15 +3098,34 @@ export function App(): JSX.Element {
             </div>
 
             <div className="demoCredentials demoCredentialsModern">
-              <p>
-                <strong>Оператор:</strong> логин operator, пароль demo123
-              </p>
-              <p>
-                <strong>Админ:</strong> логин admin или admin@demo.local, пароль demo123
-              </p>
-              <p>
-                <strong>Супер-админ:</strong> superadmin / superadmin123
-              </p>
+              <div className="demoQuickRow">
+                <button
+                  type="button"
+                  className="dialogActionBtn primary"
+                  onClick={() => void login({ login: "operator", password: "demo123" })}
+                >
+                  Войти как оператор
+                </button>
+                <button
+                  type="button"
+                  className="dialogActionBtn"
+                  onClick={() => void login({ login: "admin", password: "demo123" })}
+                >
+                  Как админ
+                </button>
+              </div>
+              <details className="demoCredentialsDetails">
+                <summary>Другие демо-аккаунты</summary>
+                <p>
+                  <strong>Оператор:</strong> operator / demo123
+                </p>
+                <p>
+                  <strong>Админ:</strong> admin / demo123
+                </p>
+                <p>
+                  <strong>Супер-админ:</strong> superadmin / superadmin123
+                </p>
+              </details>
             </div>
             <IosHomeScreenHint />
           </div>
@@ -3094,9 +3163,9 @@ export function App(): JSX.Element {
       ? "pipeline"
       : currentSection === "tasks"
         ? "tasks"
-        : currentSection === "profile"
-          ? "profile"
-          : "dialogs";
+        : currentSection === "dialogs"
+          ? "dialogs"
+          : "profile";
 
   function toggleFunnelKpiPanel(): void {
     if (currentSection !== "dialogs") {
@@ -3243,7 +3312,7 @@ export function App(): JSX.Element {
               !globalSearchResults.contacts.length &&
               !globalSearchResults.deals.length &&
               !globalSearchResults.tasks.length ? (
-                <div className="emptyScriptState">{UI.noMatchingScripts}</div>
+                <div className="emptyScriptState">{UI.noSearchResults}</div>
               ) : null}
             </div>
           ) : null}
@@ -3528,6 +3597,17 @@ export function App(): JSX.Element {
             onRemoveFilterPreset={removeFilterPreset}
             onSelectConversation={(id) => void onSelectConversation(id)}
             onOpenCustomerCard={(id) => void onOpenCustomerCardFromList(id)}
+            loading={conversationsLoading}
+            emptyContent={
+              token ? (
+                <InboxConnectChecklist
+                  authToken={token}
+                  visible={!conversationsLoading && conversations.length === 0}
+                  isAdmin={sessionUser?.role === "admin" || sessionUser?.role === "superadmin"}
+                  onOpenIntegrations={() => setCurrentSection("integrations")}
+                />
+              ) : null
+            }
           />
 
           <InboxThread
@@ -3588,6 +3668,10 @@ export function App(): JSX.Element {
             onOpenCustomerCard={() => setCustomerCardOpen(true)}
             onShareToTeam={() => void shareSelectedConversationToTeam()}
             shareToTeamLabel={UI.shareToTeamShort}
+            createTaskLabel="Задача"
+            openDealLabel="Сделка"
+            onCreateTaskFromChat={() => void createTaskFromSelectedChat()}
+            onOpenDealFromChat={() => setCustomerCardOpen(true)}
             onCallPhone={
               selectedConversationData?.phone
                 ? () => requestTelephonyDial(selectedConversationData.phone)
@@ -4301,6 +4385,7 @@ export function App(): JSX.Element {
             </div>
             <div className="scriptForm" style={{ marginBottom: 16 }}>
               <input
+                ref={newTaskInputRef}
                 className="filterInput"
                 placeholder={UI.newTaskPlaceholder}
                 value={newTaskTitle}
@@ -4349,7 +4434,7 @@ export function App(): JSX.Element {
             )}
             {openConversationsWithFollowUp.length ? (
               <div style={{ marginTop: 24 }}>
-                <div className="scriptPanelTitle">SLA follow-up</div>
+                <div className="scriptPanelTitle">{UI.slaFollowUpTitle}</div>
                 {openConversationsWithFollowUp.map((conversation) => (
                   <div key={conversation.id} className="taskCard">
                     <div className="taskCardTitle">SLA: {conversation.contact_name}</div>
@@ -4370,11 +4455,12 @@ export function App(): JSX.Element {
             ) : null}
 
             <div className="knowledgeFormCard" style={{ marginTop: 24 }}>
-              <div className="scriptPanelTitle">{UI.followUpSettings}</div>
-              <div className="sidebarHint" style={{ marginBottom: 12 }}>
-                Система сама создаст задачу-напоминание: после смены этапа или если в чате долго тишина.
-              </div>
-              <div className="scriptForm">
+              <details className="followUpDetails">
+                <summary className="followUpDetailsSummary">{UI.followUpSettings}</summary>
+                <div className="sidebarHint" style={{ margin: "10px 0 12px" }}>
+                  {UI.followUpSettingsHint}
+                </div>
+                <div className="scriptForm">
                 <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     type="checkbox"
@@ -4455,7 +4541,8 @@ export function App(): JSX.Element {
                 <button type="button" className="primaryButton" onClick={() => void saveFollowUpSettings()}>
                   {UI.saveFollowUp}
                 </button>
-              </div>
+                </div>
+              </details>
             </div>
           </section>
         ) : currentSection === "staff" ? (
@@ -4485,6 +4572,7 @@ export function App(): JSX.Element {
             <div className="knowledgePageGrid">
               <div className="knowledgeListCard">
                 <input
+                  ref={contactsSearchInputRef}
                   className="searchInput"
                   placeholder={UI.searchClients}
                   value={contactsSearch}
@@ -4514,7 +4602,7 @@ export function App(): JSX.Element {
                       </span>
                     </button>
                   ))}
-                  {crmContacts.length ? null : <div className="emptyScriptState">{UI.noKnowledgeArticles}</div>}
+                  {crmContacts.length ? null : <div className="emptyScriptState">{UI.noContacts}</div>}
                 </div>
               </div>
               <div className="knowledgeFormCard">
@@ -4547,7 +4635,9 @@ export function App(): JSX.Element {
                     {contactDetails.deals.map((deal) => (
                       <div key={deal.id} className="taskCardMeta">
                         {deal.stage} · {deal.amount}
-                        {deal.next_step_at ? ` · next ${new Date(deal.next_step_at).toLocaleString()}` : ""}
+                        {deal.next_step_at
+                          ? ` · след. ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
+                          : ""}
                       </div>
                     ))}
                     <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
@@ -4592,7 +4682,7 @@ export function App(): JSX.Element {
                     </button>
                   </>
                 ) : (
-                  <div className="emptyScriptState">{UI.selectChatHint}</div>
+                  <div className="emptyScriptState">{UI.selectContactHint}</div>
                 )}
               </div>
             </div>
@@ -4607,6 +4697,14 @@ export function App(): JSX.Element {
                 <div className="mobilePageTitle">{sessionUser?.fullName || "Operator"}</div>
                 <div className="mobilePageSubtitle">{sessionUser?.login || sessionUser?.email}</div>
               </div>
+              <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("contacts")}>
+                <span>{UI.menuContacts}</span>
+                <span>›</span>
+              </button>
+              <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("marketing")}>
+                <span>{UI.menuMarketing}</span>
+                <span>›</span>
+              </button>
               <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("knowledge")}>
                 <span>{UI.menuKnowledgeBase}</span>
                 <span>›</span>
@@ -4895,21 +4993,54 @@ export function App(): JSX.Element {
 
       {showBottomNav ? (
         <>
-          <button
-            type="button"
-            className="fabButton"
-            aria-label="Create"
-            onClick={() => {
-              if (currentSection === "pipeline") {
-                setPipelineManagerOpen(true);
-                void loadContactRequiredFields();
-              } else {
-                setSearchPanelOpen(true);
-              }
-            }}
-          >
-            +
-          </button>
+          {(() => {
+            const fab =
+              currentSection === "dialogs"
+                ? {
+                    label: UI.fabSearchFilters,
+                    onClick: () => setSearchPanelOpen(true)
+                  }
+                : currentSection === "pipeline"
+                  ? {
+                      label: UI.manageFunnel,
+                      onClick: () => {
+                        setPipelineManagerOpen(true);
+                        void loadContactRequiredFields();
+                      }
+                    }
+                  : currentSection === "tasks"
+                    ? {
+                        label: UI.fabNewTask,
+                        onClick: () => {
+                          newTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          newTaskInputRef.current?.focus();
+                        }
+                      }
+                    : currentSection === "contacts"
+                      ? {
+                          label: UI.fabSearchClients,
+                          onClick: () => {
+                            contactsSearchInputRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "center"
+                            });
+                            contactsSearchInputRef.current?.focus();
+                          }
+                        }
+                      : null;
+            if (!fab) return null;
+            return (
+              <button
+                type="button"
+                className="fabButton"
+                aria-label={fab.label}
+                title={fab.label}
+                onClick={fab.onClick}
+              >
+                +
+              </button>
+            );
+          })()}
           <BottomNav
             active={bottomNavActive}
             onChange={handleBottomNavChange}

@@ -63,6 +63,10 @@ type InboxThreadProps = {
   onOpenCustomerCard: () => void;
   onShareToTeam?: () => void;
   shareToTeamLabel?: string;
+  onCreateTaskFromChat?: () => void;
+  onOpenDealFromChat?: () => void;
+  createTaskLabel?: string;
+  openDealLabel?: string;
   onCallPhone?: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onMessagesDragLeave: (event: DragEvent<HTMLDivElement>) => void;
@@ -120,6 +124,10 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onOpenCustomerCard,
     onShareToTeam,
     shareToTeamLabel,
+    onCreateTaskFromChat,
+    onOpenDealFromChat,
+    createTaskLabel,
+    openDealLabel,
     onCallPhone,
     onMessagesDragOver,
     onMessagesDragLeave,
@@ -427,7 +435,13 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                   ⇄
                 </button>
               ) : null}
-              <button type="button" className="threadIconBtn" title="Search" aria-label="Search">
+              <button
+                type="button"
+                className="threadIconBtn"
+                title={ui.replyScripts}
+                aria-label={ui.replyScripts}
+                onClick={onToggleScriptPanel}
+              >
                 🔍
               </button>
               <button type="button" className="threadIconBtn" onClick={onOpenCustomerCard} title={ui.customerCard} aria-label={ui.customerCard}>
@@ -480,7 +494,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             onDragLeave={onMessagesDragLeave}
             onDrop={onMessagesDrop}
           >
-            {messages.length ? <div className="messagesDateDivider"><span>Today</span></div> : null}
+            {messages.length ? <div className="messagesDateDivider"><span>Сегодня</span></div> : null}
             {messages.map((message) => (
               <div key={message.id} className={`bubble ${message.direction}`}>
                 {message.body && !(message.attachment_type === "audio" && message.body === "[Голосовое сообщение]") ? (
@@ -544,14 +558,21 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             >
               {ui.knowledgeBase}
             </button>
+            {onCreateTaskFromChat ? (
+              <button type="button" className="quickChip outline" onClick={onCreateTaskFromChat}>
+                {createTaskLabel || "Задача"}
+              </button>
+            ) : null}
+            {onOpenDealFromChat ? (
+              <button type="button" className="quickChip outline" onClick={onOpenDealFromChat}>
+                {openDealLabel || "Сделка"}
+              </button>
+            ) : null}
             {onShareToTeam ? (
               <button type="button" className="quickChip outline" onClick={onShareToTeam}>
                 {shareToTeamLabel || "В Команду"}
               </button>
             ) : null}
-            <button type="button" className="quickChip outline" onClick={onToggleScriptPanel}>
-              Template
-            </button>
           </div>
 
           <div className="scriptPanel">

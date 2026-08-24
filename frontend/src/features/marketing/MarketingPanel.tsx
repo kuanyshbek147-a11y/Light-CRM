@@ -179,6 +179,10 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [adsDailyBudget, setAdsDailyBudget] = useState("5");
   const [adsCurrency, setAdsCurrency] = useState("USD");
   const [adsLinkUrl, setAdsLinkUrl] = useState("");
+  const [adsWizardStep, setAdsWizardStep] = useState<1 | 2 | 3>(1);
+  const [planOpenAi, setPlanOpenAi] = useState(false);
+  const [planOpenPost, setPlanOpenPost] = useState(true);
+  const [planOpenSegments, setPlanOpenSegments] = useState(false);
 
   const refresh = useCallback(async () => {
     const settled = await Promise.allSettled([
@@ -918,6 +922,29 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
       {marketingTab === "ads" ? (
         <div style={{ marginBottom: 24 }}>
+          <div className="adsWizardSteps" role="tablist" aria-label="Шаги Ads">
+            {(
+              [
+                [1, "Подключение"],
+                [2, "Аудитория"],
+                [3, "Кампания"]
+              ] as const
+            ).map(([step, label]) => (
+              <button
+                key={step}
+                type="button"
+                role="tab"
+                aria-selected={adsWizardStep === step}
+                className={`adsWizardStep ${adsWizardStep === step ? "active" : ""}`}
+                onClick={() => setAdsWizardStep(step)}
+              >
+                <span className="adsWizardStepNum">{step}</span>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {adsWizardStep === 1 ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
             <div className="scriptPanelTitle">Meta Ads — подключение</div>
             <div className="sidebarHint" style={{ marginBottom: 10 }}>
@@ -954,13 +981,20 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 type="button"
                 className="primaryButton"
                 disabled={busy}
-                onClick={() => void saveAdsConnection()}
+                onClick={() => {
+                  void (async () => {
+                    await saveAdsConnection();
+                    setAdsWizardStep(2);
+                  })();
+                }}
               >
-                Сохранить Ads
+                Сохранить и далее
               </button>
             </div>
           </div>
+          ) : null}
 
+          {adsWizardStep === 2 ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
             <div className="scriptPanelTitle">Custom Audience из сегмента</div>
             <div className="scriptForm">
@@ -1006,10 +1040,25 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 Аудиторий пока нет
               </div>
             )}
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button type="button" className="dialogActionBtn" onClick={() => setAdsWizardStep(1)}>
+                Назад
+              </button>
+              <button
+                type="button"
+                className="primaryButton"
+                disabled={!adsAudiences.length}
+                onClick={() => setAdsWizardStep(3)}
+              >
+                Далее к кампании
+              </button>
+            </div>
           </div>
+          ) : null}
 
+          {adsWizardStep === 3 ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-            <div className="scriptPanelTitle">Запустить кампанию</div>
+            <div className="scriptPanelTitle">Создать кампанию</div>
             <div className="scriptForm">
               <input
                 className="filterInput"
@@ -1073,6 +1122,13 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               ) : null}
               <button
                 type="button"
+                className="dialogActionBtn"
+                onClick={() => setAdsWizardStep(2)}
+              >
+                Назад
+              </button>
+              <button
+                type="button"
                 className="primaryButton"
                 disabled={busy}
                 onClick={() => void launchAdsCampaign()}
@@ -1081,6 +1137,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               </button>
             </div>
           </div>
+          ) : null}
 
           <div className="scriptPanelTitle">Кампании Ads</div>
           {adsCampaigns.length ? (
@@ -1558,8 +1615,9 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       {marketingTab === "plan" ? (
         <>
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">ИИ — сгенерировать пост</div>
-        <div className="scriptForm">
+        <details className="marketingAccordion" open={planOpenAi} onToggle={(e) => setPlanOpenAi((e.target as HTMLDetailsElement).open)}>
+          <summary className="marketingAccordionSummary">ИИ — сгенерировать пост</summary>
+        <div className="scriptForm" style={{ marginTop: 12 }}>
           <input
             className="filterInput"
             placeholder="Тема (например: акция на пилот CRM 14 дней)"
@@ -1646,9 +1704,17 @@ export function MarketingPanel({ authToken, onToast }: Props) {
             />
           </div>
         ) : null}
+        </details>
       </div>
 
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+        <details
+          className="marketingAccordion"
+          open={planOpenPost}
+          onToggle={(e) => setPlanOpenPost((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="marketingAccordionSummary">Пост и автопубликация</summary>
+      <div style={{ marginTop: 12 }}>
         <div className="scriptPanelTitle">Автопубликация в соцсети</div>
         <div className="sidebarHint" style={{ marginBottom: 10 }}>
           Telegram: {socialSettings.telegramConnected ? "бот подключён" : "бот не подключён"} ·
@@ -1874,7 +1940,17 @@ export function MarketingPanel({ authToken, onToast }: Props) {
           <div className="emptyScriptState">Постов в плане пока нет</div>
         )}
       </div>
+        </details>
+      </div>
 
+      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+        <details
+          className="marketingAccordion"
+          open={planOpenSegments}
+          onToggle={(e) => setPlanOpenSegments((e.target as HTMLDetailsElement).open)}
+        >
+          <summary className="marketingAccordionSummary">Сегменты и рассылки</summary>
+      <div style={{ marginTop: 12 }}>
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
         <div className="scriptPanelTitle">Новый сегмент</div>
         <div className="scriptForm">
@@ -2043,6 +2119,9 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         ) : (
           <div className="emptyScriptState">Кампаний пока нет</div>
         )}
+      </div>
+      </div>
+        </details>
       </div>
         </>
       ) : null}

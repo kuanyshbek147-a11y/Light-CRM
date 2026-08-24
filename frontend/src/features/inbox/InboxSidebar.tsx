@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
+import { ListSkeleton } from "../../shared/ui/ListSkeleton";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
@@ -183,6 +184,8 @@ type InboxSidebarProps = {
   onRemoveFilterPreset: (presetId: string) => void;
   onSelectConversation: (conversationId: string) => void;
   onOpenCustomerCard: (conversationId: string) => void;
+  loading?: boolean;
+  emptyContent?: JSX.Element | null;
 };
 
 export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
@@ -205,7 +208,9 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onApplyFilterPreset,
     onRemoveFilterPreset,
     onSelectConversation,
-    onOpenCustomerCard
+    onOpenCustomerCard,
+    loading = false,
+    emptyContent = null
   } = props;
 
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
@@ -392,17 +397,27 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
       ) : null}
 
       <ul className="chatList">
-        {visibleConversations.map((conversation) => (
-          <ConversationListItem
-            key={conversation.id}
-            conversation={conversation}
-            isActive={conversation.id === selectedConversation}
-            noMessages={ui.noMessages}
-            customerCardLabel={ui.customerCard}
-            onSelectConversation={onSelectConversation}
-            onOpenCustomerCard={onOpenCustomerCard}
-          />
-        ))}
+        {loading ? (
+          <li className="chatListSkeletonItem">
+            <ListSkeleton rows={6} />
+          </li>
+        ) : null}
+        {!loading && !visibleConversations.length ? (
+          <li className="chatListEmptyItem">{emptyContent || <div className="emptyScriptState">Диалогов пока нет</div>}</li>
+        ) : null}
+        {!loading
+          ? visibleConversations.map((conversation) => (
+              <ConversationListItem
+                key={conversation.id}
+                conversation={conversation}
+                isActive={conversation.id === selectedConversation}
+                noMessages={ui.noMessages}
+                customerCardLabel={ui.customerCard}
+                onSelectConversation={onSelectConversation}
+                onOpenCustomerCard={onOpenCustomerCard}
+              />
+            ))
+          : null}
       </ul>
     </aside>
   );

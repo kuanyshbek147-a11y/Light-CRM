@@ -58,27 +58,27 @@ export function OwnerDashboard({
       <div className="ownerKpiGrid">
         <div className="ownerKpiCard">
           <div className="analyticsValue">{money(ownerKpi?.revenueWon || 0)} ₸</div>
-          <div className="analyticsLabel">Выручка (won)</div>
+          <div className="analyticsLabel">Выручка (выиграно)</div>
         </div>
         <div className="ownerKpiCard">
           <div className="analyticsValue">{money(ownerKpi?.pipelineAmount || 0)} ₸</div>
-          <div className="analyticsLabel">Pipeline</div>
+          <div className="analyticsLabel">В воронке</div>
         </div>
         <div className="ownerKpiCard">
           <div className="analyticsValue">{ownerKpi?.winRate ?? 0}%</div>
-          <div className="analyticsLabel">Win rate</div>
+          <div className="analyticsLabel">Доля побед</div>
         </div>
         <div className="ownerKpiCard">
           <div className="analyticsValue">{ownerKpi?.avgFirstResponseMinutes ?? 0} мин</div>
-          <div className="analyticsLabel">Ср. FRT</div>
+          <div className="analyticsLabel">Ср. время ответа</div>
         </div>
       </div>
       <div className="ownerMetaLine">
         Лиды: <strong>{ownerKpi?.leads ?? 0}</strong>
         {" · "}
-        Won: <strong>{ownerKpi?.wonDeals ?? 0}</strong>
+        Выиграно: <strong>{ownerKpi?.wonDeals ?? 0}</strong>
         {" · "}
-        Конверсия лид→won: <strong>{ownerKpi?.conversion ?? 0}%</strong>
+        Конверсия лид→сделка: <strong>{ownerKpi?.conversion ?? 0}%</strong>
       </div>
 
       {laggingManagers.length ? (

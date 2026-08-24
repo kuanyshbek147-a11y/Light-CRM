@@ -1197,8 +1197,16 @@
   }
 
   .bottomNavIcon {
-    font-size: 20px;
-    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0;
+    line-height: 0;
+  }
+
+  .bottomNavIcon svg {
+    width: 22px;
+    height: 22px;
   }
 
   .fabButton {
@@ -1491,20 +1499,24 @@
   }
 
   .threadHeaderModern {
-    display: none;
+    display: flex;
   }
 
   .quickActionChips {
-    display: none;
+    display: flex;
   }
 
   .channelFilters,
   .mobilePageHeader {
-    display: none;
+    display: flex;
   }
 
   .dialogCardActions,
   .dialogCardTime {
+    display: initial;
+  }
+
+  .sidebarHeader {
     display: none;
   }
 
@@ -1516,22 +1528,22 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 0;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid transparent;
-    background: transparent;
-    box-shadow: none;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid #e8ecf8;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
 
   .dialogCard:hover {
-    background: #f7f8ff;
-    border-color: #e5e8fa;
+    background: #f8f9ff;
+    border-color: #d9def5;
   }
 
   .dialogCard.active {
-    background: linear-gradient(135deg, rgba(91, 92, 233, 0.08), rgba(112, 149, 255, 0.08));
-    border-color: rgba(91, 92, 233, 0.25);
-    box-shadow: none;
+    background: linear-gradient(135deg, rgba(91, 92, 233, 0.1), rgba(112, 149, 255, 0.08));
+    border-color: rgba(91, 92, 233, 0.35);
+    box-shadow: 0 4px 14px rgba(91, 92, 233, 0.12);
   }
 
   .dialogCardTop {

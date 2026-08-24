@@ -215,6 +215,232 @@ button {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
+.followUpDetails {
+  border: 0;
+}
+
+.followUpDetailsSummary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  font-size: 15px;
+  color: #1e1b4b;
+  padding: 2px 0;
+}
+
+.followUpDetailsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.followUpDetailsSummary::after {
+  content: " ▾";
+  font-weight: 500;
+  color: #64748b;
+}
+
+.followUpDetails[open] .followUpDetailsSummary::after {
+  content: " ▴";
+}
+
+.listSkeleton {
+  display: grid;
+  gap: 10px;
+  padding: 8px 4px 16px;
+}
+
+.listSkeletonRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.listSkeletonAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #eef1fb, #f7f8fc, #eef1fb);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.listSkeletonLines {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+}
+
+.listSkeletonLine {
+  height: 10px;
+  border-radius: 999px;
+  width: 62%;
+  background: linear-gradient(90deg, #eef1fb, #f7f8fc, #eef1fb);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
+}
+
+.listSkeletonLine.wide {
+  width: 88%;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.inboxOnboard {
+  margin: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #eef0ff, #f8fafc);
+  border: 1px solid #d8ddf8;
+  text-align: left;
+}
+
+.inboxOnboardTitle {
+  font-weight: 750;
+  font-size: 15px;
+  color: #1e1b4b;
+}
+
+.inboxOnboardText {
+  margin: 8px 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.inboxOnboardList {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.inboxOnboardList li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.inboxOnboardList li.ok {
+  color: #166534;
+}
+
+.inboxOnboardCheck {
+  width: 18px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.inboxOnboardStatus {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.inboxOnboardActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.adsWizardSteps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.adsWizardStep {
+  border: 1px solid #d8ddf8;
+  background: #fff;
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #334155;
+}
+
+.adsWizardStep.active {
+  border-color: #5b5ce9;
+  background: #eef0ff;
+  color: #1e1b4b;
+  font-weight: 650;
+}
+
+.adsWizardStepNum {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: #5b5ce9;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.marketingAccordion {
+  border: 0;
+}
+
+.marketingAccordionSummary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 750;
+  font-size: 15px;
+  color: #1e1b4b;
+}
+
+.marketingAccordionSummary::-webkit-details-marker {
+  display: none;
+}
+
+.marketingAccordionSummary::after {
+  content: " ▾";
+  color: #64748b;
+  font-weight: 500;
+}
+
+.marketingAccordion[open] > .marketingAccordionSummary::after {
+  content: " ▴";
+}
+
+.demoQuickRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.demoCredentialsDetails {
+  font-size: 13px;
+  color: #475569;
+}
+
+.demoCredentialsDetails summary {
+  cursor: pointer;
+  font-weight: 650;
+  color: #1e1b4b;
+  margin-bottom: 6px;
+}
+
+.chatListEmptyItem,
+.chatListSkeletonItem {
+  list-style: none;
+}
+
 .loginError {
   margin: 0;
   font-size: 13px;

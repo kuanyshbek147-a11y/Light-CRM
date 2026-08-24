@@ -109,7 +109,7 @@ export function AnalyticsCharts({
                 yAxisId="right"
                 type="monotone"
                 dataKey="winRate"
-                name="Win rate %"
+                name="Доля побед %"
                 stroke="#2563eb"
                 strokeWidth={2}
                 dot={false}
@@ -137,7 +137,7 @@ export function AnalyticsCharts({
                   yAxisId="right"
                   type="monotone"
                   dataKey="winRate"
-                  name="Win rate %"
+                  name="Доля побед %"
                   stroke="#7c3aed"
                   strokeWidth={2}
                 />
