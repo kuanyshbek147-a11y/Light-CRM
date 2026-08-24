@@ -6,8 +6,11 @@ import {
   createCustomAudience,
   createTrafficCampaign,
   fetchAdInsights,
+  fetchMetaObjectStatus,
   getAudienceApproxSize,
+  mapMetaEffectiveStatus,
   setMetaObjectStatus,
+  toMetaDailyBudgetCents,
   uploadAudiencePhones
 } from "./meta-marketing";
 
@@ -207,10 +210,12 @@ export async function createAdsCampaign(input: {
     return { error: "campaign_name_required" };
   }
 
-  const dailyBudgetCents = Math.round(Number(input.dailyBudget) * 100);
-  if (!Number.isFinite(dailyBudgetCents) || dailyBudgetCents < 100) {
-    return { error: "budget_too_low" };
+  const currency = (input.currency || "USD").toUpperCase();
+  const budgetOrError = toMetaDailyBudgetCents(Number(input.dailyBudget), currency);
+  if (typeof budgetOrError === "object") {
+    return budgetOrError;
   }
+  const dailyBudgetCents = budgetOrError;
 
   let message = name;
   let imageUrl: string | null = null;
@@ -245,7 +250,7 @@ export async function createAdsCampaign(input: {
       contentPostId,
       name,
       dailyBudgetCents,
-      (input.currency || "USD").toUpperCase(),
+      currency === "KZT" ? "USD" : currency,
       input.userId
     ]
   );
@@ -261,6 +266,7 @@ export async function createAdsCampaign(input: {
     const created = await createTrafficCampaign(credentials, {
       name,
       audienceId: aud.meta_audience_id,
+      audienceSize: aud.size,
       pageId: credentials.pageId,
       dailyBudgetCents,
       message,
@@ -357,8 +363,12 @@ export async function refreshCampaignMetrics(workspaceId: string, campaignId?: s
   if (!credentials) {
     return 0;
   }
-  const rows = await query<{ id: string; meta_ad_id: string | null }>(
-    `SELECT id, meta_ad_id FROM ads_campaigns
+  const rows = await query<{
+    id: string;
+    meta_ad_id: string | null;
+    meta_campaign_id: string | null;
+  }>(
+    `SELECT id, meta_ad_id, meta_campaign_id FROM ads_campaigns
      WHERE workspace_id = $1
        AND meta_ad_id IS NOT NULL
        AND ($2::uuid IS NULL OR id = $2::uuid)
@@ -372,12 +382,30 @@ export async function refreshCampaignMetrics(workspaceId: string, campaignId?: s
     if (!row.meta_ad_id) continue;
     try {
       const metrics = await fetchAdInsights(credentials, row.meta_ad_id);
-      await query(
-        `UPDATE ads_campaigns
-         SET metrics_json = $1::jsonb, updated_at = now()
-         WHERE id = $2`,
-        [JSON.stringify(metrics), row.id]
-      );
+      let nextStatus: string | null = null;
+      if (row.meta_campaign_id) {
+        try {
+          const metaStatus = await fetchMetaObjectStatus(credentials, row.meta_campaign_id);
+          nextStatus = mapMetaEffectiveStatus(metaStatus.effective || metaStatus.configured);
+        } catch {
+          // status sync is best-effort
+        }
+      }
+      if (nextStatus) {
+        await query(
+          `UPDATE ads_campaigns
+           SET metrics_json = $1::jsonb, status = $2, updated_at = now()
+           WHERE id = $3`,
+          [JSON.stringify(metrics), nextStatus, row.id]
+        );
+      } else {
+        await query(
+          `UPDATE ads_campaigns
+           SET metrics_json = $1::jsonb, updated_at = now()
+           WHERE id = $2`,
+          [JSON.stringify(metrics), row.id]
+        );
+      }
       updated += 1;
     } catch {
       // ignore per-ad failures

@@ -176,8 +176,8 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [adsCampaignName, setAdsCampaignName] = useState("");
   const [adsAudienceId, setAdsAudienceId] = useState("");
   const [adsPostId, setAdsPostId] = useState("");
-  const [adsDailyBudget, setAdsDailyBudget] = useState("5000");
-  const [adsCurrency, setAdsCurrency] = useState("KZT");
+  const [adsDailyBudget, setAdsDailyBudget] = useState("5");
+  const [adsCurrency, setAdsCurrency] = useState("USD");
   const [adsLinkUrl, setAdsLinkUrl] = useState("");
 
   const refresh = useCallback(async () => {
@@ -754,7 +754,8 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         name,
         dailyBudget: budget,
         currency: adsCurrency,
-        activate: true,
+        // Create paused — activate explicitly to avoid accidental spend
+        activate: false,
         linkUrl: adsLinkUrl.trim() || undefined
       });
       if (!created) {
@@ -1043,7 +1044,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               </select>
               <input
                 className="filterInput"
-                placeholder="Дневной бюджет (в валюте кабинета)"
+                placeholder="Дневной бюджет (USD кабинета Meta, напр. 5)"
                 value={adsDailyBudget}
                 onChange={(event) => setAdsDailyBudget(event.target.value)}
               />
@@ -1052,9 +1053,13 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 value={adsCurrency}
                 onChange={(event) => setAdsCurrency(event.target.value)}
               >
-                <option value="KZT">KZT</option>
-                <option value="USD">USD</option>
+                <option value="USD">USD (кабинет Meta)</option>
+                <option value="KZT">KZT → ≈USD</option>
               </select>
+              <div className="sidebarHint">
+                Таргет: Казахстан + интересы MSMB. Маленькая custom audience (&lt;100) не сужает охват.
+                Кампания создаётся на паузе — нажмите «Активировать».
+              </div>
               <input
                 className="filterInput"
                 placeholder="Ссылка объявления (с UTM из лендинга)"
@@ -1072,7 +1077,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 disabled={busy}
                 onClick={() => void launchAdsCampaign()}
               >
-                Запустить в Meta
+                Создать в Meta (на паузе)
               </button>
             </div>
           </div>

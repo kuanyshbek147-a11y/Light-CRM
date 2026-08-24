@@ -128,11 +128,59 @@ export async function getAudienceApproxSize(
   );
 }
 
+/** MSMB / CRM interests for KZ traffic (Meta interest IDs). */
+export const DEFAULT_TRAFFIC_INTERESTS = [
+  { id: "6003206992086" }, // CRM systems
+  { id: "6003371567474" }, // Entrepreneurship
+  { id: "6003755775353" }, // Small business software
+  { id: "6003584283289" }, // WhatsApp
+  { id: "6002884511422" }, // Small business
+  { id: "6003670602220" } // Instagram
+] as const;
+
+/** Tiny custom audiences alone block delivery — only attach above this size. */
+export function minCustomAudienceSize(): number {
+  const raw = Number(process.env.ADS_MIN_CUSTOM_AUDIENCE_SIZE || 100);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 100;
+}
+
+export function buildTrafficTargeting(input: {
+  audienceId?: string | null;
+  audienceSize?: number;
+  country?: string;
+  ageMin?: number;
+  ageMax?: number;
+}): Record<string, unknown> {
+  const country = (input.country || process.env.ADS_DEFAULT_COUNTRY || "KZ").trim().toUpperCase() || "KZ";
+  const ageMin = Math.min(65, Math.max(13, Math.floor(input.ageMin ?? 25)));
+  const ageMax = Math.min(65, Math.max(ageMin, Math.floor(input.ageMax ?? 55)));
+
+  const targeting: Record<string, unknown> = {
+    geo_locations: { countries: [country] },
+    age_min: ageMin,
+    age_max: ageMax,
+    flexible_spec: [{ interests: DEFAULT_TRAFFIC_INTERESTS.map((item) => ({ id: item.id })) }],
+    publisher_platforms: ["facebook", "instagram"],
+    // Keep 0: Advantage+ forbids age_max < 65
+    targeting_automation: { advantage_audience: 0 }
+  };
+
+  const audienceId = (input.audienceId || "").trim();
+  const audienceSize = Number(input.audienceSize || 0);
+  if (audienceId && audienceSize >= minCustomAudienceSize()) {
+    targeting.custom_audiences = [{ id: audienceId }];
+  }
+
+  return targeting;
+}
+
 export async function createTrafficCampaign(
   credentials: MetaAdsCredentials,
   input: {
     name: string;
-    audienceId: string;
+    audienceId?: string | null;
+    audienceSize?: number;
+    country?: string;
     pageId: string;
     dailyBudgetCents: number;
     message: string;
@@ -165,6 +213,12 @@ export async function createTrafficCampaign(
   );
   if (!campaign.id) throw new Error("campaign id missing");
 
+  const targeting = buildTrafficTargeting({
+    audienceId: input.audienceId,
+    audienceSize: input.audienceSize,
+    country: input.country
+  });
+
   const adset = await graphRequest<{ id?: string }>(
     credentials,
     `/${credentials.adAccountId}/adsets`,
@@ -178,12 +232,7 @@ export async function createTrafficCampaign(
         optimization_goal: "LINK_CLICKS",
         bid_strategy: "LOWEST_COST_WITHOUT_CAP",
         status: "PAUSED",
-        targeting: {
-          custom_audiences: [{ id: input.audienceId }],
-          publisher_platforms: ["facebook", "instagram"],
-          // Required by Meta: explicitly enable/disable Advantage+ audience
-          targeting_automation: { advantage_audience: 0 }
-        },
+        targeting,
         promoted_object: { page_id: pageId }
       }
     }
@@ -260,6 +309,63 @@ export async function setMetaObjectStatus(
     method: "POST",
     body: { status }
   });
+}
+
+export async function fetchMetaObjectStatus(
+  credentials: MetaAdsCredentials,
+  objectId: string
+): Promise<{ configured: string; effective: string }> {
+  const payload = await graphRequest<{
+    configured_status?: string;
+    effective_status?: string;
+  }>(credentials, `/${objectId}?fields=configured_status,effective_status`);
+  return {
+    configured: String(payload.configured_status || ""),
+    effective: String(payload.effective_status || "")
+  };
+}
+
+export function mapMetaEffectiveStatus(effective: string): "active" | "paused" | "pending_review" | "failed" {
+  const value = effective.toUpperCase();
+  if (value === "ACTIVE") return "active";
+  if (value === "PENDING_REVIEW" || value === "IN_PROCESS" || value === "PREAPPROVED") {
+    return "pending_review";
+  }
+  if (
+    value === "DISAPPROVED" ||
+    value === "WITH_ISSUES" ||
+    value === "ARCHIVED" ||
+    value === "DELETED"
+  ) {
+    return "failed";
+  }
+  // PAUSED, CAMPAIGN_PAUSED, ADSET_PAUSED, etc.
+  return "paused";
+}
+
+/** Meta daily_budget is always in the ad account currency (minor units). */
+export function toMetaDailyBudgetCents(
+  amountMajor: number,
+  currency: string
+): number | { error: string } {
+  const code = (currency || "USD").toUpperCase();
+  if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
+    return { error: "budget_too_low" };
+  }
+  if (code === "USD") {
+    const cents = Math.round(amountMajor * 100);
+    if (cents < 100) return { error: "budget_too_low" };
+    return cents;
+  }
+  if (code === "KZT") {
+    // Approximate FX so UI "KZT" does not send 5000 as $5000 to a USD Meta account.
+    const kztPerUsd = Number(process.env.ADS_KZT_PER_USD || 500);
+    const rate = Number.isFinite(kztPerUsd) && kztPerUsd > 0 ? kztPerUsd : 500;
+    const cents = Math.round((amountMajor / rate) * 100);
+    if (cents < 100) return { error: "budget_too_low" };
+    return cents;
+  }
+  return { error: "currency_unsupported" };
 }
 
 export async function fetchAdInsights(
