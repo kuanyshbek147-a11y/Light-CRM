@@ -86,3 +86,17 @@ export async function findWorkspaceIdByWabaId(wabaId: string): Promise<string | 
   );
   return rows[0]?.workspace_id ?? null;
 }
+
+export async function findWorkspaceIdByPhoneNumberId(phoneNumberId: string): Promise<string | null> {
+  if (!phoneNumberId) {
+    return null;
+  }
+  const rows = await query<{ workspace_id: string }>(
+    `SELECT workspace_id
+     FROM workspace_settings
+     WHERE key = $1 AND value = $2
+     LIMIT 1`,
+    [KEYS.phoneNumberId, phoneNumberId]
+  );
+  return rows[0]?.workspace_id ?? null;
+}

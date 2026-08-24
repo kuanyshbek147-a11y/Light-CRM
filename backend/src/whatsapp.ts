@@ -17,6 +17,7 @@ import {
   ensureMetaPhoneRegistered,
   extractMetaContactNames,
   extractMetaMediaMeta,
+  extractPhoneNumberIdFromPayload,
   extractWabaIdFromPayload,
   fetchMetaGroupSubject,
   getMetaCloudConfig,
@@ -35,10 +36,12 @@ import {
 } from "./modules/integrations/whatsapp/meta-cloud";
 import {
   clearWorkspaceMetaCredentials,
+  findWorkspaceIdByPhoneNumberId,
   findWorkspaceIdByWabaId,
   getWorkspaceMetaCredentials,
   saveWorkspaceMetaCredentials
 } from "./modules/integrations/whatsapp/workspace-meta";
+import { resolveLegacyDefaultWorkspaceId } from "./modules/platform/tenant-routing";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -600,14 +603,20 @@ async function processWhatsAppWebhook(payload: JsonRecord, io: Server): Promise<
   let workspaceId: string | null = null;
   if (WHATSAPP_PROVIDER === "meta") {
     const wabaId = extractWabaIdFromPayload(payload);
+    const phoneNumberId = extractPhoneNumberIdFromPayload(payload);
     if (wabaId) {
       workspaceId = await findWorkspaceIdByWabaId(wabaId);
     }
-  }
-
-  if (!workspaceId) {
-    const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-    workspaceId = workspaceRows[0]?.id ?? null;
+    if (!workspaceId && phoneNumberId) {
+      workspaceId = await findWorkspaceIdByPhoneNumberId(phoneNumberId);
+    }
+    if (!workspaceId) {
+      workspaceId = await resolveLegacyDefaultWorkspaceId(
+        `whatsapp webhook unmatched waba=${wabaId || "-"} phone=${phoneNumberId || "-"}`
+      );
+    }
+  } else {
+    workspaceId = await resolveLegacyDefaultWorkspaceId("whatsapp chatapp webhook");
   }
   if (!workspaceId) {
     return;

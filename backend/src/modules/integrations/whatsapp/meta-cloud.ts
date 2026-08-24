@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { getWorkspaceMetaCredentials } from "./workspace-meta";
+import { allowLegacyChannelFallback } from "../../platform/tenant-routing";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -59,7 +60,10 @@ export async function getMetaCloudConfigForWorkspace(workspaceId: string): Promi
     };
   }
 
-  return getMetaCloudConfig();
+  if (await allowLegacyChannelFallback()) {
+    return getMetaCloudConfig();
+  }
+  return null;
 }
 
 export function getMetaCloudMissing(config: MetaCloudConfig | null): string[] {
@@ -757,6 +761,24 @@ export function extractWabaIdFromPayload(payload: JsonRecord): string | null {
   const entry = Array.isArray(payload.entry) ? payload.entry : [];
   const first = entry[0] as JsonRecord | undefined;
   return typeof first?.id === "string" ? first.id : null;
+}
+
+/** Meta Cloud webhook: entry[].changes[].value.metadata.phone_number_id */
+export function extractPhoneNumberIdFromPayload(payload: JsonRecord): string | null {
+  const entry = Array.isArray(payload.entry) ? payload.entry : [];
+  for (const rawEntry of entry) {
+    const item = rawEntry as JsonRecord;
+    const changes = Array.isArray(item.changes) ? item.changes : [];
+    for (const rawChange of changes) {
+      const change = rawChange as JsonRecord;
+      const value = (change.value || {}) as JsonRecord;
+      const metadata = (value.metadata || {}) as JsonRecord;
+      if (typeof metadata.phone_number_id === "string" && metadata.phone_number_id.trim()) {
+        return metadata.phone_number_id.trim();
+      }
+    }
+  }
+  return null;
 }
 
 function metaGraphBase(config: MetaCloudConfig): string {

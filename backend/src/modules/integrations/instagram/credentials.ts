@@ -1,4 +1,5 @@
 import { query } from "../../../db";
+import { allowLegacyChannelFallback } from "../../platform/tenant-routing";
 
 export type InstagramCredentials = {
   pageId: string;
@@ -76,7 +77,10 @@ export async function getInstagramCredentialsForWorkspace(
   if (workspace) {
     return workspace;
   }
-  return getEnvInstagramCredentials();
+  if (await allowLegacyChannelFallback()) {
+    return getEnvInstagramCredentials();
+  }
+  return null;
 }
 
 export async function saveWorkspaceInstagramCredentials(

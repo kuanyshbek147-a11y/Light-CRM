@@ -1,4 +1,5 @@
 import { query } from "../../db";
+import { allowLegacyChannelFallback } from "../platform/tenant-routing";
 
 export type MetaAdsCredentials = {
   accessToken: string;
@@ -77,7 +78,14 @@ export async function getWorkspaceMetaAdsCredentials(
 export async function getMetaAdsCredentialsForWorkspace(
   workspaceId: string
 ): Promise<MetaAdsCredentials | null> {
-  return (await getWorkspaceMetaAdsCredentials(workspaceId)) || getEnvMetaAdsCredentials();
+  const workspace = await getWorkspaceMetaAdsCredentials(workspaceId);
+  if (workspace) {
+    return workspace;
+  }
+  if (await allowLegacyChannelFallback()) {
+    return getEnvMetaAdsCredentials();
+  }
+  return null;
 }
 
 export type MetaAdsSettingsPublic = {

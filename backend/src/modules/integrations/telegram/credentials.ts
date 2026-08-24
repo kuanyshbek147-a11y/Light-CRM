@@ -1,5 +1,6 @@
 import { query } from "../../../db";
 import { randomBytes } from "crypto";
+import { allowLegacyChannelFallback } from "../../platform/tenant-routing";
 
 export type TelegramCredentials = {
   botToken: string;
@@ -104,7 +105,10 @@ export async function getTelegramCredentialsForWorkspace(
   if (workspace) {
     return workspace;
   }
-  return getEnvTelegramCredentials();
+  if (await allowLegacyChannelFallback()) {
+    return getEnvTelegramCredentials();
+  }
+  return null;
 }
 
 export async function saveWorkspaceTelegramCredentials(

@@ -17,6 +17,7 @@ import {
   getWorkspaceInstagramCredentials,
   saveWorkspaceInstagramCredentials
 } from "./credentials";
+import { resolveLegacyDefaultWorkspaceId } from "../../platform/tenant-routing";
 import {
   exchangeInstagramLoginCode,
   getInstagramAppId,
@@ -668,14 +669,16 @@ async function resolveWorkspaceIdForInstagramEvent(
         envCreds.igUserId === recipientId ||
         envCreds.igUserId === entryId)
     ) {
-      const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-      workspaceId = workspaceRows[0]?.id ?? null;
+      workspaceId = await resolveLegacyDefaultWorkspaceId(
+        `instagram env match recipient=${recipientId} entry=${entryId}`
+      );
     }
   }
 
   if (!workspaceId) {
-    const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-    workspaceId = workspaceRows[0]?.id ?? null;
+    workspaceId = await resolveLegacyDefaultWorkspaceId(
+      `instagram unmatched recipient=${recipientId} entry=${entryId}`
+    );
   }
 
   return workspaceId;

@@ -21,6 +21,7 @@ import {
   sendTelegramTextMessage,
   setTelegramWebhook
 } from "./modules/integrations/telegram/api";
+import { resolveLegacyDefaultWorkspaceId } from "./modules/platform/tenant-routing";
 
 type TelegramUser = {
   id: number;
@@ -259,8 +260,7 @@ async function resolveDefaultWorkspaceIdForSecret(secret: string): Promise<strin
   if (secret !== envSecret) {
     return null;
   }
-  const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-  const workspaceId = workspaceRows[0]?.id ?? null;
+  const workspaceId = await resolveLegacyDefaultWorkspaceId("telegram env webhook secret");
   if (!workspaceId) {
     return null;
   }
@@ -377,8 +377,7 @@ async function pollTelegramUpdates(io: Server, botToken: string): Promise<void> 
   }
 
   const payload = (await response.json()) as { ok: boolean; result?: TelegramUpdate[] };
-  const workspaceRows = await query<{ id: string }>("SELECT id FROM workspaces ORDER BY id ASC LIMIT 1");
-  const workspaceId = workspaceRows[0]?.id;
+  const workspaceId = await resolveLegacyDefaultWorkspaceId("telegram polling env bot");
   if (!workspaceId) {
     return;
   }
