@@ -1697,8 +1697,34 @@ body.pwa-standalone {
 
 .analyticsChartsStack {
   display: grid;
-  gap: 16px;
+  gap: 18px;
   margin-top: 8px;
+}
+
+.analyticsDynamicsIntro {
+  display: grid;
+  gap: 2px;
+}
+
+.analyticsDynamicsCard {
+  gap: 10px;
+}
+
+.analyticsDynamicsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analyticsDynamicsTotal {
+  color: #475569;
+  font-size: 12px;
+}
+
+.analyticsDynamicsTotal strong {
+  color: #0f172a;
+  font-size: 14px;
 }
 
 .analyticsChartCard {
@@ -1713,6 +1739,11 @@ body.pwa-standalone {
   border-radius: 12px;
   padding: 8px 4px 4px;
   background: #fff;
+}
+
+.analyticsChartFrameLarge {
+  min-height: 300px;
+  padding: 10px 8px 6px;
 }
 
 .analyticsValue {

@@ -211,6 +211,7 @@ type Metrics = {
   periodDays?: number;
   dailySeries: Array<{
     day: string;
+    date?: string;
     messages: number;
     dialogs: number;
     closed: number;

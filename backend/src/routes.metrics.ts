@@ -1076,6 +1076,7 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
   const dailyRows = hasCustomRange
     ? await query<{
         day: string;
+        date_iso: string;
         messages: string;
         dialogs: string;
         closed: string;
@@ -1117,6 +1118,7 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
            GROUP BY 1
          )
          SELECT to_char(days.day, 'DD.MM') AS day,
+                to_char(days.day, 'YYYY-MM-DD') AS date_iso,
                 COALESCE(msg.cnt, 0)::text AS messages,
                 COALESCE(conv.cnt, 0)::text AS dialogs,
                 COALESCE(cls.cnt, 0)::text AS closed,
@@ -1132,6 +1134,7 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
       )
     : await query<{
         day: string;
+        date_iso: string;
         messages: string;
         dialogs: string;
         closed: string;
@@ -1176,6 +1179,7 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
            GROUP BY 1
          )
          SELECT to_char(days.day, 'DD.MM') AS day,
+                to_char(days.day, 'YYYY-MM-DD') AS date_iso,
                 COALESCE(msg.cnt, 0)::text AS messages,
                 COALESCE(conv.cnt, 0)::text AS dialogs,
                 COALESCE(cls.cnt, 0)::text AS closed,
@@ -1306,6 +1310,7 @@ metricsRouter.get("/overview", async (req: AuthRequest, res) => {
     const decided = won + lost;
     return {
       day: row.day,
+      date: row.date_iso,
       messages: Number(row.messages || 0),
       dialogs: Number(row.dialogs || 0),
       closed: Number(row.closed || 0),
