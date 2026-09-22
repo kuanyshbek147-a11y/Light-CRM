@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
 import {
   activateAdsCampaign,
   createAdsCampaign,
@@ -55,8 +55,15 @@ import { LandingPagesPanel } from "./LandingPagesPanel";
 type Props = {
   authToken: string;
   onToast?: (message: string, kind: "success" | "error") => void;
-  onOpenIntegrations?: () => void;
+  onOpenIntegrations?: (target?: "telegram" | "instagram") => void;
 };
+
+function readDetailsOpen(event: SyntheticEvent<HTMLDetailsElement>): boolean | null {
+  if (event.target !== event.currentTarget) {
+    return null;
+  }
+  return event.currentTarget.open;
+}
 
 const emptyFilter: MarketingSegmentFilter = {
   city: "",
@@ -205,6 +212,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
   const [planOpenPublish, setPlanOpenPublish] = useState(false);
   const [planOpenSegments, setPlanOpenSegments] = useState(false);
   const [planOpenPostExtra, setPlanOpenPostExtra] = useState(false);
+  const [planOpenDraft, setPlanOpenDraft] = useState(false);
   const postTitleRef = useRef<HTMLInputElement>(null);
   const aiSectionRef = useRef<HTMLDetailsElement>(null);
   const postsListRef = useRef<HTMLDivElement>(null);
@@ -890,6 +898,8 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
   const selectedCalendarDay =
     calendarDays.find((day) => day.key === activeCalendarDayKey) || null;
 
+  const channelReady = socialSettings.telegramConnected || socialSettings.instagramConnected;
+
   function focusNewPost(): void {
     postTitleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     postTitleRef.current?.focus();
@@ -900,13 +910,299 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
     aiSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function planEditor() {
+    return (
+      <>
+            <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+              <div className="scriptPanelTitle">Новый пост</div>
+              <div className="sidebarHint">Заголовок, текст и дата. Остальное можно заполнить позже.</div>
+              <div className="scriptForm">
+                <label className="marketingFieldLabel">
+                  <span>Заголовок</span>
+                  <input
+                    ref={postTitleRef}
+                    className="filterInput"
+                    placeholder="О чём пост"
+                    value={postTitle}
+                    onChange={(event) => setPostTitle(event.target.value)}
+                  />
+                </label>
+                <label className="marketingFieldLabel">
+                  <span>Текст</span>
+                  <textarea
+                    className="filterInput"
+                    rows={5}
+                    placeholder="Что увидит клиент"
+                    value={postBody}
+                    onChange={(event) => setPostBody(event.target.value)}
+                  />
+                </label>
+                <label className="marketingFieldLabel">
+                  <span>Куда публикуем</span>
+                  <select
+                    className="filterInput"
+                    value={postChannel}
+                    onChange={(event) =>
+                      setPostChannel(event.target.value as MarketingContentPost["channel"])
+                    }
+                  >
+                    <option value="telegram">Telegram-канал</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="whatsapp">Рассылка в WhatsApp</option>
+                    <option value="web">Сайт</option>
+                    <option value="other">Другое</option>
+                  </select>
+                </label>
+                <label className="marketingFieldLabel">
+                  <span>Когда опубликовать</span>
+                  <input
+                    className="filterInput"
+                    type="datetime-local"
+                    value={postPlannedLocal}
+                    onChange={(event) => setPostPlannedLocal(event.target.value)}
+                  />
+                </label>
+                {postChannel === "instagram" ? (
+                  <label className="marketingFieldLabel">
+                    <span>Ссылка на картинку</span>
+                    <input
+                      className="filterInput"
+                      placeholder="https://… — для Instagram картинка обязательна"
+                      value={postImageUrl}
+                      onChange={(event) => setPostImageUrl(event.target.value)}
+                    />
+                  </label>
+                ) : null}
+                {postChannel === "whatsapp" ? (
+                  <label className="marketingFieldLabel">
+                    <span>Кому отправить</span>
+                    <select
+                      className="filterInput"
+                      value={postSegmentId}
+                      onChange={(event) => setPostSegmentId(event.target.value)}
+                    >
+                      <option value="">Выберите список клиентов</option>
+                      {segments.map((segment) => (
+                        <option key={segment.id} value={segment.id}>
+                          {segment.name} ({segment.contact_count ?? 0})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {postImageUrl ? (
+                  <img
+                    src={postImageUrl}
+                    alt="Картинка поста"
+                    style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 12, objectFit: "cover" }}
+                  />
+                ) : null}
+                <details
+                  className="marketingAccordion"
+                  open={planOpenPostExtra}
+                  onToggle={(event) => {
+                    const open = readDetailsOpen(event);
+                    if (open === null) return;
+                    setPlanOpenPostExtra(open);
+                  }}
+                >
+                  <summary className="marketingAccordionSummary">Дополнительно</summary>
+                  <div className="scriptForm" style={{ marginTop: 12 }}>
+                    <label className="marketingFieldLabel">
+                      <span>Статус</span>
+                      <select
+                        className="filterInput"
+                        value={postStatus}
+                        onChange={(event) =>
+                          setPostStatus(event.target.value as MarketingContentPost["status"])
+                        }
+                      >
+                        <option value="idea">Идея</option>
+                        <option value="draft">Черновик</option>
+                        <option value="ready">Готов к публикации</option>
+                        <option value="published">Уже опубликован</option>
+                      </select>
+                    </label>
+                    {postChannel === "instagram" ? null : (
+                      <label className="marketingFieldLabel">
+                        <span>Ссылка на картинку</span>
+                        <input
+                          className="filterInput"
+                          placeholder="Необязательно. Для Instagram картинка нужна"
+                          value={postImageUrl}
+                          onChange={(event) => setPostImageUrl(event.target.value)}
+                        />
+                      </label>
+                    )}
+                    {postChannel === "whatsapp" ? null : (
+                      <label className="marketingFieldLabel">
+                        <span>Список клиентов для рассылки</span>
+                        <select
+                          className="filterInput"
+                          value={postSegmentId}
+                          onChange={(event) => setPostSegmentId(event.target.value)}
+                        >
+                          <option value="">Не отправлять клиентам</option>
+                          {segments.map((segment) => (
+                            <option key={segment.id} value={segment.id}>
+                              {segment.name} ({segment.contact_count ?? 0})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <label className="sidebarHint marketingCheck">
+                      <input
+                        type="checkbox"
+                        checked={postAutoSocial}
+                        onChange={(event) => setPostAutoSocial(event.target.checked)}
+                      />
+                      Опубликовать в соцсеть в назначенный день
+                    </label>
+                    <label className="sidebarHint marketingCheck">
+                      <input
+                        type="checkbox"
+                        checked={postAutoBroadcast}
+                        onChange={(event) => setPostAutoBroadcast(event.target.checked)}
+                      />
+                      Отправить клиентам в назначенный день
+                    </label>
+                    <p className="sidebarHint" style={{ margin: 0 }}>
+                      Чтобы пост ушёл сам, оставьте статус «Готов к публикации» и укажите дату.
+                    </p>
+                  </div>
+                </details>
+                <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitPost()}>
+                  Добавить в план
+                </button>
+              </div>
+            </div>
+
+            <div ref={postsListRef} style={{ marginBottom: 24 }}>
+              <div className="scriptPanelTitle">План постов</div>
+              {posts.length ? (
+                posts.map((post) => (
+                  <div key={post.id} className="taskCard">
+                    <div className="taskCardTitle">{post.title}</div>
+                    <div className="taskCardMeta">
+                      {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
+                      {post.planned_at ? ` · на ${new Date(post.planned_at).toLocaleString("ru-RU")}` : ""}
+                      {post.auto_publish_social ? " · опубликуется сам" : ""}
+                      {post.auto_broadcast ? " · уйдёт клиентам" : ""}
+                      {post.campaign_id ? " · есть рассылка" : ""}
+                      {post.social_external_id ? " · уже в соцсети" : ""}
+                    </div>
+                    {post.publish_error ? (
+                      <div className="sidebarHint" style={{ marginTop: 8, color: "#b91c1c" }}>
+                        Не опубликовалось: {post.publish_error}
+                      </div>
+                    ) : null}
+                    <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                      {post.body}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      <select
+                        className="filterInput"
+                        style={{ maxWidth: 220 }}
+                        value={post.status}
+                        disabled={busy}
+                        aria-label="Статус поста"
+                        onChange={(event) =>
+                          void changePostStatus(post.id, event.target.value as MarketingContentPost["status"])
+                        }
+                      >
+                        <option value="idea">Идея</option>
+                        <option value="draft">Черновик</option>
+                        <option value="ready">Готов к публикации</option>
+                        <option value="published">Опубликован</option>
+                        <option value="cancelled">Отменён</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="dialogActionBtn primary"
+                        disabled={busy}
+                        onClick={() => void publishSocialNow(post.id)}
+                      >
+                        Опубликовать сейчас
+                      </button>
+                      {post.status === "draft" || post.status === "idea" ? (
+                        <>
+                          <button
+                            type="button"
+                            className="dialogActionBtn primary"
+                            disabled={busy}
+                            onClick={() => void approvePost(post.id)}
+                          >
+                            Утвердить
+                          </button>
+                          <button
+                            type="button"
+                            className="dialogActionBtn"
+                            disabled={busy}
+                            onClick={() => void rewritePost(post.id)}
+                          >
+                            Переписать с помощью ИИ
+                          </button>
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="dialogActionBtn primary"
+                        disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
+                        onClick={() => void makeCampaignFromPost(post, false)}
+                      >
+                        Сделать рассылку
+                      </button>
+                      <button
+                        type="button"
+                        className="dialogActionBtn primary"
+                        disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
+                        onClick={() => void makeCampaignFromPost(post, true)}
+                      >
+                        Рассылка сейчас
+                      </button>
+                      {post.schedule_processed_at || post.publish_error ? (
+                        <button
+                          type="button"
+                          className="dialogActionBtn"
+                          disabled={busy}
+                          onClick={() => void retrySchedule(post.id)}
+                        >
+                          Повторить публикацию
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="dialogActionBtn"
+                        disabled={busy}
+                        onClick={() => void removePost(post.id)}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="marketingEmpty">
+                  <p className="marketingEmptyTitle">Пока пусто</p>
+                  <p className="marketingConnectStatus">Создайте первый пост — он появится здесь и в календаре.</p>
+                  <button type="button" className="primaryButton" onClick={focusNewPost}>
+                    Создать пост
+                  </button>
+                </div>
+              )}
+            </div>
+      </>
+    );
+  }
+
   return (
     <section className="knowledgePage card marketingPage">
       <div className="railHeader">
         <div>
           <div className="sidebarTitle">Маркетинг</div>
           <div className="sidebarHint">
-            Напишите пост и поставьте дату. Публикация, реклама и напоминания — по шагам ниже.
+            {channelReady ? "Канал подключён. Добавьте пост в план." : "Сначала подключите канал."}
           </div>
         </div>
       </div>
@@ -915,7 +1211,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
       <div className="pipelineFilterButtons" style={{ marginBottom: 16, flexWrap: "wrap" }}>
         {(
           [
-            ["plan", "План", "Написать пост и поставить дату"],
+            ["plan", "План", channelReady ? "Посты и даты публикации" : "Сначала подключите канал"],
             ["landings", "Лендинг", "Страница, куда ведёт реклама"],
             ["calendar", "Календарь", "Посты по дням"],
             ["series", "Напоминания", "Три сообщения клиенту: в день обращения, через 3 дня и через 7 дней"],
@@ -1740,300 +2036,67 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
 
       {marketingTab === "plan" ? (
         <>
-          <div className="marketingLead">
-            <div>
-              <p className="marketingLeadText">Напишите пост и поставьте дату — он попадёт в план.</p>
-              <button type="button" className="textButton marketingLeadAlt" onClick={openAiDraft}>
-                Нужен черновик — попросить ИИ
-              </button>
-            </div>
-            <button type="button" className="primaryButton" onClick={focusNewPost}>
-              Создать пост
-            </button>
-          </div>
-
-          <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-            <div className="scriptPanelTitle">Новый пост</div>
-            <div className="sidebarHint">Заголовок, текст и дата. Остальное можно заполнить позже.</div>
-            <div className="scriptForm">
-              <label className="marketingFieldLabel">
-                <span>Заголовок</span>
-                <input
-                  ref={postTitleRef}
-                  className="filterInput"
-                  placeholder="О чём пост"
-                  value={postTitle}
-                  onChange={(event) => setPostTitle(event.target.value)}
-                />
-              </label>
-              <label className="marketingFieldLabel">
-                <span>Текст</span>
-                <textarea
-                  className="filterInput"
-                  rows={5}
-                  placeholder="Что увидит клиент"
-                  value={postBody}
-                  onChange={(event) => setPostBody(event.target.value)}
-                />
-              </label>
-              <label className="marketingFieldLabel">
-                <span>Куда публикуем</span>
-                <select
-                  className="filterInput"
-                  value={postChannel}
-                  onChange={(event) =>
-                    setPostChannel(event.target.value as MarketingContentPost["channel"])
-                  }
-                >
-                  <option value="telegram">Telegram-канал</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="whatsapp">Рассылка в WhatsApp</option>
-                  <option value="web">Сайт</option>
-                  <option value="other">Другое</option>
-                </select>
-              </label>
-              <label className="marketingFieldLabel">
-                <span>Когда опубликовать</span>
-                <input
-                  className="filterInput"
-                  type="datetime-local"
-                  value={postPlannedLocal}
-                  onChange={(event) => setPostPlannedLocal(event.target.value)}
-                />
-              </label>
-              {postChannel === "instagram" ? (
-                <label className="marketingFieldLabel">
-                  <span>Ссылка на картинку</span>
-                  <input
-                    className="filterInput"
-                    placeholder="https://… — для Instagram картинка обязательна"
-                    value={postImageUrl}
-                    onChange={(event) => setPostImageUrl(event.target.value)}
-                  />
-                </label>
-              ) : null}
-              {postChannel === "whatsapp" ? (
-                <label className="marketingFieldLabel">
-                  <span>Кому отправить</span>
-                  <select
-                    className="filterInput"
-                    value={postSegmentId}
-                    onChange={(event) => setPostSegmentId(event.target.value)}
-                  >
-                    <option value="">Выберите список клиентов</option>
-                    {segments.map((segment) => (
-                      <option key={segment.id} value={segment.id}>
-                        {segment.name} ({segment.contact_count ?? 0})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {postImageUrl ? (
-                <img
-                  src={postImageUrl}
-                  alt="Картинка поста"
-                  style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 12, objectFit: "cover" }}
-                />
-              ) : null}
-              <details
-                className="marketingAccordion"
-                open={planOpenPostExtra}
-                onToggle={(event) => setPlanOpenPostExtra((event.target as HTMLDetailsElement).open)}
-              >
-                <summary className="marketingAccordionSummary">Дополнительно</summary>
-                <div className="scriptForm" style={{ marginTop: 12 }}>
-                  <label className="marketingFieldLabel">
-                    <span>Статус</span>
-                    <select
-                      className="filterInput"
-                      value={postStatus}
-                      onChange={(event) =>
-                        setPostStatus(event.target.value as MarketingContentPost["status"])
-                      }
-                    >
-                      <option value="idea">Идея</option>
-                      <option value="draft">Черновик</option>
-                      <option value="ready">Готов к публикации</option>
-                      <option value="published">Уже опубликован</option>
-                    </select>
-                  </label>
-                  {postChannel === "instagram" ? null : (
-                    <label className="marketingFieldLabel">
-                      <span>Ссылка на картинку</span>
-                      <input
-                        className="filterInput"
-                        placeholder="Необязательно. Для Instagram картинка нужна"
-                        value={postImageUrl}
-                        onChange={(event) => setPostImageUrl(event.target.value)}
-                      />
-                    </label>
-                  )}
-                  {postChannel === "whatsapp" ? null : (
-                    <label className="marketingFieldLabel">
-                      <span>Список клиентов для рассылки</span>
-                      <select
-                        className="filterInput"
-                        value={postSegmentId}
-                        onChange={(event) => setPostSegmentId(event.target.value)}
-                      >
-                        <option value="">Не отправлять клиентам</option>
-                        {segments.map((segment) => (
-                          <option key={segment.id} value={segment.id}>
-                            {segment.name} ({segment.contact_count ?? 0})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <label className="sidebarHint marketingCheck">
-                    <input
-                      type="checkbox"
-                      checked={postAutoSocial}
-                      onChange={(event) => setPostAutoSocial(event.target.checked)}
-                    />
-                    Опубликовать в соцсеть в назначенный день
-                  </label>
-                  <label className="sidebarHint marketingCheck">
-                    <input
-                      type="checkbox"
-                      checked={postAutoBroadcast}
-                      onChange={(event) => setPostAutoBroadcast(event.target.checked)}
-                    />
-                    Отправить клиентам в назначенный день
-                  </label>
-                  <p className="sidebarHint" style={{ margin: 0 }}>
-                    Чтобы пост ушёл сам, оставьте статус «Готов к публикации» и укажите дату.
-                  </p>
-                </div>
-              </details>
-              <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitPost()}>
-                Добавить в план
-              </button>
-            </div>
-          </div>
-
-          <div ref={postsListRef} style={{ marginBottom: 24 }}>
-            <div className="scriptPanelTitle">План постов</div>
-            {posts.length ? (
-              posts.map((post) => (
-                <div key={post.id} className="taskCard">
-                  <div className="taskCardTitle">{post.title}</div>
-                  <div className="taskCardMeta">
-                    {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
-                    {post.planned_at ? ` · на ${new Date(post.planned_at).toLocaleString("ru-RU")}` : ""}
-                    {post.auto_publish_social ? " · опубликуется сам" : ""}
-                    {post.auto_broadcast ? " · уйдёт клиентам" : ""}
-                    {post.campaign_id ? " · есть рассылка" : ""}
-                    {post.social_external_id ? " · уже в соцсети" : ""}
-                  </div>
-                  {post.publish_error ? (
-                    <div className="sidebarHint" style={{ marginTop: 8, color: "#b91c1c" }}>
-                      Не опубликовалось: {post.publish_error}
-                    </div>
-                  ) : null}
-                  <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                    {post.body}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                    <select
-                      className="filterInput"
-                      style={{ maxWidth: 220 }}
-                      value={post.status}
-                      disabled={busy}
-                      aria-label="Статус поста"
-                      onChange={(event) =>
-                        void changePostStatus(post.id, event.target.value as MarketingContentPost["status"])
-                      }
-                    >
-                      <option value="idea">Идея</option>
-                      <option value="draft">Черновик</option>
-                      <option value="ready">Готов к публикации</option>
-                      <option value="published">Опубликован</option>
-                      <option value="cancelled">Отменён</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="dialogActionBtn primary"
-                      disabled={busy}
-                      onClick={() => void publishSocialNow(post.id)}
-                    >
-                      Опубликовать сейчас
-                    </button>
-                    {post.status === "draft" || post.status === "idea" ? (
-                      <>
-                        <button
-                          type="button"
-                          className="dialogActionBtn primary"
-                          disabled={busy}
-                          onClick={() => void approvePost(post.id)}
-                        >
-                          Утвердить
-                        </button>
-                        <button
-                          type="button"
-                          className="dialogActionBtn"
-                          disabled={busy}
-                          onClick={() => void rewritePost(post.id)}
-                        >
-                          Переписать с помощью ИИ
-                        </button>
-                      </>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="dialogActionBtn primary"
-                      disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
-                      onClick={() => void makeCampaignFromPost(post, false)}
-                    >
-                      Сделать рассылку
-                    </button>
-                    <button
-                      type="button"
-                      className="dialogActionBtn primary"
-                      disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
-                      onClick={() => void makeCampaignFromPost(post, true)}
-                    >
-                      Рассылка сейчас
-                    </button>
-                    {post.schedule_processed_at || post.publish_error ? (
-                      <button
-                        type="button"
-                        className="dialogActionBtn"
-                        disabled={busy}
-                        onClick={() => void retrySchedule(post.id)}
-                      >
-                        Повторить публикацию
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="dialogActionBtn"
-                      disabled={busy}
-                      onClick={() => void removePost(post.id)}
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="marketingEmpty">
-                <p className="marketingEmptyTitle">Пока пусто</p>
-                <p className="marketingConnectStatus">Создайте первый пост — он появится здесь и в календаре.</p>
-                <button type="button" className="primaryButton" onClick={focusNewPost}>
-                  Создать пост
+          {channelReady ? (
+            <div className="marketingLead">
+              <div>
+                <p className="marketingLeadText">Напишите пост и поставьте дату — он попадёт в план.</p>
+                <button type="button" className="textButton marketingLeadAlt" onClick={openAiDraft}>
+                  Нужен черновик — попросить ИИ
                 </button>
               </div>
-            )}
-          </div>
+              <button type="button" className="primaryButton" onClick={focusNewPost}>
+                Создать пост
+              </button>
+            </div>
+          ) : (
+            <div className="marketingLead isSetup">
+              <p className="marketingLeadText">Сначала подключите канал</p>
+              <div className="marketingLeadActions">
+                <button type="button" className="primaryButton" onClick={() => onOpenIntegrations?.("telegram")}>
+                  Подключить Telegram
+                </button>
+                <button type="button" className="primaryButton" onClick={() => onOpenIntegrations?.("instagram")}>
+                  Подключить Instagram
+                </button>
+              </div>
+            </div>
+          )}
+
+          {channelReady ? (
+            planEditor()
+          ) : (
+            <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+              <details
+                className="marketingAccordion"
+                open={planOpenDraft}
+                onToggle={(event) => {
+                  const open = readDetailsOpen(event);
+                  if (open === null) return;
+                  setPlanOpenDraft(open);
+                }}
+              >
+                <summary className="marketingAccordionSummary">
+                  План постов
+                  <span className="marketingSummaryMeta">
+                    Можно набросать заранее. Публикация — после подключения канала.
+                  </span>
+                </summary>
+                <div style={{ marginTop: 12 }}>{planEditor()}</div>
+              </details>
+            </div>
+          )}
+
 
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
             <details
               ref={aiSectionRef}
               className="marketingAccordion"
               open={planOpenAi}
-              onToggle={(event) => setPlanOpenAi((event.target as HTMLDetailsElement).open)}
+              onToggle={(event) => {
+                const open = readDetailsOpen(event);
+                if (open === null) return;
+                setPlanOpenAi(open);
+              }}
             >
               <summary className="marketingAccordionSummary">
                 Написать черновик с помощью ИИ
@@ -2145,16 +2208,25 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
             </details>
           </div>
 
+          {channelReady ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
             <details
               className="marketingAccordion"
               open={planOpenPublish}
-              onToggle={(event) => setPlanOpenPublish((event.target as HTMLDetailsElement).open)}
+              onToggle={(event) => {
+                const open = readDetailsOpen(event);
+                if (open === null) return;
+                setPlanOpenPublish(open);
+              }}
             >
               <summary className="marketingAccordionSummary">
                 Куда публиковать
                 <span className="marketingSummaryMeta">
-                  {socialSettings.telegramConnected ? "Telegram подключён" : "Telegram не подключён"}
+                  {socialSettings.telegramConnected
+                    ? socialSettings.telegramChannelId
+                      ? "Telegram подключён"
+                      : "Telegram подключён, канал для постов не указан"
+                    : "Telegram не подключён"}
                   {" · "}
                   {socialSettings.instagramConnected ? "Instagram подключён" : "Instagram не подключён"}
                 </span>
@@ -2164,70 +2236,76 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                   <div className="scriptPanelTitle">Telegram</div>
                   {socialSettings.telegramConnected ? (
                     <p className="marketingConnectStatus">
-                      Канал подключён. Посты со статусом «Готов к публикации» уйдут в назначенный день.
+                      Telegram подключён. Готовые посты можно публиковать в назначенный день.
                     </p>
                   ) : (
-                    <p className="marketingConnectStatus">
-                      Канал ещё не подключён. Укажите его — и готовые посты смогут уходить сами.
-                    </p>
+                    <>
+                      <p className="marketingConnectStatus">Telegram ещё не подключён.</p>
+                      <button
+                        type="button"
+                        className="primaryButton"
+                        onClick={() => onOpenIntegrations?.("telegram")}
+                      >
+                        Подключить Telegram
+                      </button>
+                    </>
                   )}
-                  <label className="marketingFieldLabel">
-                    <span>Канал</span>
-                    <input
-                      className="filterInput"
-                      placeholder="@канал или номер вида -100…"
-                      title="Имя канала с @. Для закрытого канала — числовой номер, обычно начинается с -100."
-                      value={telegramChannelDraft}
-                      onChange={(event) => setTelegramChannelDraft(event.target.value)}
-                    />
-                  </label>
-                  <button type="button" className="primaryButton" disabled={busy} onClick={() => void saveSocial()}>
-                    {socialSettings.telegramConnected ? "Сохранить канал" : "Подключить канал"}
-                  </button>
-                  <p className="sidebarHint" style={{ margin: 0 }}>
-                    Бот Light CRM должен быть администратором этого канала.
-                  </p>
+                  {socialSettings.telegramConnected ? (
+                    <details className="marketingAccordion">
+                      <summary className="marketingAccordionSummary">Дополнительно</summary>
+                      <div className="scriptForm" style={{ marginTop: 12 }}>
+                        <label className="marketingFieldLabel">
+                          <span>Куда отправлять посты</span>
+                          <input
+                            className="filterInput"
+                            placeholder="@канал"
+                            value={telegramChannelDraft}
+                            onChange={(event) => setTelegramChannelDraft(event.target.value)}
+                          />
+                        </label>
+                        <button type="button" className="secondaryButton" disabled={busy} onClick={() => void saveSocial()}>
+                          Сохранить
+                        </button>
+                        <p className="sidebarHint" style={{ margin: 0 }}>
+                          Бот должен быть администратором канала. Для закрытого канала укажите его номер — обычно он начинается с -100.
+                        </p>
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
                 <div className={`marketingConnectCard ${socialSettings.instagramConnected ? "isOn" : ""}`}>
                   <div className="scriptPanelTitle">Instagram</div>
                   {socialSettings.instagramConnected ? (
-                    <>
-                      <p className="marketingConnectStatus">
-                        Instagram подключён. Для поста нужна ссылка на картинку.
-                      </p>
-                      {onOpenIntegrations ? (
-                        <button type="button" className="textButton" onClick={onOpenIntegrations}>
-                          Открыть интеграции
-                        </button>
-                      ) : null}
-                    </>
+                    <p className="marketingConnectStatus">
+                      Instagram подключён. Для поста нужна картинка.
+                    </p>
                   ) : (
                     <>
                       <p className="marketingConnectStatus">Instagram ещё не подключён.</p>
-                      <p className="sidebarHint" style={{ margin: 0 }}>
-                        Подключите его в разделе «Интеграции». После этого отсюда можно публиковать посты с картинкой.
-                      </p>
-                      {onOpenIntegrations ? (
-                        <button type="button" className="secondaryButton" onClick={onOpenIntegrations}>
-                          Открыть интеграции
-                        </button>
-                      ) : (
-                        <p className="sidebarHint" style={{ margin: 0 }}>
-                          Раздел «Интеграции» — в меню слева.
-                        </p>
-                      )}
+                      <button
+                        type="button"
+                        className="primaryButton"
+                        onClick={() => onOpenIntegrations?.("instagram")}
+                      >
+                        Подключить Instagram
+                      </button>
                     </>
                   )}
                 </div>
               </div>
             </details>
           </div>
+          ) : null}
 
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
             <details
               className="marketingAccordion"
               open={planOpenSegments}
-              onToggle={(event) => setPlanOpenSegments((event.target as HTMLDetailsElement).open)}
+              onToggle={(event) => {
+                const open = readDetailsOpen(event);
+                if (open === null) return;
+                setPlanOpenSegments(open);
+              }}
             >
               <summary className="marketingAccordionSummary">
                 Рассылки клиентам

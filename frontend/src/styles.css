@@ -459,6 +459,21 @@ button {
   flex-shrink: 0;
 }
 
+.marketingLead.isSetup {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.marketingLeadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marketingLeadActions .primaryButton {
+  width: auto;
+}
+
 .marketingFieldLabel {
   display: grid;
   gap: 6px;
@@ -537,8 +552,14 @@ button {
   }
 
   .marketingLead .primaryButton,
+  .marketingLeadActions,
+  .marketingLeadActions .primaryButton,
   .marketingEmpty .primaryButton {
     width: 100%;
+  }
+
+  .marketingLeadActions {
+    flex-direction: column;
   }
 }
 
