@@ -16,9 +16,13 @@
   backend:
     build:
       context: ../backend
+    # Optional: create via `npm run setup:env` (examples → infra/.env + meta.secrets.env).
+    # Compose still starts without them; DB/JWT defaults below are enough for local CRM.
     env_file:
-      - .env
-      - meta.secrets.env
+      - path: .env
+        required: false
+      - path: meta.secrets.env
+        required: false
     environment:
       PORT: 4000
       JWT_SECRET: dev-secret

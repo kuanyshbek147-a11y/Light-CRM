@@ -460,6 +460,10 @@ async function run(): Promise<void> {
     ]
   );
 
+  // workspace_settings and related tables live in migrate; seed used to fail here without them.
+  const { ensureUserLoginSchema } = await import("./migrate");
+  await ensureUserLoginSchema();
+
   const { ensureDemoLandingWebChat } = await import("./modules/integrations/webchat/credentials");
   await ensureDemoLandingWebChat();
 

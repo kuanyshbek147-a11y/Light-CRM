@@ -6,15 +6,22 @@
 - `manager@demo.local` / `demo123`
 - `admin@demo.local` / `demo123`
 
-## Локальный запуск без Docker
-1. `npm install`
-2. Поднимите PostgreSQL (`whatsapp_crm`, `postgres/postgres`)
-3. Запустите seed: `npm run -w backend seed`
-4. Запустите backend: `npm run -w backend dev`
-5. Запустите frontend: `npm run -w frontend dev`
+## Локальный запуск
 
-## Docker (рекомендуется)
+Краткая актуальная инструкция: **[RUN.md](./RUN.md)**.
+
+### Без Docker
+1. `npm install`
+2. `npm run setup:env` (создаёт `infra/.env`, `infra/meta.secrets.env`, `frontend/.env` из примеров)
+3. Поднимите PostgreSQL (`whatsapp_crm`, `postgres` / `postgres`)
+4. Seed: `npm run seed`
+5. Backend: `npm run -w backend dev`
+6. Frontend (второй терминал): `npm run -w frontend dev`
+7. Проверка: http://localhost:4000/health и http://localhost:5173
+
+### Docker (рекомендуется)
 - Файл: `infra/docker-compose.yml`
+- `npm run setup:env` (желательно; для Compose 2.24+ файлы уже не обязательны)
 - Быстрый запуск: `npm run docker:up`
 - Остановка: `npm run docker:down`
 - Логи: `npm run docker:logs`
@@ -22,8 +29,8 @@
 
 ### Пошаговый запуск через Docker на Windows
 1. Установите Docker Desktop и проверьте команду `docker --version`.
-2. Откройте проект `b:\\ИИ\\whatsapp-crm-mvp`.
-3. Выполните `npm run docker:up`.
+2. Откройте проект в терминале.
+3. Выполните `npm install`, затем `npm run setup:env`, затем `npm run docker:up`.
 4. Дождитесь старта контейнеров `db`, `seed`, `backend`, `frontend`.
 5. Откройте:
    - UI: `http://localhost:5173`
