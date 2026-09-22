@@ -15,13 +15,24 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Light CRM</title>
+    <script>
+      // Wake Render Free ASAP — before React bundle parses.
+      try {
+        fetch("https://light-crm-backend.onrender.com/health", {
+          method: "GET",
+          mode: "cors",
+          cache: "no-store",
+          credentials: "omit"
+        }).catch(function () {});
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root">
       <div style="margin: 24px; font-family: system-ui, sans-serif; color: #475569; max-width: 28rem">
         <p style="margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; color: #0f172a">Загрузка Light CRM…</p>
         <p style="margin: 0; font-size: 0.9rem; line-height: 1.45">
-          Если открываете впервые за несколько минут — сервер может «просыпаться» 30–60 секунд. Обновите страницу, если загрузка затянулась.
+          Открываем интерфейс. Если сервер спал — вход может занять до минуты.
         </p>
       </div>
     </div>

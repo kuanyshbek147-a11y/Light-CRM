@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { io } from "socket.io-client";
 import { API_BASE_URL, SOCKET_BASE_URL } from "./shared/config/api";
@@ -9,6 +9,7 @@ import {
   setNotificationSoundEnabled,
   unlockNotificationSound
 } from "./shared/lib/notificationSound";
+import { startBackendKeepAlive, warmupBackend } from "./shared/lib/backendWarmup";
 import {
   clearStoredSession,
   persistSession,
@@ -21,10 +22,38 @@ import {
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxConnectChecklist } from "./features/inbox/InboxConnectChecklist";
 import { InboxThread } from "./features/inbox/InboxThread";
-import { LandingWebChat } from "./features/landing/LandingWebChat";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
+
+const LandingWebChat = lazy(() =>
+  import("./features/landing/LandingWebChat").then((m) => ({ default: m.LandingWebChat }))
+);
+const IntegrationsPanel = lazy(() =>
+  import("./features/integrations/IntegrationsPanel").then((m) => ({ default: m.IntegrationsPanel }))
+);
+const MarketingPanel = lazy(() =>
+  import("./features/marketing/MarketingPanel").then((m) => ({ default: m.MarketingPanel }))
+);
+const OpsPanel = lazy(() => import("./features/ops/OpsPanel").then((m) => ({ default: m.OpsPanel })));
+const PlatformPanel = lazy(() =>
+  import("./features/platform/PlatformPanel").then((m) => ({ default: m.PlatformPanel }))
+);
+const FunnelKpiPanel = lazy(() =>
+  import("./features/funnel/FunnelKpiPanel").then((m) => ({ default: m.FunnelKpiPanel }))
+);
+const AnalyticsCharts = lazy(() =>
+  import("./features/analytics/AnalyticsCharts").then((m) => ({ default: m.AnalyticsCharts }))
+);
+const OwnerDashboard = lazy(() =>
+  import("./features/analytics/OwnerDashboard").then((m) => ({ default: m.OwnerDashboard }))
+);
+const StaffChatPanel = lazy(() =>
+  import("./features/staff/StaffChatPanel").then((m) => ({ default: m.StaffChatPanel }))
+);
+const TelephonySoftphone = lazy(() =>
+  import("./features/telephony/TelephonySoftphone").then((m) => ({ default: m.TelephonySoftphone }))
+);
 import {
   canRecordVoiceForWhatsApp,
   extensionForRecordedAudio,
@@ -84,15 +113,6 @@ import {
   refreshScripts,
   type CreatedMessageResponse
 } from "./features/inbox/model/actions";
-import { IntegrationsPanel } from "./features/integrations/IntegrationsPanel";
-import { MarketingPanel } from "./features/marketing/MarketingPanel";
-import { OpsPanel } from "./features/ops/OpsPanel";
-import { PlatformPanel } from "./features/platform/PlatformPanel";
-import { FunnelKpiPanel } from "./features/funnel/FunnelKpiPanel";
-import { AnalyticsCharts } from "./features/analytics/AnalyticsCharts";
-import { OwnerDashboard } from "./features/analytics/OwnerDashboard";
-import { StaffChatPanel } from "./features/staff/StaffChatPanel";
-import { TelephonySoftphone } from "./features/telephony/TelephonySoftphone";
 import { requestTelephonyDial, type CallLogResult } from "./features/telephony/api";
 import { loadStaffUnreadCount, shareConversationToStaff } from "./features/staff/api";
 import {
@@ -794,6 +814,7 @@ export function App(): JSX.Element {
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const [toastKind, setToastKind] = useState<ToastKind>("success");
   const toastTimerRef = useRef<number | null>(null);
+  const [softphoneReady, setSoftphoneReady] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false
   );
@@ -823,6 +844,27 @@ export function App(): JSX.Element {
       /* ignore */
     }
   }, []);
+
+  useEffect(() => {
+    startBackendKeepAlive();
+    void warmupBackend();
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      return;
+    }
+    void warmupBackend();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setSoftphoneReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSoftphoneReady(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [token]);
 
   useEffect(() => {
     if (!token) {
@@ -1365,10 +1407,12 @@ export function App(): JSX.Element {
     }
 
     const maxAttempts = 4;
+    void warmupBackend();
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         if (attempt > 1) {
           setLoginError(`Сервер просыпается… попытка ${attempt}/${maxAttempts}`);
+          await warmupBackend();
         }
         const response = await fetch(`${API}/auth/login`, {
           method: "POST",
@@ -3131,7 +3175,9 @@ export function App(): JSX.Element {
             <IosHomeScreenHint />
           </div>
         </aside>
-        <LandingWebChat />
+        <Suspense fallback={null}>
+          <LandingWebChat />
+        </Suspense>
       </main>
     );
   }
@@ -3198,6 +3244,16 @@ export function App(): JSX.Element {
   const openConversationsWithFollowUp = conversations.filter((conversation) => conversation.has_sla_follow_up);
 
   return (
+    <Suspense
+      fallback={
+        <main className="centered">
+          <div className="integrationsCard" style={{ maxWidth: 360, textAlign: "center" }}>
+            <div className="integrationsTitle">Light CRM</div>
+            <p className="integrationsHint">Загрузка интерфейса…</p>
+          </div>
+        </main>
+      }
+    >
     <div
       className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}${showBottomNav ? " hasBottomNav" : ""}${
         leftMenuCollapsedEffective ? " leftMenuCollapsed" : ""
@@ -5623,7 +5679,7 @@ export function App(): JSX.Element {
           </aside>
         </div>
       ) : null}
-      {token ? (
+      {token && softphoneReady ? (
         <TelephonySoftphone
           authToken={token}
           onToast={showToast}
@@ -5653,6 +5709,7 @@ export function App(): JSX.Element {
         </div>
       ) : null}
     </div>
+    </Suspense>
   );
 }
 
