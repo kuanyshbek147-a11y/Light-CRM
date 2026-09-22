@@ -1,5 +1,6 @@
 export type Conversation = {
   id: string;
+  contact_id?: string;
   contact_name: string;
   phone: string;
   is_group?: boolean;

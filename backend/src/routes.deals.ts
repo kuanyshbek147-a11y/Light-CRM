@@ -202,11 +202,16 @@ dealsRouter.delete("/stages/:id", async (req: AuthRequest, res) => {
 dealsRouter.get("/", async (req: AuthRequest, res) => {
   const rows = await query(
     `SELECT d.id, d.conversation_id, d.stage, d.amount, d.next_step_at,
-            ct.name AS contact_name, u.full_name AS manager_name, c.contact_id
+            ct.name AS contact_name, ct.phone, u.full_name AS manager_name, c.contact_id,
+            c.status AS conversation_status, c.channel,
+            m.body AS last_message_body
      FROM deals d
-     JOIN conversations c ON c.id = d.conversation_id
-     JOIN contacts ct ON ct.id = c.contact_id
+     JOIN conversations c ON c.id = d.conversation_id AND c.workspace_id = d.workspace_id
+     JOIN contacts ct ON ct.id = c.contact_id AND ct.workspace_id = d.workspace_id
      LEFT JOIN users u ON u.id = d.owner_user_id
+     LEFT JOIN LATERAL (
+       SELECT body FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
+     ) m ON true
      WHERE d.workspace_id = $1
      ORDER BY d.updated_at DESC`,
     [req.user?.workspaceId]
@@ -231,11 +236,40 @@ async function ensureStageAndContactReady(
 }
 
 dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, res) => {
-  const { stage } = req.body as { stage: string };
+  const { stage, amount, next_step_at } = req.body as {
+    stage: string;
+    amount?: number | string | null;
+    next_step_at?: string | null;
+  };
   const cleanStage = (stage || "").trim();
   if (!cleanStage) {
     res.status(400).json({ error: "stage_required" });
     return;
+  }
+
+  let cleanAmount: number | null = null;
+  let hasAmount = false;
+  if (amount !== undefined && amount !== null && amount !== "") {
+    cleanAmount = Number(amount);
+    if (Number.isNaN(cleanAmount) || cleanAmount < 0) {
+      res.status(400).json({ error: "invalid_amount" });
+      return;
+    }
+    hasAmount = true;
+  }
+
+  let nextStepMode: "skip" | "clear" | "set" = "skip";
+  let nextStepValue: string | null = null;
+  if (next_step_at === null) {
+    nextStepMode = "clear";
+  } else if (next_step_at !== undefined && String(next_step_at).trim()) {
+    const parsed = new Date(String(next_step_at));
+    if (Number.isNaN(parsed.getTime())) {
+      res.status(400).json({ error: "invalid_next_step" });
+      return;
+    }
+    nextStepMode = "set";
+    nextStepValue = parsed.toISOString();
   }
 
   const workspaceId = req.user?.workspaceId || "";
@@ -250,9 +284,16 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
     [req.params.conversationId, workspaceId]
   );
 
-  const rows = await query<{ id: string; conversation_id: string; stage: string; updated_at: string }>(
-    `INSERT INTO deals (workspace_id, conversation_id, owner_user_id, stage, amount)
-     SELECT $1, $2, $3, $4, 0
+  const rows = await query<{
+    id: string;
+    conversation_id: string;
+    stage: string;
+    amount: string;
+    next_step_at: string | null;
+    updated_at: string;
+  }>(
+    `INSERT INTO deals (workspace_id, conversation_id, owner_user_id, stage, amount, next_step_at)
+     SELECT $1, $2, $3, $4, COALESCE($5, 0), $6::timestamp
      WHERE EXISTS (
        SELECT 1
        FROM conversations c
@@ -260,9 +301,24 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
      )
      ON CONFLICT (conversation_id) DO UPDATE
      SET stage = EXCLUDED.stage,
+         amount = CASE WHEN $7::boolean THEN EXCLUDED.amount ELSE deals.amount END,
+         next_step_at = CASE
+           WHEN $8 = 'clear' THEN NULL
+           WHEN $8 = 'set' THEN EXCLUDED.next_step_at
+           ELSE deals.next_step_at
+         END,
          updated_at = now()
-     RETURNING id, conversation_id, stage, updated_at`,
-    [workspaceId, req.params.conversationId, req.user?.id, cleanStage]
+     RETURNING id, conversation_id, stage, amount, next_step_at, updated_at`,
+    [
+      workspaceId,
+      req.params.conversationId,
+      req.user?.id,
+      cleanStage,
+      hasAmount ? cleanAmount : null,
+      nextStepMode === "set" ? nextStepValue : null,
+      hasAmount,
+      nextStepMode
+    ]
   );
 
   if (!rows[0]) {
@@ -280,6 +336,66 @@ dealsRouter.put("/conversation/:conversationId/stage", async (req: AuthRequest, 
   });
 
   res.json(rows[0]);
+});
+
+dealsRouter.post("/:id/link", async (req: AuthRequest, res) => {
+  const conversationId = String((req.body as { conversationId?: string }).conversationId || "").trim();
+  if (!conversationId) {
+    res.status(400).json({ error: "conversation_required" });
+    return;
+  }
+
+  const workspaceId = req.user?.workspaceId || "";
+  const dealRows = await query<{ id: string; conversation_id: string; contact_id: string }>(
+    `SELECT d.id, d.conversation_id, c.contact_id
+     FROM deals d
+     JOIN conversations c ON c.id = d.conversation_id
+     WHERE d.id = $1 AND d.workspace_id = $2
+     LIMIT 1`,
+    [req.params.id, workspaceId]
+  );
+  const deal = dealRows[0];
+  if (!deal) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (deal.conversation_id === conversationId) {
+    res.json({ id: deal.id, conversation_id: conversationId, linked: true });
+    return;
+  }
+
+  const target = await query<{ id: string; contact_id: string }>(
+    `SELECT id, contact_id FROM conversations WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
+    [conversationId, workspaceId]
+  );
+  if (!target[0]) {
+    res.status(404).json({ error: "conversation_not_found" });
+    return;
+  }
+  if (target[0].contact_id !== deal.contact_id) {
+    res.status(400).json({ error: "different_contact" });
+    return;
+  }
+
+  const occupied = await query<{ id: string }>(
+    `SELECT id FROM deals
+     WHERE conversation_id = $1 AND workspace_id = $2 AND id <> $3
+     LIMIT 1`,
+    [conversationId, workspaceId, deal.id]
+  );
+  if (occupied[0]) {
+    res.status(409).json({ error: "conversation_has_deal" });
+    return;
+  }
+
+  const updated = await query(
+    `UPDATE deals
+     SET conversation_id = $1, updated_at = now()
+     WHERE id = $2 AND workspace_id = $3
+     RETURNING id, conversation_id, stage, amount, next_step_at, updated_at`,
+    [conversationId, deal.id, workspaceId]
+  );
+  res.json(updated[0]);
 });
 
 dealsRouter.patch("/:id/stage", async (req: AuthRequest, res) => {

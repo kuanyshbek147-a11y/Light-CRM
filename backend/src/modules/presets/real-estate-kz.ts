@@ -113,19 +113,13 @@ async function upsertStage(
 async function cleanupUnusedLegacyStages(workspaceId: string): Promise<number> {
   let removed = 0;
   for (const name of LEGACY_DEFAULT_STAGE_NAMES) {
-    const inUse = await query<{ id: string }>(
-      `SELECT id FROM conversations
-       WHERE workspace_id = $1 AND lower(COALESCE(stage, '')) = lower($2)
-       LIMIT 1`,
-      [workspaceId, name]
-    );
     const dealsInUse = await query<{ id: string }>(
       `SELECT id FROM deals
        WHERE workspace_id = $1 AND lower(COALESCE(stage, '')) = lower($2)
        LIMIT 1`,
       [workspaceId, name]
     );
-    if (inUse[0] || dealsInUse[0]) {
+    if (dealsInUse[0]) {
       continue;
     }
     const deleted = await query<{ id: string }>(
