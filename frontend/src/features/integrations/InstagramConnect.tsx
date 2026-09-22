@@ -66,6 +66,7 @@ export function InstagramConnect({ authToken }: Props) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showManual, setShowManual] = useState(false);
+  const [alertPulse, setAlertPulse] = useState(0);
   const blockAlertRef = useRef<HTMLDivElement | null>(null);
 
   const refreshStatus = useCallback(async (): Promise<void> => {
@@ -160,7 +161,7 @@ export function InstagramConnect({ authToken }: Props) {
     const reason = instagramOAuthBlockReason(setup);
     if (reason) {
       setError(reason);
-      blockAlertRef.current?.focus();
+      setAlertPulse((value) => value + 1);
       return;
     }
 
@@ -226,6 +227,20 @@ export function InstagramConnect({ authToken }: Props) {
 
   const blockReason = instagramOAuthBlockReason(setup);
   const visibleError = error || blockReason;
+
+  useEffect(() => {
+    if (alertPulse === 0) {
+      return;
+    }
+    const node = blockAlertRef.current;
+    if (!node) {
+      return;
+    }
+    node.classList.remove("isPulsing");
+    void node.offsetWidth;
+    node.classList.add("isPulsing");
+    node.focus();
+  }, [alertPulse]);
 
   return (
     <div className="instagramConnectCard" id="integration-instagram">

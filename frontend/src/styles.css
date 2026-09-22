@@ -4007,6 +4007,19 @@ body.pwa-standalone {
   font-size: 13px;
 }
 
+.integrationsError.isPulsing {
+  animation: instagramConnectAlertPulse 0.45s ease-in-out;
+}
+
+@keyframes instagramConnectAlertPulse {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
 .integrationsWarning {
   color: #92400e;
   background: #fffbeb;
