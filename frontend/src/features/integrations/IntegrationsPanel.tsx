@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { AutoReplyConnect } from "./AutoReplyConnect";
 import { EmailConnect } from "./EmailConnect";
 import { InstagramConnect } from "./InstagramConnect";
@@ -8,9 +9,15 @@ import { TelephonyConnect } from "../telephony/TelephonyConnect";
 
 type Props = {
   authToken: string;
+  focus?: "telegram" | "instagram" | null;
 };
 
-export function IntegrationsPanel({ authToken }: Props) {
+export function IntegrationsPanel({ authToken, focus }: Props) {
+  useEffect(() => {
+    if (!focus) return;
+    document.getElementById(`integration-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focus]);
+
   return (
     <section className="integrationsPanel card">
       <div className="integrationsPanelHeader">

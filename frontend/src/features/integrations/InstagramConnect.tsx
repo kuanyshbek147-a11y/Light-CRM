@@ -192,7 +192,7 @@ export function InstagramConnect({ authToken }: Props) {
   }
 
   return (
-    <div className="instagramConnectCard">
+    <div className="instagramConnectCard" id="integration-instagram">
       <div className="integrationsPanelHeader">
         <div>
           <h3 className="integrationsPanelTitle">Instagram Direct</h3>

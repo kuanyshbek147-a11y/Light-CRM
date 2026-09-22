@@ -633,6 +633,10 @@ button {
   font-weight: 750;
   font-size: 15px;
   color: #1e1b4b;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
 }
 
 .marketingAccordionSummary::-webkit-details-marker {
@@ -640,13 +644,155 @@ button {
 }
 
 .marketingAccordionSummary::after {
-  content: " ▾";
+  content: "▾";
+  margin-left: auto;
   color: #64748b;
   font-weight: 500;
 }
 
 .marketingAccordion[open] > .marketingAccordionSummary::after {
-  content: " ▴";
+  content: "▴";
+}
+
+.marketingSummaryMeta {
+  font-weight: 500;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.marketingLead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid #e0e4fb;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f6f7ff, #fff);
+}
+
+.marketingLeadText {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e1b4b;
+  line-height: 1.4;
+}
+
+.marketingLeadAlt {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.marketingLead .primaryButton {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.marketingLead.isSetup {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.marketingLeadActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marketingLeadActions .primaryButton {
+  width: auto;
+}
+
+.marketingFieldLabel {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #334155;
+}
+
+.marketingFieldOptional {
+  font-weight: 500;
+  color: #64748b;
+}
+
+.marketingCheck {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.marketingConnectGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.marketingConnectCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.marketingConnectCard.isOn {
+  background: #f4f7ff;
+  border-color: #d8ddf8;
+}
+
+.marketingConnectStatus {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.marketingEmpty {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px dashed #d8ddf8;
+  border-radius: 14px;
+  background: #fafbff;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.marketingEmptyTitle {
+  margin: 0;
+  font-weight: 750;
+  color: #1e1b4b;
+}
+
+.marketingEmpty .primaryButton {
+  width: auto;
+}
+
+@media (max-width: 768px) {
+  .marketingLead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .marketingLead .primaryButton,
+  .marketingLeadActions,
+  .marketingLeadActions .primaryButton,
+  .marketingEmpty .primaryButton {
+    width: 100%;
+  }
+
+  .marketingLeadActions {
+    flex-direction: column;
+  }
 }
 
 .demoQuickRow {

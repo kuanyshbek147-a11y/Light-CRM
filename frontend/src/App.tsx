@@ -726,6 +726,11 @@ export function App(): JSX.Element {
     | "integrations"
     | "platform"
   >("dialogs");
+  const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
+  const openIntegrations = (target?: "telegram" | "instagram") => {
+    setIntegrationsFocus(target ?? null);
+    setCurrentSection("integrations");
+  };
   const [staffUnreadCount, setStaffUnreadCount] = useState(0);
   const [crmTasks, setCrmTasks] = useState<CrmTask[]>([]);
   const [taskStatusFilter, setTaskStatusFilter] = useState<"open" | "done">("open");
@@ -853,7 +858,7 @@ export function App(): JSX.Element {
     try {
       const expected = sessionStorage.getItem("instagram_oauth_state");
       if (expected && expected === state) {
-        setCurrentSection("integrations");
+        openIntegrations("instagram");
       }
     } catch {
       /* ignore */
@@ -3507,7 +3512,7 @@ export function App(): JSX.Element {
               title="Settings"
               onClick={() => {
                 if (sessionUser?.role === "admin") {
-                  setCurrentSection("integrations");
+                  openIntegrations();
                 }
               }}
             >
@@ -3720,7 +3725,7 @@ export function App(): JSX.Element {
             <button
               type="button"
               className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
-              onClick={() => setCurrentSection("integrations")}
+              onClick={() => openIntegrations()}
               title={UI.menuIntegrations}
             >
               <span className="leftMenuButtonIcon" aria-hidden="true">
@@ -3790,7 +3795,7 @@ export function App(): JSX.Element {
                   authToken={token}
                   visible={!conversationsLoading && conversations.length === 0}
                   isAdmin={sessionUser?.role === "admin" || sessionUser?.role === "superadmin"}
-                  onOpenIntegrations={() => setCurrentSection("integrations")}
+                  onOpenIntegrations={() => openIntegrations()}
                 />
               ) : null
             }
@@ -4207,7 +4212,13 @@ export function App(): JSX.Element {
             </div>
           </section>
         ) : currentSection === "marketing" ? (
-          token ? <MarketingPanel authToken={token} onToast={showToast} /> : null
+          token ? (
+            <MarketingPanel
+              authToken={token}
+              onToast={showToast}
+              onOpenIntegrations={(target) => openIntegrations(target)}
+            />
+          ) : null
         ) : currentSection === "ops" ? (
           token ? (
             <OpsPanel
@@ -4220,7 +4231,7 @@ export function App(): JSX.Element {
             />
           ) : null
         ) : currentSection === "integrations" ? (
-          token ? <IntegrationsPanel authToken={token} /> : null
+          token ? <IntegrationsPanel authToken={token} focus={integrationsFocus} /> : null
         ) : currentSection === "analytics" ? (
           <section className="analyticsPage card">
             <div className="railHeader">
@@ -4918,7 +4929,7 @@ export function App(): JSX.Element {
                 <span>›</span>
               </button>
               {sessionUser?.role === "admin" ? (
-                <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("integrations")}>
+                <button type="button" className="profileMenuBtn" onClick={() => openIntegrations()}>
                   <span>{UI.menuIntegrations}</span>
                   <span>›</span>
                 </button>

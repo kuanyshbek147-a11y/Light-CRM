@@ -89,7 +89,7 @@ export function TelegramConnect({ authToken }: Props) {
   }
 
   return (
-    <div className="instagramConnectCard">
+    <div className="instagramConnectCard" id="integration-telegram">
       <div className="integrationsPanelHeader">
         <div>
           <h3 className="integrationsPanelTitle">Telegram Bot</h3>
