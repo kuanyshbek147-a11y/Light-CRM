@@ -753,8 +753,10 @@ body.pwa-standalone {
 
 .appShell {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -1013,6 +1015,10 @@ body.pwa-standalone {
   font-size: 12px;
   color: #0f172a;
   font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspaceLayout {
@@ -1020,7 +1026,7 @@ body.pwa-standalone {
   min-height: 0;
   padding: 14px;
   display: grid;
-  grid-template-columns: 210px 1fr;
+  grid-template-columns: 210px minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
   transition: grid-template-columns 0.2s ease;
@@ -1190,14 +1196,21 @@ body.pwa-standalone {
 
 .appGrid {
   display: grid;
-  grid-template-columns: 360px 1fr 380px;
-  gap: 14px;
+  grid-template-columns: 280px minmax(0, 1fr) 280px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
   overflow: hidden;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .appGrid.appGridNoRightRail {
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.appGrid.appGridNoRightRail.appGridKpiCollapsed {
+  grid-template-columns: 280px minmax(0, 1fr) 44px;
 }
 
 .card {
@@ -1211,6 +1224,9 @@ body.pwa-standalone {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .sidebarHeader {
@@ -1315,6 +1331,8 @@ body.pwa-standalone {
   margin: 0;
   list-style: none;
   overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .chatItem {
@@ -1518,6 +1536,9 @@ body.pwa-standalone {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .threadHeader {
@@ -1602,9 +1623,10 @@ body.pwa-standalone {
 }
 
 .messages {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  padding: 14px 16px;
+  padding: 16px 18px 12px;
   background: linear-gradient(180deg, rgba(91, 92, 233, 0.05), rgba(145, 174, 255, 0.03) 30%, transparent 60%);
   position: relative;
 }
@@ -1613,6 +1635,66 @@ body.pwa-standalone {
   outline: 2px dashed #818cf8;
   outline-offset: -6px;
   background: linear-gradient(180deg, rgba(79, 70, 229, 0.08), transparent 40%);
+}
+
+.threadReplyDock {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #fcfdff;
+  border-top: 1px solid var(--line);
+  z-index: 4;
+}
+
+.threadReplyDock .quickActionChips,
+.threadReplyDock .composer {
+  flex: 0 0 auto;
+}
+
+.threadReplyDock .scriptPanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  border-top: 0;
+  background: transparent;
+}
+
+.scriptPanelIntro {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scriptPanelIntro .sidebarHint {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.threadReplyDock .composer.composerWa {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: #fff;
+  box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.04);
+}
+
+@media (min-width: 769px) {
+  .threadReplyDock {
+    max-height: 46%;
+  }
+
+  .sidebar {
+    padding: 12px 12px 0;
+  }
+
+  .channelFilters,
+  .sidebar .mobilePageHeader {
+    margin-left: 2px;
+    margin-right: 2px;
+  }
 }
 
 .scriptPanel {
@@ -2510,7 +2592,7 @@ body.pwa-standalone {
 
 .bubble {
   margin-bottom: 12px;
-  max-width: 78%;
+  max-width: min(640px, 78%);
   padding: 10px 12px;
   border-radius: 16px;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
@@ -2519,8 +2601,8 @@ body.pwa-standalone {
 .bubbleBody {
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: 14.5px;
+  line-height: 1.45;
 }
 
 .bubbleMedia {
@@ -2991,12 +3073,91 @@ body.pwa-standalone {
 .rightRail {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .railHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   padding: 14px 14px 8px 14px;
   border-bottom: 1px solid #eef2f7;
+}
+
+.railHeaderText {
+  min-width: 0;
+}
+
+.railCollapseBtn,
+.kpiRailToggle {
+  border: 1px solid #dbe2f0;
+  background: #fff;
+  color: #3730a3;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.railCollapseBtn {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.railCollapseBtn:hover,
+.kpiRailToggle:hover {
+  border-color: #c7d2fe;
+  background: #f5f7ff;
+}
+
+.kpiRailToggle {
+  min-width: 0;
+  height: 100%;
+  padding: 14px 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.04em;
+  font-size: 12px;
+}
+
+.rightRail .sidebarTitle {
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.rightRail .dealTable {
+  table-layout: fixed;
+}
+
+.rightRail .dealTable th,
+.rightRail .dealTable td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.rightRail .dealTable th:nth-child(1),
+.rightRail .dealTable td:nth-child(1) {
+  width: 34%;
+}
+
+.rightRail .dealTable th:nth-child(2),
+.rightRail .dealTable td:nth-child(2) {
+  width: 26%;
+}
+
+.rightRail .stageSelect {
+  max-width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  padding: 8px 6px;
 }
 
 .kpiGrid {
@@ -3067,6 +3228,42 @@ body.pwa-standalone {
   font-weight: 700;
 }
 
+@media (min-width: 769px) {
+  .workspaceLayout {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1440px) {
+  .workspaceLayout {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .appGrid {
+    grid-template-columns: 248px minmax(0, 1fr) 248px;
+    gap: 10px;
+  }
+
+  .appGrid.appGridNoRightRail.appGridKpiCollapsed {
+    grid-template-columns: 268px minmax(0, 1fr) 44px;
+  }
+
+  .topbarSearch {
+    min-width: 160px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .appGrid {
+    grid-template-columns: 232px minmax(0, 1fr) 240px;
+  }
+
+  .appGrid.appGridNoRightRail.appGridKpiCollapsed {
+    grid-template-columns: 248px minmax(0, 1fr) 44px;
+  }
+}
+
 @media (max-width: 1100px) {
   .landingPage {
     grid-template-columns: 1fr;
@@ -3086,6 +3283,7 @@ body.pwa-standalone {
 
   .workspaceLayout {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
   }
 
   .leftMenu {
@@ -3095,8 +3293,14 @@ body.pwa-standalone {
     padding: 10px 12px;
   }
 
-  .appGrid {
-    grid-template-columns: 300px 1fr;
+  .appGrid,
+  .appGrid.appGridNoRightRail,
+  .appGrid.appGridNoRightRail.appGridKpiCollapsed {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .kpiRailToggle {
+    display: none;
   }
 
   .knowledgePageGrid {
@@ -3201,10 +3405,17 @@ body.pwa-standalone {
     padding: 10px 12px;
   }
 
-  .appGrid {
+  .appGrid,
+  .appGrid.appGridNoRightRail,
+  .appGrid.appGridNoRightRail.appGridKpiCollapsed {
     grid-template-columns: 1fr;
     gap: 10px;
     overflow: visible;
+    height: auto;
+  }
+
+  .kpiRailToggle {
+    display: none;
   }
 
   .appGrid.mobileThreadOpen .sidebar,

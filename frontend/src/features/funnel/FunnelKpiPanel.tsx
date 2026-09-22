@@ -35,6 +35,8 @@ type FunnelKpiPanelProps = {
   onDealStageChange: (dealId: string, stage: string) => void;
   className?: string;
   showHeader?: boolean;
+  onCollapse?: () => void;
+  collapseLabel?: string;
 };
 
 export function FunnelKpiPanel({
@@ -45,16 +47,23 @@ export function FunnelKpiPanel({
   formatStageLabel,
   onDealStageChange,
   className,
-  showHeader = true
+  showHeader = true,
+  onCollapse,
+  collapseLabel
 }: FunnelKpiPanelProps) {
   return (
     <div className={className}>
       {showHeader ? (
         <div className="railHeader">
-          <div>
+          <div className="railHeaderText">
             <div className="sidebarTitle">{labels.pipelineAndKpi}</div>
             <div className="sidebarHint">{labels.salesOverview}</div>
           </div>
+          {onCollapse ? (
+            <button type="button" className="railCollapseBtn" onClick={onCollapse}>
+              {collapseLabel || "Свернуть"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

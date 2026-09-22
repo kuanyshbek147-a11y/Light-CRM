@@ -710,7 +710,9 @@
 /* ── Quick action chips in chat ── */
 .quickActionChips {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  max-width: 100%;
   overflow-x: auto;
   padding: 10px 14px 0;
   scrollbar-width: none;

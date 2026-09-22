@@ -450,41 +450,6 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             </div>
           </div>
 
-          <div className="threadHeader">
-            {onBack ? (
-              <button type="button" className="mobileBackButton" onClick={onBack}>
-                {backLabel || "←"}
-              </button>
-            ) : null}
-            <div className="threadTitle">
-              <div className="threadLabel">{ui.replyBox}</div>
-              <button type="button" className="threadName clientCardTrigger" onClick={onOpenCustomerCard}>
-                {selectedConversationData.contact_name}
-                {selectedConversationData.is_group ? <span className="groupBadge">Группа</span> : null}
-              </button>
-              <div className="threadMeta">
-                <span className={`channelBadge ${selectedConversationData.channel}`}>
-                  {selectedConversationData.channel === "whatsapp"
-                    ? "WhatsApp"
-                    : selectedConversationData.channel === "telegram"
-                      ? "Telegram"
-                      : selectedConversationData.channel === "instagram"
-                        ? "Instagram"
-                        : selectedConversationData.channel === "web"
-                          ? "Сайт"
-                          : selectedConversationData.channel === "email"
-                            ? "Email"
-                            : selectedConversationData.channel}
-                </span>
-                <span>
-                  {selectedConversationData.is_group
-                    ? "группа"
-                    : selectedConversationData.phone || ""}
-                </span>
-              </div>
-            </div>
-          </div>
-
           <div
             className={`messages ${isDragOverMessages ? "dragOver" : ""}`}
             role="log"
@@ -543,11 +508,14 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             {isDragOverMessages ? <div className="dropHint">Перетащите картинку или видео сюда</div> : null}
           </div>
 
+          <div className="threadReplyDock">
           <div className="quickActionChips">
             <button
               type="button"
               className={`quickChip ${scriptPanelOpen ? "active" : ""}`}
               onClick={onToggleScriptPanel}
+              aria-expanded={scriptPanelOpen}
+              aria-controls="thread-assist-panel"
             >
               {ui.replyScripts}
             </button>
@@ -555,6 +523,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               type="button"
               className={`quickChip outline ${knowledgeQuickOpen ? "active" : ""}`}
               onClick={onToggleKnowledgeQuick}
+              aria-expanded={knowledgeQuickOpen}
+              aria-controls="thread-assist-panel"
             >
               {ui.knowledgeBase}
             </button>
@@ -575,34 +545,11 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
             ) : null}
           </div>
 
-          <div className="scriptPanel">
-            <div className="scriptPanelTop">
-              <div className="scriptPanelToggle">
-                <span className="scriptPanelToggleText">
-                  <span className="scriptPanelTitle">{ui.replyScripts}</span>
-                  <span className="sidebarHint">{ui.quickScriptHint}</span>
-                </span>
-              </div>
-              <div className="scriptPanelTopActions">
-                <button
-                  type="button"
-                  className={`scriptTopButton scriptTopButtonAccent ${scriptPanelOpen ? "active" : ""}`}
-                  onClick={onToggleScriptPanel}
-                  title={ui.replyScripts}
-                  aria-expanded={scriptPanelOpen}
-                >
-                  {ui.replyScripts}
-                </button>
-                <button
-                  type="button"
-                  className={`scriptTopButton scriptTopButtonPrimary ${knowledgeQuickOpen ? "active" : ""}`}
-                  onClick={onToggleKnowledgeQuick}
-                  aria-expanded={knowledgeQuickOpen}
-                  title={ui.knowledgeBase}
-                >
-                  {ui.knowledgeBase}
-                </button>
-              </div>
+          {scriptPanelOpen || knowledgeQuickOpen ? (
+          <div className="scriptPanel" id="thread-assist-panel">
+            <div className="scriptPanelIntro">
+              <span className="scriptPanelTitle">{scriptPanelOpen ? ui.replyScripts : ui.knowledgeBase}</span>
+              <span className="sidebarHint">{scriptPanelOpen ? ui.quickScriptHint : ui.searchKnowledgeBase}</span>
             </div>
 
             {scriptPanelOpen ? (
@@ -641,7 +588,6 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
 
             {!scriptPanelOpen && knowledgeQuickOpen ? (
               <div className="scriptKnowledgePanel">
-                <div className="scriptPanelTitle">{ui.knowledgeBase}</div>
                 <input
                   className="searchInput scriptKnowledgeSearch"
                   placeholder={ui.searchKnowledgeBase}
@@ -692,6 +638,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               </div>
             ) : null}
           </div>
+          ) : null}
 
           <div className={`composer composerWa ${recordingAudio ? "composerRecording" : ""}`}>
             {recordingAudio ? (
@@ -716,6 +663,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               composerControls
             )}
             {mediaUploadError ? <div className="composerError">{mediaUploadError}</div> : null}
+          </div>
           </div>
         </>
       ) : (
