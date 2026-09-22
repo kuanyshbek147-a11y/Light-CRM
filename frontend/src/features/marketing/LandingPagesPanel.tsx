@@ -440,11 +440,11 @@ export function LandingPagesPanel({ authToken, onToast, onUseInAds }: Props) {
     <div style={{ marginBottom: 24 }}>
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
         <div className="scriptPanelTitle">
-          {editingId ? "Редактирование лендинга" : "Новый лендинг для бизнеса"}
+          {editingId ? "Редактирование страницы" : "Новая страница для рекламы"}
         </div>
         <div className="sidebarHint" style={{ marginBottom: 12 }}>
-          Публичная страница для рекламы и рассылок. После публикации ссылку можно вставить в Meta Ads
-          или WhatsApp.
+          Страница, куда ведёт реклама или ссылка в сообщении. После публикации её можно вставить в объявление
+          или в WhatsApp.
         </div>
         <div style={{ marginBottom: 14 }}>
           <div className="sidebarHint" style={{ marginBottom: 8 }}>
@@ -558,7 +558,7 @@ export function LandingPagesPanel({ authToken, onToast, onUseInAds }: Props) {
               onChange={(e) => setForm((p) => ({ ...p, heroImageUrl: e.target.value }))}
             />
             <div className="sidebarHint">
-              Эта картинка уходит в превью WhatsApp / Meta (OG). Лучше широкий JPG/PNG без мелкого текста.
+              Эта картинка уходит в превью WhatsApp и Facebook. Лучше широкий JPG или PNG без мелкого текста.
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
               <input

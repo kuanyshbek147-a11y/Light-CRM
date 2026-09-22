@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   activateAdsCampaign,
   createAdsCampaign,
@@ -55,6 +55,7 @@ import { LandingPagesPanel } from "./LandingPagesPanel";
 type Props = {
   authToken: string;
   onToast?: (message: string, kind: "success" | "error") => void;
+  onOpenIntegrations?: () => void;
 };
 
 const emptyFilter: MarketingSegmentFilter = {
@@ -77,7 +78,7 @@ const campaignStatusLabel: Record<MarketingCampaign["status"], string> = {
 const postStatusLabel: Record<MarketingContentPost["status"], string> = {
   idea: "Идея",
   draft: "Черновик",
-  ready: "Готов",
+  ready: "Готов к публикации",
   published: "Опубликован",
   cancelled: "Отменён"
 };
@@ -90,6 +91,26 @@ const postChannelLabel: Record<MarketingContentPost["channel"], string> = {
   other: "Другое"
 };
 
+const sequenceStatusLabel: Record<string, string> = {
+  draft: "Черновик",
+  paused: "На паузе",
+  active: "Идёт",
+  running: "Идёт",
+  done: "Завершена",
+  cancelled: "Отменена",
+  queued: "В очереди"
+};
+
+const audienceStatusLabel: Record<string, string> = {
+  ready: "Готово",
+  synced: "Обновлено",
+  failed: "Ошибка",
+  pending: "Ждёт",
+  draft: "Черновик"
+};
+
+const AI_UNAVAILABLE = "ИИ пока не подключён. Напишите текст вручную.";
+
 function fromLocalInputValue(value: string): string | null {
   if (!value.trim()) {
     return null;
@@ -101,7 +122,7 @@ function fromLocalInputValue(value: string): string | null {
   return date.toISOString();
 }
 
-export function MarketingPanel({ authToken, onToast }: Props) {
+export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props) {
   const [segments, setSegments] = useState<MarketingSegment[]>([]);
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [posts, setPosts] = useState<MarketingContentPost[]>([]);
@@ -128,10 +149,10 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [selectedCalendarDayKey, setSelectedCalendarDayKey] = useState<string | null>(null);
   const [calendarRangeDays, setCalendarRangeDays] = useState<7 | 30>(7);
   const [campaignTemplateName, setCampaignTemplateName] = useState("");
-  const [seqName, setSeqName] = useState("Серия 0/3/7");
-  const [seqStep0, setSeqStep0] = useState("Здравствуйте, {{name}}! Это первое касание.");
+  const [seqName, setSeqName] = useState("Напоминания клиенту");
+  const [seqStep0, setSeqStep0] = useState("Здравствуйте, {{name}}! Это первое сообщение.");
   const [seqStep3, setSeqStep3] = useState("{{name}}, напоминаем о нашем предложении.");
-  const [seqStep7, setSeqStep7] = useState("{{name}}, последний soft follow-up. Готовы обсудить?");
+  const [seqStep7, setSeqStep7] = useState("{{name}}, последнее напоминание. Готовы обсудить?");
   const [seqTemplate, setSeqTemplate] = useState("");
   const [socialSettings, setSocialSettings] = useState<MarketingSocialSettings>({
     telegramChannelId: "",
@@ -181,8 +202,12 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const [adsLinkUrl, setAdsLinkUrl] = useState("");
   const [adsWizardStep, setAdsWizardStep] = useState<1 | 2 | 3>(1);
   const [planOpenAi, setPlanOpenAi] = useState(false);
-  const [planOpenPost, setPlanOpenPost] = useState(true);
+  const [planOpenPublish, setPlanOpenPublish] = useState(false);
   const [planOpenSegments, setPlanOpenSegments] = useState(false);
+  const [planOpenPostExtra, setPlanOpenPostExtra] = useState(false);
+  const postTitleRef = useRef<HTMLInputElement>(null);
+  const aiSectionRef = useRef<HTMLDetailsElement>(null);
+  const postsListRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     const settled = await Promise.allSettled([
@@ -286,7 +311,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   async function submitSegment(): Promise<void> {
     const name = segmentName.trim();
     if (!name) {
-      onToast?.("Укажите название сегмента", "error");
+      onToast?.("Укажите название списка клиентов", "error");
       return;
     }
     setBusy(true);
@@ -300,14 +325,14 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       }
       const created = await createMarketingSegment(authToken, { name, filter: cleanFilter });
       if (!created) {
-        onToast?.("Не удалось создать сегмент", "error");
+        onToast?.("Не удалось создать список клиентов", "error");
         return;
       }
       setSegmentName("");
       setFilter(emptyFilter);
       setCampaignSegmentId(created.id);
       setPostSegmentId(created.id);
-      onToast?.(`Сегмент создан · ${created.contact_count || 0} контактов`, "success");
+      onToast?.(`Список создан · ${created.contact_count || 0} контактов`, "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -319,12 +344,12 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     try {
       const ok = await deleteMarketingSegment(authToken, segmentId);
       if (!ok) {
-        onToast?.("Не удалось удалить сегмент", "error");
+        onToast?.("Не удалось удалить список", "error");
         return;
       }
       if (campaignSegmentId === segmentId) setCampaignSegmentId("");
       if (postSegmentId === segmentId) setPostSegmentId("");
-      onToast?.("Сегмент удалён", "success");
+      onToast?.("Список удалён", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -335,7 +360,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     const name = campaignName.trim();
     const body = campaignBody.trim();
     if (!name || !body || !campaignSegmentId) {
-      onToast?.("Заполните название, сегмент и текст", "error");
+      onToast?.("Заполните название, список клиентов и текст", "error");
       return;
     }
     setBusy(true);
@@ -349,11 +374,11 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         templateLang: "ru"
       });
       if (!created) {
-        onToast?.("Не удалось создать кампанию", "error");
+        onToast?.("Не удалось создать рассылку", "error");
         return;
       }
       setCampaignName("");
-      onToast?.("Кампания создана (черновик)", "success");
+      onToast?.("Черновик рассылки создан", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -365,7 +390,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     try {
       const started = await startMarketingCampaign(authToken, campaignId);
       if (!started) {
-        onToast?.("Не удалось запустить: пустой сегмент или неверный статус", "error");
+        onToast?.("Не удалось запустить: в списке никого нет или рассылка уже ушла", "error");
         return;
       }
       onToast?.(`Рассылка запущена · ${started.recipients_total || 0} получателей`, "success");
@@ -383,7 +408,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       return;
     }
     if (postAutoBroadcast && !postSegmentId) {
-      onToast?.("Для авторассылки выберите сегмент", "error");
+      onToast?.("Для рассылки выберите список клиентов", "error");
       return;
     }
     setBusy(true);
@@ -408,7 +433,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       setPostImageUrl("");
       setPostPlannedLocal("");
       setPostStatus("ready");
-      onToast?.("Пост добавлен в контент-план", "success");
+      onToast?.("Пост добавлен в план", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -458,7 +483,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         onToast?.("Не удалось сбросить расписание", "error");
         return;
       }
-      onToast?.("Пост снова в очереди автозапуска", "success");
+      onToast?.("Пост снова поставлен в очередь", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -484,7 +509,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   async function makeCampaignFromPost(post: MarketingContentPost, start: boolean): Promise<void> {
     const segmentId = post.segment_id || campaignSegmentId || postSegmentId;
     if (!segmentId) {
-      onToast?.("Сначала создайте и выберите сегмент", "error");
+      onToast?.("Сначала создайте список клиентов и выберите его", "error");
       return;
     }
     setBusy(true);
@@ -503,7 +528,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       onToast?.(
         start
           ? `Рассылка запущена · ${result.campaign.recipients_total || 0} получателей`
-          : "Черновик кампании создан из поста",
+          : "Черновик рассылки создан из поста",
         "success"
       );
       await refresh();
@@ -523,7 +548,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         return;
       }
       setSocialSettings(saved);
-      onToast?.("Настройки автопубликации сохранены", "success");
+      onToast?.("Канал сохранён", "success");
     } finally {
       setBusy(false);
     }
@@ -546,7 +571,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         onToast?.(
           aiConfigured
             ? "Не удалось сгенерировать текст"
-            : "OpenAI не настроен на сервере (OPENAI_API_KEY)",
+            : AI_UNAVAILABLE,
           "error"
         );
         return;
@@ -557,7 +582,9 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       if (postStatus === "idea") {
         setPostStatus("draft");
       }
-      onToast?.("Текст сгенерирован — можно править и сохранить", "success");
+      onToast?.("Черновик готов — поправьте текст и добавьте в план", "success");
+      postTitleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      postTitleRef.current?.focus();
     } finally {
       setGenerating(false);
     }
@@ -566,7 +593,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   async function runGenerateImage(): Promise<void> {
     const prompt = (imagePrompt || postTitle || genTopic).trim();
     if (!prompt) {
-      onToast?.("Нужен промпт картинки или тема", "error");
+      onToast?.("Напишите, что нарисовать, или укажите тему поста", "error");
       return;
     }
     setGenerating(true);
@@ -579,7 +606,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         onToast?.(
           aiConfigured
             ? "Не удалось сгенерировать картинку"
-            : "OpenAI не настроен на сервере (OPENAI_API_KEY)",
+            : AI_UNAVAILABLE,
           "error"
         );
         return;
@@ -593,7 +620,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
   async function runGenerateWeek(): Promise<void> {
     if (!genTopic.trim()) {
-      onToast?.("Укажите тему недели / продукт", "error");
+      onToast?.("Напишите, о чём посты на эти дни", "error");
       return;
     }
     setGenerating(true);
@@ -613,13 +640,14 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       if (!result) {
         onToast?.(
           aiConfigured
-            ? "Не удалось собрать контент на неделю"
-            : "OpenAI не настроен на сервере (OPENAI_API_KEY)",
+            ? "Не удалось собрать посты на эти дни"
+            : AI_UNAVAILABLE,
           "error"
         );
         return;
       }
       onToast?.(`В план добавлено постов: ${result.count}`, "success");
+      postsListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       await refresh();
     } finally {
       setGenerating(false);
@@ -634,7 +662,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         onToast?.("Не удалось утвердить", "error");
         return;
       }
-      onToast?.("Пост утверждён (Готов)", "success");
+      onToast?.("Пост готов к публикации", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -649,7 +677,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         onToast?.("Не удалось переписать", "error");
         return;
       }
-      onToast?.("Текст переписан ИИ", "success");
+      onToast?.("Текст переписан", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -658,7 +686,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
   async function submitSequence(): Promise<void> {
     if (!postSegmentId || !seqName.trim()) {
-      onToast?.("Нужны название и сегмент", "error");
+      onToast?.("Нужны название и список клиентов", "error");
       return;
     }
     setBusy(true);
@@ -674,10 +702,10 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         templateLang: "ru"
       });
       if (!created) {
-        onToast?.("Не удалось создать серию", "error");
+        onToast?.("Не удалось создать напоминания", "error");
         return;
       }
-      onToast?.("Серия создана", "success");
+      onToast?.("Напоминания созданы", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -689,10 +717,10 @@ export function MarketingPanel({ authToken, onToast }: Props) {
     try {
       const started = await startMarketingSequence(authToken, id);
       if (!started) {
-        onToast?.("Не удалось запустить серию", "error");
+        onToast?.("Не удалось запустить напоминания", "error");
         return;
       }
-      onToast?.(`Серия активна · pending ${started.pending_runs || 0}`, "success");
+      onToast?.(`Напоминания запущены · ждут отправки: ${started.pending_runs || 0}`, "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -708,12 +736,12 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         pageId: adsPageDraft.trim() || undefined
       });
       if (!saved) {
-        onToast?.("Не удалось сохранить настройки Ads", "error");
+        onToast?.("Не удалось сохранить настройки рекламы", "error");
         return;
       }
       setAdsTokenDraft("");
       setAdsSettings(saved);
-      onToast?.(saved.connected ? "Meta Ads подключены" : "Настройки сохранены", "success");
+      onToast?.(saved.connected ? "Реклама подключена" : "Настройки сохранены", "success");
       await refresh();
     } finally {
       setBusy(false);
@@ -722,19 +750,19 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
   async function syncAudience(): Promise<void> {
     if (!adsSyncSegmentId) {
-      onToast?.("Выберите сегмент", "error");
+      onToast?.("Выберите список клиентов", "error");
       return;
     }
     setBusy(true);
     try {
       const synced = await syncAdsAudience(authToken, { segmentId: adsSyncSegmentId });
       if (!synced) {
-        onToast?.("Синхронизация не удалась: проверьте Ads token и сегмент", "error");
+        onToast?.("Не получилось передать список. Проверьте ключ рекламы и клиентов.", "error");
         return;
       }
       setAdsAudienceId(synced.id);
       onToast?.(
-        `Аудитория «${synced.name}» · ${synced.size} · ${synced.status}`,
+        `Список «${synced.name}» передан · ${synced.size} человек`,
         synced.status === "failed" ? "error" : "success"
       );
       await refresh();
@@ -763,7 +791,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
         linkUrl: adsLinkUrl.trim() || undefined
       });
       if (!created) {
-        onToast?.("Не удалось создать кампанию Ads", "error");
+        onToast?.("Не удалось создать объявление", "error");
         return;
       }
       setAdsCampaignName("");
@@ -862,14 +890,23 @@ export function MarketingPanel({ authToken, onToast }: Props) {
   const selectedCalendarDay =
     calendarDays.find((day) => day.key === activeCalendarDayKey) || null;
 
+  function focusNewPost(): void {
+    postTitleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    postTitleRef.current?.focus();
+  }
+
+  function openAiDraft(): void {
+    setPlanOpenAi(true);
+    aiSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <section className="knowledgePage card marketingPage">
       <div className="railHeader">
         <div>
           <div className="sidebarTitle">Маркетинг</div>
           <div className="sidebarHint">
-            Контент-план, лендинги, ИИ, серии 0/3/7, отчёты, таргет Meta Ads и автопубликация.
-            {aiConfigured ? " · ИИ доступен" : " · ИИ: задайте OPENAI_API_KEY на backend"}
+            Напишите пост и поставьте дату. Публикация, реклама и напоминания — по шагам ниже.
           </div>
         </div>
       </div>
@@ -878,18 +915,19 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       <div className="pipelineFilterButtons" style={{ marginBottom: 16, flexWrap: "wrap" }}>
         {(
           [
-            ["plan", "План"],
-            ["landings", "Лендинг"],
-            ["calendar", "Календарь"],
-            ["series", "Серии 0/3/7"],
-            ["reports", "Отчёты"],
-            ["ads", "Таргет"]
+            ["plan", "План", "Написать пост и поставить дату"],
+            ["landings", "Лендинг", "Страница, куда ведёт реклама"],
+            ["calendar", "Календарь", "Посты по дням"],
+            ["series", "Напоминания", "Три сообщения клиенту: в день обращения, через 3 дня и через 7 дней"],
+            ["reports", "Отчёты", "Заявки, диалоги и окупаемость рекламы"],
+            ["ads", "Реклама", "Реклама в Facebook и Instagram"]
           ] as const
-        ).map(([id, label]) => (
+        ).map(([id, label, hint]) => (
           <button
             key={id}
             type="button"
             className={`leftMenuButton ${marketingTab === id ? "active" : ""}`}
+            title={hint}
             onClick={() => setMarketingTab(id)}
           >
             {label}
@@ -911,10 +949,10 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               const saved = await saveAdsSettings(authToken, { defaultLinkUrl: publicUrl });
               if (saved) {
                 setAdsSettings(saved);
-                onToast?.("Ссылка с UTM вставлена в Ads", "success");
+                onToast?.("Ссылка добавлена в рекламу", "success");
                 return;
               }
-              onToast?.("Ссылка с UTM вставлена в форму Ads", "success");
+              onToast?.("Ссылка добавлена в форму рекламы", "success");
             })();
           }}
         />
@@ -922,12 +960,12 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
       {marketingTab === "ads" ? (
         <div style={{ marginBottom: 24 }}>
-          <div className="adsWizardSteps" role="tablist" aria-label="Шаги Ads">
+          <div className="adsWizardSteps" role="tablist" aria-label="Шаги настройки рекламы">
             {(
               [
                 [1, "Подключение"],
-                [2, "Аудитория"],
-                [3, "Кампания"]
+                [2, "Кому показывать"],
+                [3, "Объявление"]
               ] as const
             ).map(([step, label]) => (
               <button
@@ -946,37 +984,48 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
           {adsWizardStep === 1 ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-            <div className="scriptPanelTitle">Meta Ads — подключение</div>
+            <div className="scriptPanelTitle">Подключение рекламы</div>
             <div className="sidebarHint" style={{ marginBottom: 10 }}>
-              Нужен Marketing API token с правами ads_management / ads_read (отдельно от WhatsApp/Instagram).
               {adsSettings?.connected
-                ? ` · подключено${adsSettings.connectedAt ? ` · ${new Date(adsSettings.connectedAt).toLocaleString("ru-RU")}` : ""}`
-                : " · не подключено"}
+                ? `Реклама подключена${adsSettings.connectedAt ? ` · ${new Date(adsSettings.connectedAt).toLocaleString("ru-RU")}` : ""}. Ключ можно заменить ниже.`
+                : "Пока не подключено. Нужен ключ рекламного кабинета Facebook и Instagram — это отдельно от переписки в WhatsApp."}
             </div>
             <div className="scriptForm">
-              <input
-                className="filterInput"
-                type="password"
-                placeholder={
-                  adsSettings?.hasToken
-                    ? "Access token (оставьте пустым, чтобы не менять)"
-                    : "Access token Marketing API"
-                }
-                value={adsTokenDraft}
-                onChange={(event) => setAdsTokenDraft(event.target.value)}
-              />
-              <input
-                className="filterInput"
-                placeholder="Ad Account ID (act_…)"
-                value={adsAccountDraft}
-                onChange={(event) => setAdsAccountDraft(event.target.value)}
-              />
-              <input
-                className="filterInput"
-                placeholder="Page ID (для креатива)"
-                value={adsPageDraft}
-                onChange={(event) => setAdsPageDraft(event.target.value)}
-              />
+              <label className="marketingFieldLabel">
+                <span>Ключ доступа</span>
+                <input
+                  className="filterInput"
+                  type="password"
+                  placeholder={
+                    adsSettings?.hasToken
+                      ? "Оставьте пустым, чтобы не менять"
+                      : "Ключ из рекламного кабинета"
+                  }
+                  title="Секретный ключ рекламного кабинета. Его выдаёт Facebook для управления объявлениями."
+                  value={adsTokenDraft}
+                  onChange={(event) => setAdsTokenDraft(event.target.value)}
+                />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Номер кабинета</span>
+                <input
+                  className="filterInput"
+                  placeholder="Начинается с act_"
+                  title="Номер рекламного кабинета. Обычно начинается с act_."
+                  value={adsAccountDraft}
+                  onChange={(event) => setAdsAccountDraft(event.target.value)}
+                />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Страница Facebook</span>
+                <input
+                  className="filterInput"
+                  placeholder="ID страницы, от имени которой пойдёт реклама"
+                  title="Числовой идентификатор страницы Facebook, от имени которой пойдёт объявление."
+                  value={adsPageDraft}
+                  onChange={(event) => setAdsPageDraft(event.target.value)}
+                />
+              </label>
               <button
                 type="button"
                 className="primaryButton"
@@ -996,14 +1045,17 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
           {adsWizardStep === 2 ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-            <div className="scriptPanelTitle">Custom Audience из сегмента</div>
+            <div className="scriptPanelTitle">Кому показывать рекламу</div>
+            <div className="sidebarHint" style={{ marginBottom: 10 }}>
+              Выберите список клиентов — его можно передать в рекламный кабинет.
+            </div>
             <div className="scriptForm">
               <select
                 className="filterInput"
                 value={adsSyncSegmentId}
                 onChange={(event) => setAdsSyncSegmentId(event.target.value)}
               >
-                <option value="">Сегмент CRM</option>
+                <option value="">Список клиентов</option>
                 {segments.map((segment) => (
                   <option key={segment.id} value={segment.id}>
                     {segment.name}
@@ -1019,7 +1071,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 disabled={busy || !adsSyncSegmentId}
                 onClick={() => void syncAudience()}
               >
-                Синхронизировать сегмент
+                Передать список в рекламу
               </button>
             </div>
             {adsAudiences.length ? (
@@ -1027,9 +1079,9 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 <div key={audience.id} className="taskCard" style={{ marginTop: 10 }}>
                   <div className="taskCardTitle">{audience.name}</div>
                   <div className="taskCardMeta">
-                    {audience.status} · size {audience.size}
+                    {audienceStatusLabel[audience.status] || audience.status} · {audience.size} человек
                     {audience.last_sync_at
-                      ? ` · sync ${new Date(audience.last_sync_at).toLocaleString("ru-RU")}`
+                      ? ` · обновлено ${new Date(audience.last_sync_at).toLocaleString("ru-RU")}`
                       : ""}
                     {audience.last_error ? ` · ${audience.last_error}` : ""}
                   </div>
@@ -1037,7 +1089,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               ))
             ) : (
               <div className="emptyScriptState" style={{ marginTop: 10 }}>
-                Аудиторий пока нет
+                Списков пока нет. Выберите клиентов и передайте их в рекламу.
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -1058,7 +1110,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
           {adsWizardStep === 3 ? (
           <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-            <div className="scriptPanelTitle">Создать кампанию</div>
+            <div className="scriptPanelTitle">Новое объявление</div>
             <div className="scriptForm">
               <input
                 className="filterInput"
@@ -1083,17 +1135,18 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 value={adsPostId}
                 onChange={(event) => setAdsPostId(event.target.value)}
               >
-                <option value="">Креатив из контент-плана (опционально)</option>
+                <option value="">Взять текст из плана (необязательно)</option>
                 {posts.map((post) => (
                   <option key={post.id} value={post.id}>
                     {post.title || post.body.slice(0, 40)}
-                    {post.image_url ? " · img" : ""}
+                    {post.image_url ? " · с картинкой" : ""}
                   </option>
                 ))}
               </select>
               <input
                 className="filterInput"
-                placeholder="Дневной бюджет (USD кабинета Meta, напр. 5)"
+                placeholder="Бюджет в день, в валюте кабинета (например, 5)"
+                title="Сколько тратить на рекламу за сутки. Валюта — как в рекламном кабинете."
                 value={adsDailyBudget}
                 onChange={(event) => setAdsDailyBudget(event.target.value)}
               />
@@ -1102,22 +1155,22 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 value={adsCurrency}
                 onChange={(event) => setAdsCurrency(event.target.value)}
               >
-                <option value="USD">USD (кабинет Meta)</option>
-                <option value="KZT">KZT → ≈USD</option>
+                <option value="USD">Доллары (валюта кабинета)</option>
+                <option value="KZT">Тенге (пересчитаем в доллары)</option>
               </select>
               <div className="sidebarHint">
-                Таргет: Казахстан + интересы MSMB. Маленькая custom audience (&lt;100) не сужает охват.
-                Кампания создаётся на паузе — нажмите «Активировать».
+                Реклама показывается в Казахстане. Если в списке меньше 100 человек, охват не сужается.
+                Объявление создаётся выключенным — включите его кнопкой «Активировать».
               </div>
               <input
                 className="filterInput"
-                placeholder="Ссылка объявления (с UTM из лендинга)"
+                placeholder="Ссылка в объявлении"
                 value={adsLinkUrl}
                 onChange={(event) => setAdsLinkUrl(event.target.value)}
               />
               {adsLinkUrl ? (
                 <div className="sidebarHint">
-                  Для атрибуции в CRM ссылка должна содержать utm_source / utm_campaign
+                  Чтобы видеть, откуда пришёл клиент, в ссылке нужны метки utm_source и utm_campaign.
                 </div>
               ) : null}
               <button
@@ -1133,13 +1186,13 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 disabled={busy}
                 onClick={() => void launchAdsCampaign()}
               >
-                Создать в Meta (на паузе)
+                Создать объявление (пока выключено)
               </button>
             </div>
           </div>
           ) : null}
 
-          <div className="scriptPanelTitle">Кампании Ads</div>
+          <div className="scriptPanelTitle">Рекламные кампании</div>
           {adsCampaigns.length ? (
             adsCampaigns.map((campaign) => {
               const metrics = campaign.metrics_json || {};
@@ -1156,7 +1209,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                     {campaign.last_error ? ` · ${campaign.last_error}` : ""}
                   </div>
                   <div className="taskCardMeta">
-                    spend {spend} · clicks {clicks} · CTR {ctr}%
+                    расход {spend} · клики {clicks} · переходы {ctr}%
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                     <button
@@ -1182,7 +1235,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               );
             })
           ) : (
-            <div className="emptyScriptState">Кампаний Ads пока нет</div>
+            <div className="emptyScriptState">Объявлений пока нет. Соберите список клиентов и создайте первое.</div>
           )}
         </div>
       ) : null}
@@ -1286,7 +1339,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               <div className="sidebarHint" style={{ marginBottom: 12 }}>
                 {selectedCalendarDay.items.length
                   ? `Запланировано: ${selectedCalendarDay.items.length}`
-                  : "На этот день в контент-плане ничего нет"}
+                  : "На этот день постов нет. Добавьте пост во вкладке «План»."}
               </div>
 
               {selectedCalendarDay.items.length ? (
@@ -1352,7 +1405,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                         disabled={busy}
                         onClick={() => void publishSocialNow(post.id)}
                       >
-                        В соцсеть сейчас
+                        Опубликовать сейчас
                       </button>
                       {post.status === "draft" || post.status === "idea" ? (
                         <button
@@ -1379,7 +1432,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                 ))
               ) : (
                 <div className="emptyScriptState">
-                  Добавьте пост во вкладке «План» с датой на этот день.
+                  На этот день пусто. Откройте «План» и добавьте пост с этой датой.
                 </div>
               )}
             </div>
@@ -1390,20 +1443,85 @@ export function MarketingPanel({ authToken, onToast }: Props) {
       {marketingTab === "series" ? (
         <div style={{ marginBottom: 24 }}>
           <div className="knowledgeFormCard" style={{ marginBottom: 16 }}>
-            <div className="scriptPanelTitle">Серия follow-up (день 0 / 3 / 7)</div>
+            <div className="scriptPanelTitle">Три напоминания клиенту</div>
+            <div className="sidebarHint" style={{ marginBottom: 10 }}>
+              Сообщение в день обращения, затем через 3 дня и через 7 дней. Уходит выбранному списку клиентов.
+            </div>
             <div className="scriptForm">
-              <input className="filterInput" value={seqName} onChange={(e) => setSeqName(e.target.value)} />
-              <textarea className="filterInput" rows={2} value={seqStep0} onChange={(e) => setSeqStep0(e.target.value)} />
-              <textarea className="filterInput" rows={2} value={seqStep3} onChange={(e) => setSeqStep3(e.target.value)} />
-              <textarea className="filterInput" rows={2} value={seqStep7} onChange={(e) => setSeqStep7(e.target.value)} />
-              <input
-                className="filterInput"
-                placeholder="WhatsApp HSM template name (опционально для дня 0)"
-                value={seqTemplate}
-                onChange={(e) => setSeqTemplate(e.target.value)}
-              />
+              <label className="marketingFieldLabel">
+                <span>Название</span>
+                <input className="filterInput" value={seqName} onChange={(e) => setSeqName(e.target.value)} />
+              </label>
+              {segments.length ? (
+                <label className="marketingFieldLabel">
+                  <span>Кому отправить</span>
+                  <select
+                    className="filterInput"
+                    value={postSegmentId}
+                    onChange={(event) => setPostSegmentId(event.target.value)}
+                  >
+                    <option value="">Выберите список клиентов</option>
+                    {segments.map((segment) => (
+                      <option key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.contact_count ?? 0})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <div className="marketingConnectCard">
+                  <p className="marketingConnectStatus">
+                    Списка клиентов ещё нет. Соберите его — и напоминания будет кому отправить.
+                  </p>
+                  <button
+                    type="button"
+                    className="secondaryButton"
+                    onClick={() => {
+                      setMarketingTab("plan");
+                      setPlanOpenSegments(true);
+                    }}
+                  >
+                    Создать список клиентов
+                  </button>
+                </div>
+              )}
+              <label className="marketingFieldLabel">
+                <span>Куда отправить</span>
+                <select
+                  className="filterInput"
+                  value={campaignChannel}
+                  onChange={(event) => setCampaignChannel(event.target.value as "whatsapp" | "telegram")}
+                >
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="telegram">Telegram</option>
+                </select>
+              </label>
+              <label className="marketingFieldLabel">
+                <span>В тот же день</span>
+                <textarea className="filterInput" rows={2} value={seqStep0} onChange={(e) => setSeqStep0(e.target.value)} />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Через 3 дня</span>
+                <textarea className="filterInput" rows={2} value={seqStep3} onChange={(e) => setSeqStep3(e.target.value)} />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Через 7 дней</span>
+                <textarea className="filterInput" rows={2} value={seqStep7} onChange={(e) => setSeqStep7(e.target.value)} />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>
+                  Шаблон WhatsApp <span className="marketingFieldOptional">необязательно</span>
+                </span>
+                <input
+                  className="filterInput"
+                  placeholder="Если первое сообщение уже согласовано как шаблон"
+                  title="Имя готового шаблона WhatsApp. Нужно только если первое сообщение должно уйти шаблоном, а не обычным текстом."
+                  value={seqTemplate}
+                  onChange={(e) => setSeqTemplate(e.target.value)}
+                />
+              </label>
               <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitSequence()}>
-                Создать серию
+                Создать напоминания
               </button>
             </div>
           </div>
@@ -1411,8 +1529,10 @@ export function MarketingPanel({ authToken, onToast }: Props) {
             <div key={sequence.id} className="taskCard">
               <div className="taskCardTitle">{sequence.name}</div>
               <div className="taskCardMeta">
-                {sequence.status} · {sequence.channel} · pending {sequence.pending_runs || 0}
-                {sequence.template_name ? ` · HSM ${sequence.template_name}` : ""}
+                {sequenceStatusLabel[sequence.status] || sequence.status} ·{" "}
+                {sequence.channel === "telegram" ? "Telegram" : "WhatsApp"} · ждут отправки:{" "}
+                {sequence.pending_runs || 0}
+                {sequence.template_name ? ` · шаблон WhatsApp: ${sequence.template_name}` : ""}
               </div>
               {sequence.status === "draft" || sequence.status === "paused" ? (
                 <button
@@ -1422,7 +1542,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
                   disabled={busy}
                   onClick={() => void launchSequence(sequence.id)}
                 >
-                  Запустить серию
+                  Запустить напоминания
                 </button>
               ) : null}
             </div>
@@ -1432,33 +1552,37 @@ export function MarketingPanel({ authToken, onToast }: Props) {
 
       {marketingTab === "reports" ? (
         <div style={{ marginBottom: 24 }}>
-          <div className="scriptPanelTitle">Воронка контента → демо</div>
+          <div className="scriptPanelTitle">От постов к заявкам</div>
           <div className="sidebarHint" style={{ marginBottom: 10 }}>
-            За {inboundReport.periodDays} дн.: посты Instagram, входящие диалоги и заявки «ДЕМО / пилот»
+            За {inboundReport.periodDays} дн.: посты в Instagram, новые диалоги и заявки на демо.
           </div>
           <div className="ownerKpiGrid" style={{ marginBottom: 14 }}>
             <div className="ownerKpiCard">
               <div className="analyticsValue">{inboundReport.posts.published}</div>
-              <div className="analyticsLabel">IG опубликовано</div>
+              <div className="analyticsLabel">Опубликовано в Instagram</div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">{inboundReport.posts.ready}</div>
-              <div className="analyticsLabel">IG в очереди</div>
+              <div className="analyticsLabel">Ждут публикации</div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">{inboundReport.inbound.demoRequests}</div>
-              <div className="analyticsLabel">Заявки ДЕМО</div>
+              <div className="analyticsLabel">Заявки на демо</div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">
                 {inboundReport.inbound.instagramDialogs}/{inboundReport.inbound.whatsappDialogs}/
                 {inboundReport.inbound.telegramDialogs}
               </div>
-              <div className="analyticsLabel">Диалоги IG / WA / TG</div>
+              <div className="analyticsLabel" title="Instagram, WhatsApp и Telegram">
+                Диалоги: IG / WA / TG
+              </div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">{inboundReport.inbound.dealsWon}</div>
-              <div className="analyticsLabel">Won по демо</div>
+              <div className="analyticsLabel" title="Сделки, которые дошли до оплаты после заявки на демо">
+                Сделки закрыты
+              </div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">
@@ -1535,19 +1659,19 @@ export function MarketingPanel({ authToken, onToast }: Props) {
             )}
           </div>
 
-          <div className="scriptPanelTitle">Реклама → деньги</div>
+          <div className="scriptPanelTitle">Реклама и деньги</div>
           <div className="sidebarHint" style={{ marginBottom: 10 }}>
-            Сквозная связка: Meta spend / лендинги → лиды → won → CPA / ROAS
+            Сколько ушло на рекламу, сколько заявок пришло и сколько денег вернулось.
           </div>
           <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
             <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1.4fr repeat(6, 0.7fr)" }}>
-              <span>Ads кампания</span>
+              <span>Реклама</span>
               <span>Spend</span>
               <span>Clicks</span>
               <span>Лиды</span>
               <span>Won</span>
               <span>Revenue</span>
-              <span>ROAS</span>
+              <span title="Окупаемость: выручка разделить на расходы на рекламу">Окупаемость</span>
             </div>
             {roiReport.ads.map((row) => (
               <div
@@ -1565,7 +1689,7 @@ export function MarketingPanel({ authToken, onToast }: Props) {
               </div>
             ))}
             {roiReport.ads.length ? null : (
-              <div className="analyticsManagersEmpty">Нет Ads кампаний</div>
+              <div className="analyticsManagersEmpty">Рекламных кампаний пока нет</div>
             )}
           </div>
 
@@ -1595,534 +1719,695 @@ export function MarketingPanel({ authToken, onToast }: Props) {
             )}
           </div>
 
-          <div className="scriptPanelTitle">Отчёты кампаний (broadcast)</div>
+          <div className="scriptPanelTitle">Отчёты рассылок</div>
           {reports.length ? (
             reports.map((report) => (
               <div key={report.campaign_id} className="taskCard">
                 <div className="taskCardTitle">{report.name}</div>
                 <div className="taskCardMeta">
-                  {report.status} · {report.channel} · sent {report.sent} · replies {report.replied} (
-                  {report.reply_rate}%) · deals {report.deals_touched} · won {report.deals_won}
+                  {campaignStatusLabel[report.status as MarketingCampaign["status"]] || report.status} ·{" "}
+                  {report.channel === "telegram" ? "Telegram" : report.channel === "whatsapp" ? "WhatsApp" : report.channel}{" "}
+                  · отправлено {report.sent} · ответили {report.replied} ({report.reply_rate}%) · сделок{" "}
+                  {report.deals_touched} · закрыто {report.deals_won}
                 </div>
               </div>
             ))
           ) : (
-            <div className="emptyScriptState">Отчётов broadcast пока нет</div>
+            <div className="emptyScriptState">Отчётов по рассылкам пока нет</div>
           )}
         </div>
       ) : null}
 
       {marketingTab === "plan" ? (
         <>
-      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <details className="marketingAccordion" open={planOpenAi} onToggle={(e) => setPlanOpenAi((e.target as HTMLDetailsElement).open)}>
-          <summary className="marketingAccordionSummary">ИИ — сгенерировать пост</summary>
-        <div className="scriptForm" style={{ marginTop: 12 }}>
-          <input
-            className="filterInput"
-            placeholder="Тема (например: акция на пилот CRM 14 дней)"
-            value={genTopic}
-            onChange={(event) => setGenTopic(event.target.value)}
-          />
-          <input
-            className="filterInput"
-            placeholder="Оффер / детали (необязательно)"
-            value={genOffer}
-            onChange={(event) => setGenOffer(event.target.value)}
-          />
-          <input
-            className="filterInput"
-            placeholder="Тон"
-            value={genTone}
-            onChange={(event) => setGenTone(event.target.value)}
-          />
-          <button
-            type="button"
-            className="primaryButton"
-            disabled={busy || generating}
-            onClick={() => void runGenerateText()}
-          >
-            {generating ? "Генерация…" : "Сгенерировать текст"}
-          </button>
-          <input
-            className="filterInput"
-            placeholder="Промпт для картинки (англ./рус.)"
-            value={imagePrompt}
-            onChange={(event) => setImagePrompt(event.target.value)}
-          />
-          <button
-            type="button"
-            className="dialogActionBtn primary"
-            disabled={busy || generating}
-            onClick={() => void runGenerateImage()}
-          >
-            Сгенерировать картинку
-          </button>
-          <div className="sidebarHint" style={{ marginTop: 8 }}>
-            Контент на неделю — сразу в план (черновики с датами с завтра 11:00 Алматы):
+          <div className="marketingLead">
+            <div>
+              <p className="marketingLeadText">Напишите пост и поставьте дату — он попадёт в план.</p>
+              <button type="button" className="textButton marketingLeadAlt" onClick={openAiDraft}>
+                Нужен черновик — попросить ИИ
+              </button>
+            </div>
+            <button type="button" className="primaryButton" onClick={focusNewPost}>
+              Создать пост
+            </button>
           </div>
-          <select
-            className="filterInput"
-            value={weekDays}
-            onChange={(event) => setWeekDays(Number(event.target.value) || 7)}
-          >
-            <option value={3}>3 дня</option>
-            <option value={5}>5 дней</option>
-            <option value={7}>7 дней</option>
-          </select>
-          <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={weekWithImages}
-              onChange={(event) => setWeekWithImages(event.target.checked)}
-            />
-            Сразу сгенерировать картинки (дольше и дороже)
-          </label>
-          <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={weekAutoSocial}
-              onChange={(event) => setWeekAutoSocial(event.target.checked)}
-            />
-            Включить автопубликацию по дате (после проверки статусом «Готов»)
-          </label>
-          <button
-            type="button"
-            className="primaryButton"
-            disabled={busy || generating}
-            onClick={() => void runGenerateWeek()}
-          >
-            {generating ? "Генерация недели…" : "Контент на неделю"}
-          </button>
-        </div>
-        {postImageUrl ? (
-          <div style={{ marginTop: 12 }}>
-            <img
-              src={postImageUrl}
-              alt="Сгенерированная картинка"
-              style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 12, objectFit: "cover" }}
-            />
-          </div>
-        ) : null}
-        </details>
-      </div>
 
-      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <details
-          className="marketingAccordion"
-          open={planOpenPost}
-          onToggle={(e) => setPlanOpenPost((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="marketingAccordionSummary">Пост и автопубликация</summary>
-      <div style={{ marginTop: 12 }}>
-        <div className="scriptPanelTitle">Автопубликация в соцсети</div>
-        <div className="sidebarHint" style={{ marginBottom: 10 }}>
-          Telegram: {socialSettings.telegramConnected ? "бот подключён" : "бот не подключён"} ·
-          Instagram: {socialSettings.instagramConnected ? "подключён" : "не подключён"}
-        </div>
-        <div className="scriptForm">
-          <input
-            className="filterInput"
-            placeholder="ID Telegram-канала (@channel или -100...)"
-            value={telegramChannelDraft}
-            onChange={(event) => setTelegramChannelDraft(event.target.value)}
-          />
-          <button type="button" className="primaryButton" disabled={busy} onClick={() => void saveSocial()}>
-            Сохранить
-          </button>
-        </div>
-        <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Бот должен быть админом канала. Instagram: публичный URL картинки + право content_publish
-          (переподключите Instagram в Интеграциях).
-        </div>
-      </div>
-
-      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">Контент-план — новый пост</div>
-        <div className="scriptForm">
-          <input
-            className="filterInput"
-            placeholder="Заголовок / тема"
-            value={postTitle}
-            onChange={(event) => setPostTitle(event.target.value)}
-          />
-          <select
-            className="filterInput"
-            value={postChannel}
-            onChange={(event) =>
-              setPostChannel(event.target.value as MarketingContentPost["channel"])
-            }
-          >
-            <option value="telegram">Telegram-канал</option>
-            <option value="instagram">Instagram</option>
-            <option value="whatsapp">WhatsApp (рассылка)</option>
-            <option value="web">Сайт</option>
-            <option value="other">Другое / TG</option>
-          </select>
-          <select
-            className="filterInput"
-            value={postStatus}
-            onChange={(event) =>
-              setPostStatus(event.target.value as MarketingContentPost["status"])
-            }
-          >
-            <option value="idea">Идея</option>
-            <option value="draft">Черновик</option>
-            <option value="ready">Готов (для автозапуска)</option>
-            <option value="published">Опубликован</option>
-          </select>
-          <input
-            className="filterInput"
-            type="datetime-local"
-            value={postPlannedLocal}
-            onChange={(event) => setPostPlannedLocal(event.target.value)}
-          />
-          <select
-            className="filterInput"
-            value={postSegmentId}
-            onChange={(event) => setPostSegmentId(event.target.value)}
-          >
-            <option value="">Сегмент для авторассылки</option>
-            {segments.map((segment) => (
-              <option key={segment.id} value={segment.id}>
-                {segment.name} ({segment.contact_count ?? 0})
-              </option>
-            ))}
-          </select>
-          <input
-            className="filterInput"
-            placeholder="URL картинки (обязательно для Instagram)"
-            value={postImageUrl}
-            onChange={(event) => setPostImageUrl(event.target.value)}
-          />
-          <textarea
-            className="filterInput"
-            rows={5}
-            placeholder="Текст поста или рассылки"
-            value={postBody}
-            onChange={(event) => setPostBody(event.target.value)}
-          />
-          <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={postAutoSocial}
-              onChange={(event) => setPostAutoSocial(event.target.checked)}
-            />
-            Автопубликация в соцсеть по дате (Telegram / Instagram)
-          </label>
-          <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={postAutoBroadcast}
-              onChange={(event) => setPostAutoBroadcast(event.target.checked)}
-            />
-            Авторассылка клиентам по дате (WhatsApp / Telegram DM)
-          </label>
-          <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitPost()}>
-            Добавить в план
-          </button>
-        </div>
-        <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Автозапуск: статус «Готов» + дата/время. После успешной отправки статус станет
-          «Опубликован».
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 24 }}>
-        <div className="scriptPanelTitle">Посты и тексты</div>
-        {posts.length ? (
-          posts.map((post) => (
-            <div key={post.id} className="taskCard">
-              <div className="taskCardTitle">{post.title}</div>
-              <div className="taskCardMeta">
-                {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
-                {post.planned_at
-                  ? ` · план ${new Date(post.planned_at).toLocaleString()}`
-                  : ""}
-                {post.auto_publish_social ? " · авто-соцсеть" : ""}
-                {post.auto_broadcast ? " · авто-рассылка" : ""}
-                {post.campaign_id ? " · есть кампания" : ""}
-                {post.social_external_id ? " · опубликовано" : ""}
-              </div>
-              {post.publish_error ? (
-                <div className="sidebarHint" style={{ marginTop: 8, color: "#b91c1c" }}>
-                  Ошибка: {post.publish_error}
-                </div>
-              ) : null}
-              <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                {post.body}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+          <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+            <div className="scriptPanelTitle">Новый пост</div>
+            <div className="sidebarHint">Заголовок, текст и дата. Остальное можно заполнить позже.</div>
+            <div className="scriptForm">
+              <label className="marketingFieldLabel">
+                <span>Заголовок</span>
+                <input
+                  ref={postTitleRef}
+                  className="filterInput"
+                  placeholder="О чём пост"
+                  value={postTitle}
+                  onChange={(event) => setPostTitle(event.target.value)}
+                />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Текст</span>
+                <textarea
+                  className="filterInput"
+                  rows={5}
+                  placeholder="Что увидит клиент"
+                  value={postBody}
+                  onChange={(event) => setPostBody(event.target.value)}
+                />
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Куда публикуем</span>
                 <select
                   className="filterInput"
-                  style={{ maxWidth: 160 }}
-                  value={post.status}
-                  disabled={busy}
+                  value={postChannel}
                   onChange={(event) =>
-                    void changePostStatus(
-                      post.id,
-                      event.target.value as MarketingContentPost["status"]
-                    )
+                    setPostChannel(event.target.value as MarketingContentPost["channel"])
                   }
                 >
-                  <option value="idea">Идея</option>
-                  <option value="draft">Черновик</option>
-                  <option value="ready">Готов</option>
-                  <option value="published">Опубликован</option>
-                  <option value="cancelled">Отменён</option>
+                  <option value="telegram">Telegram-канал</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="whatsapp">Рассылка в WhatsApp</option>
+                  <option value="web">Сайт</option>
+                  <option value="other">Другое</option>
                 </select>
-                <button
-                  type="button"
-                  className="dialogActionBtn primary"
-                  disabled={busy}
-                  onClick={() => void publishSocialNow(post.id)}
-                >
-                  В соцсеть сейчас
-                </button>
-                {post.status === "draft" || post.status === "idea" ? (
-                  <>
+              </label>
+              <label className="marketingFieldLabel">
+                <span>Когда опубликовать</span>
+                <input
+                  className="filterInput"
+                  type="datetime-local"
+                  value={postPlannedLocal}
+                  onChange={(event) => setPostPlannedLocal(event.target.value)}
+                />
+              </label>
+              {postChannel === "instagram" ? (
+                <label className="marketingFieldLabel">
+                  <span>Ссылка на картинку</span>
+                  <input
+                    className="filterInput"
+                    placeholder="https://… — для Instagram картинка обязательна"
+                    value={postImageUrl}
+                    onChange={(event) => setPostImageUrl(event.target.value)}
+                  />
+                </label>
+              ) : null}
+              {postChannel === "whatsapp" ? (
+                <label className="marketingFieldLabel">
+                  <span>Кому отправить</span>
+                  <select
+                    className="filterInput"
+                    value={postSegmentId}
+                    onChange={(event) => setPostSegmentId(event.target.value)}
+                  >
+                    <option value="">Выберите список клиентов</option>
+                    {segments.map((segment) => (
+                      <option key={segment.id} value={segment.id}>
+                        {segment.name} ({segment.contact_count ?? 0})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {postImageUrl ? (
+                <img
+                  src={postImageUrl}
+                  alt="Картинка поста"
+                  style={{ maxWidth: "100%", maxHeight: 240, borderRadius: 12, objectFit: "cover" }}
+                />
+              ) : null}
+              <details
+                className="marketingAccordion"
+                open={planOpenPostExtra}
+                onToggle={(event) => setPlanOpenPostExtra((event.target as HTMLDetailsElement).open)}
+              >
+                <summary className="marketingAccordionSummary">Дополнительно</summary>
+                <div className="scriptForm" style={{ marginTop: 12 }}>
+                  <label className="marketingFieldLabel">
+                    <span>Статус</span>
+                    <select
+                      className="filterInput"
+                      value={postStatus}
+                      onChange={(event) =>
+                        setPostStatus(event.target.value as MarketingContentPost["status"])
+                      }
+                    >
+                      <option value="idea">Идея</option>
+                      <option value="draft">Черновик</option>
+                      <option value="ready">Готов к публикации</option>
+                      <option value="published">Уже опубликован</option>
+                    </select>
+                  </label>
+                  {postChannel === "instagram" ? null : (
+                    <label className="marketingFieldLabel">
+                      <span>Ссылка на картинку</span>
+                      <input
+                        className="filterInput"
+                        placeholder="Необязательно. Для Instagram картинка нужна"
+                        value={postImageUrl}
+                        onChange={(event) => setPostImageUrl(event.target.value)}
+                      />
+                    </label>
+                  )}
+                  {postChannel === "whatsapp" ? null : (
+                    <label className="marketingFieldLabel">
+                      <span>Список клиентов для рассылки</span>
+                      <select
+                        className="filterInput"
+                        value={postSegmentId}
+                        onChange={(event) => setPostSegmentId(event.target.value)}
+                      >
+                        <option value="">Не отправлять клиентам</option>
+                        {segments.map((segment) => (
+                          <option key={segment.id} value={segment.id}>
+                            {segment.name} ({segment.contact_count ?? 0})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <label className="sidebarHint marketingCheck">
+                    <input
+                      type="checkbox"
+                      checked={postAutoSocial}
+                      onChange={(event) => setPostAutoSocial(event.target.checked)}
+                    />
+                    Опубликовать в соцсеть в назначенный день
+                  </label>
+                  <label className="sidebarHint marketingCheck">
+                    <input
+                      type="checkbox"
+                      checked={postAutoBroadcast}
+                      onChange={(event) => setPostAutoBroadcast(event.target.checked)}
+                    />
+                    Отправить клиентам в назначенный день
+                  </label>
+                  <p className="sidebarHint" style={{ margin: 0 }}>
+                    Чтобы пост ушёл сам, оставьте статус «Готов к публикации» и укажите дату.
+                  </p>
+                </div>
+              </details>
+              <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitPost()}>
+                Добавить в план
+              </button>
+            </div>
+          </div>
+
+          <div ref={postsListRef} style={{ marginBottom: 24 }}>
+            <div className="scriptPanelTitle">План постов</div>
+            {posts.length ? (
+              posts.map((post) => (
+                <div key={post.id} className="taskCard">
+                  <div className="taskCardTitle">{post.title}</div>
+                  <div className="taskCardMeta">
+                    {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
+                    {post.planned_at ? ` · на ${new Date(post.planned_at).toLocaleString("ru-RU")}` : ""}
+                    {post.auto_publish_social ? " · опубликуется сам" : ""}
+                    {post.auto_broadcast ? " · уйдёт клиентам" : ""}
+                    {post.campaign_id ? " · есть рассылка" : ""}
+                    {post.social_external_id ? " · уже в соцсети" : ""}
+                  </div>
+                  {post.publish_error ? (
+                    <div className="sidebarHint" style={{ marginTop: 8, color: "#b91c1c" }}>
+                      Не опубликовалось: {post.publish_error}
+                    </div>
+                  ) : null}
+                  <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                    {post.body}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <select
+                      className="filterInput"
+                      style={{ maxWidth: 220 }}
+                      value={post.status}
+                      disabled={busy}
+                      aria-label="Статус поста"
+                      onChange={(event) =>
+                        void changePostStatus(post.id, event.target.value as MarketingContentPost["status"])
+                      }
+                    >
+                      <option value="idea">Идея</option>
+                      <option value="draft">Черновик</option>
+                      <option value="ready">Готов к публикации</option>
+                      <option value="published">Опубликован</option>
+                      <option value="cancelled">Отменён</option>
+                    </select>
                     <button
                       type="button"
                       className="dialogActionBtn primary"
                       disabled={busy}
-                      onClick={() => void approvePost(post.id)}
+                      onClick={() => void publishSocialNow(post.id)}
                     >
-                      Утвердить
+                      Опубликовать сейчас
                     </button>
+                    {post.status === "draft" || post.status === "idea" ? (
+                      <>
+                        <button
+                          type="button"
+                          className="dialogActionBtn primary"
+                          disabled={busy}
+                          onClick={() => void approvePost(post.id)}
+                        >
+                          Утвердить
+                        </button>
+                        <button
+                          type="button"
+                          className="dialogActionBtn"
+                          disabled={busy}
+                          onClick={() => void rewritePost(post.id)}
+                        >
+                          Переписать с помощью ИИ
+                        </button>
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="dialogActionBtn primary"
+                      disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
+                      onClick={() => void makeCampaignFromPost(post, false)}
+                    >
+                      Сделать рассылку
+                    </button>
+                    <button
+                      type="button"
+                      className="dialogActionBtn primary"
+                      disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
+                      onClick={() => void makeCampaignFromPost(post, true)}
+                    >
+                      Рассылка сейчас
+                    </button>
+                    {post.schedule_processed_at || post.publish_error ? (
+                      <button
+                        type="button"
+                        className="dialogActionBtn"
+                        disabled={busy}
+                        onClick={() => void retrySchedule(post.id)}
+                      >
+                        Повторить публикацию
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="dialogActionBtn"
                       disabled={busy}
-                      onClick={() => void rewritePost(post.id)}
+                      onClick={() => void removePost(post.id)}
                     >
-                      Переписать ИИ
+                      Удалить
                     </button>
-                  </>
-                ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="marketingEmpty">
+                <p className="marketingEmptyTitle">Пока пусто</p>
+                <p className="marketingConnectStatus">Создайте первый пост — он появится здесь и в календаре.</p>
+                <button type="button" className="primaryButton" onClick={focusNewPost}>
+                  Создать пост
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+            <details
+              ref={aiSectionRef}
+              className="marketingAccordion"
+              open={planOpenAi}
+              onToggle={(event) => setPlanOpenAi((event.target as HTMLDetailsElement).open)}
+            >
+              <summary className="marketingAccordionSummary">
+                Написать черновик с помощью ИИ
+                <span className="marketingSummaryMeta" title="ИИ предлагает текст по вашей теме. Его можно поправить перед публикацией.">
+                  {aiConfigured ? "Помощник подключён" : "Пока не подключён — текст можно написать вручную"}
+                </span>
+              </summary>
+              <div className="scriptForm" style={{ marginTop: 12 }}>
+                <p className="sidebarHint" style={{ margin: 0 }}>
+                  Опишите тему — помощник предложит текст. Потом его можно поправить и добавить в план.
+                </p>
+                <label className="marketingFieldLabel">
+                  <span>О чём пост</span>
+                  <input
+                    className="filterInput"
+                    placeholder="Например: скидка на первую неделю"
+                    value={genTopic}
+                    onChange={(event) => setGenTopic(event.target.value)}
+                  />
+                </label>
+                <label className="marketingFieldLabel">
+                  <span>
+                    Что предложить клиенту <span className="marketingFieldOptional">необязательно</span>
+                  </span>
+                  <input
+                    className="filterInput"
+                    placeholder="Цена, срок, условие"
+                    value={genOffer}
+                    onChange={(event) => setGenOffer(event.target.value)}
+                  />
+                </label>
+                <label className="marketingFieldLabel">
+                  <span>Как звучать</span>
+                  <input
+                    className="filterInput"
+                    placeholder="Например: дружелюбно и по делу"
+                    value={genTone}
+                    onChange={(event) => setGenTone(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="primaryButton"
+                  disabled={busy || generating}
+                  onClick={() => void runGenerateText()}
+                >
+                  {generating ? "Пишем текст…" : "Предложить текст"}
+                </button>
+                <label className="marketingFieldLabel">
+                  <span>Что нарисовать</span>
+                  <input
+                    className="filterInput"
+                    placeholder="Коротко: что должно быть на картинке"
+                    value={imagePrompt}
+                    onChange={(event) => setImagePrompt(event.target.value)}
+                  />
+                </label>
                 <button
                   type="button"
                   className="dialogActionBtn primary"
-                  disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
-                  onClick={() => void makeCampaignFromPost(post, false)}
+                  disabled={busy || generating}
+                  onClick={() => void runGenerateImage()}
                 >
-                  Сделать рассылку
+                  Сделать картинку
                 </button>
-                <button
-                  type="button"
-                  className="dialogActionBtn primary"
-                  disabled={busy || !(post.segment_id || campaignSegmentId || postSegmentId)}
-                  onClick={() => void makeCampaignFromPost(post, true)}
-                >
-                  Рассылка сейчас
-                </button>
-                {post.schedule_processed_at || post.publish_error ? (
-                  <button
-                    type="button"
-                    className="dialogActionBtn"
-                    disabled={busy}
-                    onClick={() => void retrySchedule(post.id)}
+                <div className="scriptPanelTitle" style={{ marginTop: 8 }}>
+                  Сразу на несколько дней
+                </div>
+                <p className="sidebarHint" style={{ margin: 0 }}>
+                  Черновики появятся в плане с завтрашнего дня, на 11:00 по Алматы.
+                </p>
+                <label className="marketingFieldLabel">
+                  <span>На сколько дней</span>
+                  <select
+                    className="filterInput"
+                    value={weekDays}
+                    onChange={(event) => setWeekDays(Number(event.target.value) || 7)}
                   >
-                    Повторить автозапуск
+                    <option value={3}>3 дня</option>
+                    <option value={5}>5 дней</option>
+                    <option value={7}>7 дней</option>
+                  </select>
+                </label>
+                <label className="sidebarHint marketingCheck">
+                  <input
+                    type="checkbox"
+                    checked={weekWithImages}
+                    onChange={(event) => setWeekWithImages(event.target.checked)}
+                  />
+                  Сразу сделать картинки (займёт больше времени)
+                </label>
+                <label className="sidebarHint marketingCheck">
+                  <input
+                    type="checkbox"
+                    checked={weekAutoSocial}
+                    onChange={(event) => setWeekAutoSocial(event.target.checked)}
+                  />
+                  Публиковать самим в назначенный день, когда отметите «Готов»
+                </label>
+                <button
+                  type="button"
+                  className="primaryButton"
+                  disabled={busy || generating}
+                  onClick={() => void runGenerateWeek()}
+                >
+                  {generating ? "Собираем план…" : "Заполнить план на эти дни"}
+                </button>
+              </div>
+            </details>
+          </div>
+
+          <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+            <details
+              className="marketingAccordion"
+              open={planOpenPublish}
+              onToggle={(event) => setPlanOpenPublish((event.target as HTMLDetailsElement).open)}
+            >
+              <summary className="marketingAccordionSummary">
+                Куда публиковать
+                <span className="marketingSummaryMeta">
+                  {socialSettings.telegramConnected ? "Telegram подключён" : "Telegram не подключён"}
+                  {" · "}
+                  {socialSettings.instagramConnected ? "Instagram подключён" : "Instagram не подключён"}
+                </span>
+              </summary>
+              <div className="marketingConnectGrid">
+                <div className={`marketingConnectCard ${socialSettings.telegramConnected ? "isOn" : ""}`}>
+                  <div className="scriptPanelTitle">Telegram</div>
+                  {socialSettings.telegramConnected ? (
+                    <p className="marketingConnectStatus">
+                      Канал подключён. Посты со статусом «Готов к публикации» уйдут в назначенный день.
+                    </p>
+                  ) : (
+                    <p className="marketingConnectStatus">
+                      Канал ещё не подключён. Укажите его — и готовые посты смогут уходить сами.
+                    </p>
+                  )}
+                  <label className="marketingFieldLabel">
+                    <span>Канал</span>
+                    <input
+                      className="filterInput"
+                      placeholder="@канал или номер вида -100…"
+                      title="Имя канала с @. Для закрытого канала — числовой номер, обычно начинается с -100."
+                      value={telegramChannelDraft}
+                      onChange={(event) => setTelegramChannelDraft(event.target.value)}
+                    />
+                  </label>
+                  <button type="button" className="primaryButton" disabled={busy} onClick={() => void saveSocial()}>
+                    {socialSettings.telegramConnected ? "Сохранить канал" : "Подключить канал"}
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="dialogActionBtn"
-                  disabled={busy}
-                  onClick={() => void removePost(post.id)}
-                >
-                  Удалить
-                </button>
+                  <p className="sidebarHint" style={{ margin: 0 }}>
+                    Бот Light CRM должен быть администратором этого канала.
+                  </p>
+                </div>
+                <div className={`marketingConnectCard ${socialSettings.instagramConnected ? "isOn" : ""}`}>
+                  <div className="scriptPanelTitle">Instagram</div>
+                  {socialSettings.instagramConnected ? (
+                    <>
+                      <p className="marketingConnectStatus">
+                        Instagram подключён. Для поста нужна ссылка на картинку.
+                      </p>
+                      {onOpenIntegrations ? (
+                        <button type="button" className="textButton" onClick={onOpenIntegrations}>
+                          Открыть интеграции
+                        </button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <p className="marketingConnectStatus">Instagram ещё не подключён.</p>
+                      <p className="sidebarHint" style={{ margin: 0 }}>
+                        Подключите его в разделе «Интеграции». После этого отсюда можно публиковать посты с картинкой.
+                      </p>
+                      {onOpenIntegrations ? (
+                        <button type="button" className="secondaryButton" onClick={onOpenIntegrations}>
+                          Открыть интеграции
+                        </button>
+                      ) : (
+                        <p className="sidebarHint" style={{ margin: 0 }}>
+                          Раздел «Интеграции» — в меню слева.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
-        ) : (
-          <div className="emptyScriptState">Постов в плане пока нет</div>
-        )}
-      </div>
-        </details>
-      </div>
+            </details>
+          </div>
 
-      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <details
-          className="marketingAccordion"
-          open={planOpenSegments}
-          onToggle={(e) => setPlanOpenSegments((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="marketingAccordionSummary">Сегменты и рассылки</summary>
-      <div style={{ marginTop: 12 }}>
-      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">Новый сегмент</div>
-        <div className="scriptForm">
-          <input
-            className="filterInput"
-            placeholder="Название сегмента"
-            value={segmentName}
-            onChange={(event) => setSegmentName(event.target.value)}
-          />
-          <input
-            className="filterInput"
-            placeholder="Город"
-            value={filter.city || ""}
-            onChange={(event) => setFilter((prev) => ({ ...prev, city: event.target.value }))}
-          />
-          <input
-            className="filterInput"
-            placeholder="Тип клиента"
-            value={filter.client_type || ""}
-            onChange={(event) => setFilter((prev) => ({ ...prev, client_type: event.target.value }))}
-          />
-          <input
-            className="filterInput"
-            placeholder="Категория"
-            value={filter.category || ""}
-            onChange={(event) => setFilter((prev) => ({ ...prev, category: event.target.value }))}
-          />
-          <input
-            className="filterInput"
-            placeholder="Канал контакта (whatsapp / telegram)"
-            value={filter.channel || ""}
-            onChange={(event) => setFilter((prev) => ({ ...prev, channel: event.target.value }))}
-          />
-          <input
-            className="filterInput"
-            placeholder="Этап сделки"
-            value={filter.deal_stage || ""}
-            onChange={(event) => setFilter((prev) => ({ ...prev, deal_stage: event.target.value }))}
-          />
-          <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitSegment()}>
-            Создать сегмент
-          </button>
-        </div>
-      </div>
+          <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+            <details
+              className="marketingAccordion"
+              open={planOpenSegments}
+              onToggle={(event) => setPlanOpenSegments((event.target as HTMLDetailsElement).open)}
+            >
+              <summary className="marketingAccordionSummary">
+                Рассылки клиентам
+                <span className="marketingSummaryMeta">Список клиентов и сообщение в WhatsApp или Telegram</span>
+              </summary>
+              <div style={{ marginTop: 12 }}>
+                <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+                  <div className="scriptPanelTitle">Новый список клиентов</div>
+                  <div className="scriptForm">
+                    <input
+                      className="filterInput"
+                      placeholder="Название списка"
+                      value={segmentName}
+                      onChange={(event) => setSegmentName(event.target.value)}
+                    />
+                    <input
+                      className="filterInput"
+                      placeholder="Город"
+                      value={filter.city || ""}
+                      onChange={(event) => setFilter((prev) => ({ ...prev, city: event.target.value }))}
+                    />
+                    <input
+                      className="filterInput"
+                      placeholder="Тип клиента"
+                      value={filter.client_type || ""}
+                      onChange={(event) => setFilter((prev) => ({ ...prev, client_type: event.target.value }))}
+                    />
+                    <input
+                      className="filterInput"
+                      placeholder="Категория"
+                      value={filter.category || ""}
+                      onChange={(event) => setFilter((prev) => ({ ...prev, category: event.target.value }))}
+                    />
+                    <input
+                      className="filterInput"
+                      placeholder="Канал: WhatsApp или Telegram"
+                      value={filter.channel || ""}
+                      onChange={(event) => setFilter((prev) => ({ ...prev, channel: event.target.value }))}
+                    />
+                    <input
+                      className="filterInput"
+                      placeholder="Этап сделки"
+                      value={filter.deal_stage || ""}
+                      onChange={(event) => setFilter((prev) => ({ ...prev, deal_stage: event.target.value }))}
+                    />
+                    <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitSegment()}>
+                      Создать список
+                    </button>
+                  </div>
+                </div>
 
-      <div style={{ marginBottom: 24 }}>
-        <div className="scriptPanelTitle">Сегменты</div>
-        {segments.length ? (
-          segments.map((segment) => (
-            <div key={segment.id} className="taskCard">
-              <div className="taskCardTitle">{segment.name}</div>
-              <div className="taskCardMeta">
-                {segment.contact_count ?? 0} контактов
-                {Object.keys(segment.filter_json || {}).length
-                  ? ` · ${Object.entries(segment.filter_json)
-                      .filter(([, v]) => v)
-                      .map(([k, v]) => `${k}=${v}`)
-                      .join(", ")}`
-                  : " · без фильтров"}
+                <div style={{ marginBottom: 24 }}>
+                  <div className="scriptPanelTitle">Списки клиентов</div>
+                  {segments.length ? (
+                    segments.map((segment) => (
+                      <div key={segment.id} className="taskCard">
+                        <div className="taskCardTitle">{segment.name}</div>
+                        <div className="taskCardMeta">
+                          {segment.contact_count ?? 0} контактов
+                          {Object.keys(segment.filter_json || {}).length
+                            ? ` · ${Object.entries(segment.filter_json)
+                                .filter(([, value]) => value)
+                                .map(([key, value]) => `${key}=${value}`)
+                                .join(", ")}`
+                            : " · без фильтров"}
+                        </div>
+                        <button
+                          type="button"
+                          className={`dialogActionBtn ${
+                            campaignSegmentId === segment.id || postSegmentId === segment.id ? "primary" : ""
+                          }`}
+                          style={{ marginTop: 10 }}
+                          disabled={busy}
+                          onClick={() => {
+                            setCampaignSegmentId(segment.id);
+                            setPostSegmentId(segment.id);
+                          }}
+                        >
+                          Выбрать
+                        </button>
+                        <button
+                          type="button"
+                          className="dialogActionBtn"
+                          style={{ marginTop: 10, marginLeft: 8 }}
+                          disabled={busy}
+                          onClick={() => void removeSegment(segment.id)}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="emptyScriptState">Списков пока нет. Создайте список — и можно отправить рассылку.</div>
+                  )}
+                </div>
+
+                <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
+                  <div className="scriptPanelTitle">Новая рассылка</div>
+                  <div className="scriptForm">
+                    <input
+                      className="filterInput"
+                      placeholder="Название рассылки"
+                      value={campaignName}
+                      onChange={(event) => setCampaignName(event.target.value)}
+                    />
+                    <select
+                      className="filterInput"
+                      value={campaignSegmentId}
+                      onChange={(event) => setCampaignSegmentId(event.target.value)}
+                    >
+                      <option value="">Выберите список клиентов</option>
+                      {segments.map((segment) => (
+                        <option key={segment.id} value={segment.id}>
+                          {segment.name} ({segment.contact_count ?? 0})
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="filterInput"
+                      value={campaignChannel}
+                      onChange={(event) => setCampaignChannel(event.target.value as "whatsapp" | "telegram")}
+                    >
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="telegram">Telegram</option>
+                    </select>
+                    <input
+                      className="filterInput"
+                      placeholder="Название шаблона WhatsApp (необязательно)"
+                      title="Имя готового шаблона WhatsApp, если сообщение должно уйти шаблоном."
+                      value={campaignTemplateName}
+                      onChange={(event) => setCampaignTemplateName(event.target.value)}
+                    />
+                    <textarea
+                      className="filterInput"
+                      rows={4}
+                      placeholder="Текст сообщения"
+                      value={campaignBody}
+                      onChange={(event) => setCampaignBody(event.target.value)}
+                    />
+                    <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitCampaign()}>
+                      Создать черновик
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="scriptPanelTitle">Рассылки</div>
+                  {campaigns.length ? (
+                    campaigns.map((campaign) => (
+                      <div key={campaign.id} className="taskCard">
+                        <div className="taskCardTitle">{campaign.name}</div>
+                        <div className="taskCardMeta">
+                          {campaignStatusLabel[campaign.status]} ·{" "}
+                          {campaign.channel === "telegram" ? "Telegram" : "WhatsApp"}
+                          {campaign.segment_name ? ` · ${campaign.segment_name}` : ""}
+                          {` · отправлено ${campaign.recipients_sent || 0}/${campaign.recipients_total || 0}`}
+                        </div>
+                        <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                          {campaign.body}
+                        </div>
+                        {campaign.status === "draft" || campaign.status === "failed" ? (
+                          <button
+                            type="button"
+                            className="dialogActionBtn primary"
+                            style={{ marginTop: 10 }}
+                            disabled={busy}
+                            onClick={() => void launchCampaign(campaign.id)}
+                          >
+                            Запустить рассылку
+                          </button>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="emptyScriptState">Рассылок пока нет</div>
+                  )}
+                </div>
               </div>
-              <button
-                type="button"
-                className={`dialogActionBtn ${
-                  campaignSegmentId === segment.id || postSegmentId === segment.id ? "primary" : ""
-                }`}
-                style={{ marginTop: 10 }}
-                disabled={busy}
-                onClick={() => {
-                  setCampaignSegmentId(segment.id);
-                  setPostSegmentId(segment.id);
-                }}
-              >
-                Выбрать
-              </button>
-              <button
-                type="button"
-                className="dialogActionBtn"
-                style={{ marginTop: 10, marginLeft: 8 }}
-                disabled={busy}
-                onClick={() => void removeSegment(segment.id)}
-              >
-                Удалить
-              </button>
-            </div>
-          ))
-        ) : (
-          <div className="emptyScriptState">Сегментов пока нет</div>
-        )}
-      </div>
-
-      <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">Новая кампания</div>
-        <div className="scriptForm">
-          <input
-            className="filterInput"
-            placeholder="Название кампании"
-            value={campaignName}
-            onChange={(event) => setCampaignName(event.target.value)}
-          />
-          <select
-            className="filterInput"
-            value={campaignSegmentId}
-            onChange={(event) => setCampaignSegmentId(event.target.value)}
-          >
-            <option value="">Выберите сегмент</option>
-            {segments.map((segment) => (
-              <option key={segment.id} value={segment.id}>
-                {segment.name} ({segment.contact_count ?? 0})
-              </option>
-            ))}
-          </select>
-          <select
-            className="filterInput"
-            value={campaignChannel}
-            onChange={(event) => setCampaignChannel(event.target.value as "whatsapp" | "telegram")}
-          >
-            <option value="whatsapp">WhatsApp</option>
-            <option value="telegram">Telegram</option>
-          </select>
-          <input
-            className="filterInput"
-            placeholder="WhatsApp HSM template (опционально)"
-            value={campaignTemplateName}
-            onChange={(event) => setCampaignTemplateName(event.target.value)}
-          />
-          <textarea
-            className="filterInput"
-            rows={4}
-            placeholder="Текст рассылки"
-            value={campaignBody}
-            onChange={(event) => setCampaignBody(event.target.value)}
-          />
-          <button type="button" className="primaryButton" disabled={busy} onClick={() => void submitCampaign()}>
-            Создать черновик
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <div className="scriptPanelTitle">Кампании</div>
-        {campaigns.length ? (
-          campaigns.map((campaign) => (
-            <div key={campaign.id} className="taskCard">
-              <div className="taskCardTitle">{campaign.name}</div>
-              <div className="taskCardMeta">
-                {campaignStatusLabel[campaign.status]} · {campaign.channel}
-                {campaign.segment_name ? ` · ${campaign.segment_name}` : ""}
-                {` · отправлено ${campaign.recipients_sent || 0}/${campaign.recipients_total || 0}`}
-              </div>
-              <div className="sidebarHint" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                {campaign.body}
-              </div>
-              {campaign.status === "draft" || campaign.status === "failed" ? (
-                <button
-                  type="button"
-                  className="dialogActionBtn primary"
-                  style={{ marginTop: 10 }}
-                  disabled={busy}
-                  onClick={() => void launchCampaign(campaign.id)}
-                >
-                  Запустить рассылку
-                </button>
-              ) : null}
-            </div>
-          ))
-        ) : (
-          <div className="emptyScriptState">Кампаний пока нет</div>
-        )}
-      </div>
-      </div>
-        </details>
-      </div>
+            </details>
+          </div>
         </>
       ) : null}
       </div>

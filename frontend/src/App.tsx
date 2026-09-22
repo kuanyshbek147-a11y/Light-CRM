@@ -4078,7 +4078,13 @@ export function App(): JSX.Element {
             </div>
           </section>
         ) : currentSection === "marketing" ? (
-          token ? <MarketingPanel authToken={token} onToast={showToast} /> : null
+          token ? (
+            <MarketingPanel
+              authToken={token}
+              onToast={showToast}
+              onOpenIntegrations={() => setCurrentSection("integrations")}
+            />
+          ) : null
         ) : currentSection === "ops" ? (
           token ? (
             <OpsPanel
