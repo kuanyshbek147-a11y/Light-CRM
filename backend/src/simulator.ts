@@ -9,7 +9,8 @@ const sampleIncoming = [
 ];
 
 export function startSimulator(io: Server): void {
-  const intervalMs = Number(process.env.SIMULATOR_INTERVAL_MS || 15000);
+  // Default OFF — fake inbox noise must never run in production by accident.
+  const intervalMs = Number(process.env.SIMULATOR_INTERVAL_MS || 0);
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     return;
   }
