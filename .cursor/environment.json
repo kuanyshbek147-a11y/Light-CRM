@@ -1,0 +1,16 @@
+{
+  "name": "WhatsApp CRM MVP",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "npm run -w backend dev"
+    },
+    {
+      "name": "frontend",
+      "command": "VITE_API_URL=http://localhost:4000/api npm run -w frontend dev"
+    }
+  ]
+}
