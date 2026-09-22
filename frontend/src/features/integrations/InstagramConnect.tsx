@@ -67,6 +67,7 @@ export function InstagramConnect({ authToken }: Props) {
   const [success, setSuccess] = useState("");
   const [showManual, setShowManual] = useState(false);
   const [alertPulse, setAlertPulse] = useState(0);
+  const [connectLabel, setConnectLabel] = useState("");
   const blockAlertRef = useRef<HTMLDivElement | null>(null);
 
   const refreshStatus = useCallback(async (): Promise<void> => {
@@ -161,6 +162,7 @@ export function InstagramConnect({ authToken }: Props) {
     const reason = instagramOAuthBlockReason(setup);
     if (reason) {
       setError(reason);
+      setConnectLabel("Ключи Meta не заданы");
       setAlertPulse((value) => value + 1);
       return;
     }
@@ -242,6 +244,14 @@ export function InstagramConnect({ authToken }: Props) {
     node.focus();
   }, [alertPulse]);
 
+  useEffect(() => {
+    if (!connectLabel) {
+      return;
+    }
+    const timer = window.setTimeout(() => setConnectLabel(""), 2200);
+    return () => window.clearTimeout(timer);
+  }, [connectLabel]);
+
   return (
     <div className="instagramConnectCard" id="integration-instagram">
       <div className="integrationsPanelHeader">
@@ -283,7 +293,7 @@ export function InstagramConnect({ authToken }: Props) {
           disabled={oauthLoading || loading}
           onClick={() => void onConnectOAuth()}
         >
-          {oauthLoading ? "Подключение..." : "Подключить Instagram"}
+          {oauthLoading ? "Подключение..." : connectLabel || "Подключить Instagram"}
         </button>
         {status?.connected ? (
           <button
