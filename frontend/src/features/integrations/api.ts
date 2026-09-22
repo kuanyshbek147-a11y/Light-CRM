@@ -148,6 +148,11 @@ export type InstagramConnectSetup = {
   verifyToken: string | null;
   mode?: "instagram_login" | "facebook_login";
   redirectUri?: string;
+  appSecretConfigured?: boolean;
+  credentialsReady?: boolean;
+  missing?: string[];
+  /** Russian reason OAuth cannot start. Null or omitted when credentials are ready. */
+  blockReason?: string | null;
 };
 
 export type InstagramConnectResult = {

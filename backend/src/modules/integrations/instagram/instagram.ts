@@ -1,11 +1,11 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { Server } from "socket.io";
 import { resolveAutoAssignedManager } from "../../../auto-assignment";
 import { query } from "../../../db";
-import { authMiddleware, type AuthRequest } from "../../auth";
+import { authMiddleware, canManageIntegrations, type AuthRequest } from "../../auth";
 import { maybeAutoReply } from "../../auto-reply";
 import { placeholderBodyForAttachment, uploadsDir } from "../../media/upload";
 import {
@@ -19,6 +19,7 @@ import {
 } from "./credentials";
 import { resolveLegacyDefaultWorkspaceId } from "../../platform/tenant-routing";
 import {
+  describeInstagramOAuthReadiness,
   exchangeInstagramLoginCode,
   getInstagramAppId,
   getInstagramAppSecret,
@@ -198,6 +199,22 @@ async function downloadInstagramMediaToUploads(
   }
 }
 
+function instagramAdminWorkspaceId(req: AuthRequest, res: Response): string | null {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return null;
+  }
+  if (!canManageIntegrations(req.user?.role)) {
+    res.status(403).json({
+      ok: false,
+      error: "Подключить Instagram может только администратор."
+    });
+    return null;
+  }
+  return workspaceId;
+}
+
 function resolveInstagramWebhookSecrets(): string[] {
   const secrets = [
     getInstagramAppSecret(),
@@ -275,7 +292,7 @@ export function createInstagramRouter(io: Server): Router {
   });
 
   router.get("/connect/setup", (req, res) => {
-    const appId = getInstagramAppId();
+    const readiness = describeInstagramOAuthReadiness();
     const apiVersion = process.env.INSTAGRAM_API_VERSION || process.env.WHATSAPP_API_VERSION || "v21.0";
     const frontendOrigin =
       (typeof req.query.redirectOrigin === "string" && req.query.redirectOrigin.trim()) ||
@@ -288,7 +305,11 @@ export function createInstagramRouter(io: Server): Router {
 
     res.json({
       mode: "instagram_login",
-      appId,
+      appId: readiness.appId,
+      appSecretConfigured: readiness.appSecretConfigured,
+      credentialsReady: readiness.credentialsReady,
+      missing: readiness.missing,
+      blockReason: readiness.blockReason,
       apiVersion,
       scopes: getInstagramLoginScopes(),
       redirectUri,
@@ -298,12 +319,8 @@ export function createInstagramRouter(io: Server): Router {
   });
 
   router.post("/connect", authMiddleware, async (req: AuthRequest, res) => {
-    if (!req.user?.workspaceId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    if (req.user.role !== "admin") {
-      res.status(403).json({ error: "Forbidden" });
+    const workspaceId = instagramAdminWorkspaceId(req, res);
+    if (!workspaceId) {
       return;
     }
 
@@ -325,7 +342,7 @@ export function createInstagramRouter(io: Server): Router {
       });
 
       const resolvedIgUserId = validated.igUserId || igUserId || pageId;
-      await saveWorkspaceInstagramCredentials(req.user.workspaceId, {
+      await saveWorkspaceInstagramCredentials(workspaceId, {
         pageId: pageId || resolvedIgUserId,
         pageAccessToken,
         igUserId: resolvedIgUserId
@@ -356,12 +373,8 @@ export function createInstagramRouter(io: Server): Router {
   });
 
   router.post("/connect/oauth", authMiddleware, async (req: AuthRequest, res) => {
-    if (!req.user?.workspaceId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    if (req.user.role !== "admin") {
-      res.status(403).json({ error: "Forbidden" });
+    const workspaceId = instagramAdminWorkspaceId(req, res);
+    if (!workspaceId) {
       return;
     }
 
@@ -380,7 +393,7 @@ export function createInstagramRouter(io: Server): Router {
       }
       try {
         const profile = await exchangeInstagramLoginCode({ code, redirectUri });
-        await saveWorkspaceInstagramCredentials(req.user.workspaceId, {
+        await saveWorkspaceInstagramCredentials(workspaceId, {
           pageId: profile.igUserId,
           pageAccessToken: profile.accessToken,
           igUserId: profile.igUserId
@@ -437,7 +450,7 @@ export function createInstagramRouter(io: Server): Router {
         return;
       }
 
-      await saveWorkspaceInstagramCredentials(req.user.workspaceId, {
+      await saveWorkspaceInstagramCredentials(workspaceId, {
         pageId: selected.pageId,
         pageAccessToken: selected.pageAccessToken,
         igUserId: selected.igUserId
@@ -472,16 +485,12 @@ export function createInstagramRouter(io: Server): Router {
   });
 
   router.post("/disconnect", authMiddleware, async (req: AuthRequest, res) => {
-    if (!req.user?.workspaceId) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    if (req.user.role !== "admin") {
-      res.status(403).json({ error: "Forbidden" });
+    const workspaceId = instagramAdminWorkspaceId(req, res);
+    if (!workspaceId) {
       return;
     }
 
-    await clearWorkspaceInstagramCredentials(req.user.workspaceId);
+    await clearWorkspaceInstagramCredentials(workspaceId);
     res.json({ ok: true, connected: false });
   });
 
