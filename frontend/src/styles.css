@@ -1623,7 +1623,7 @@ body.pwa-standalone {
 }
 
 .messages {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: auto;
   padding: 16px 18px 12px;
@@ -1638,11 +1638,10 @@ body.pwa-standalone {
 }
 
 .threadReplyDock {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 0;
   background: #fcfdff;
   border-top: 1px solid var(--line);
   z-index: 4;
@@ -1654,9 +1653,10 @@ body.pwa-standalone {
 }
 
 .threadReplyDock .scriptPanel {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   min-width: 0;
+  max-height: min(28vh, 220px);
   overflow: auto;
   border-top: 0;
   background: transparent;
@@ -1682,10 +1682,6 @@ body.pwa-standalone {
 }
 
 @media (min-width: 769px) {
-  .threadReplyDock {
-    max-height: 46%;
-  }
-
   .sidebar {
     padding: 12px 12px 0;
   }
@@ -3118,12 +3114,12 @@ body.pwa-standalone {
 .kpiRailToggle {
   min-width: 0;
   height: 100%;
-  padding: 14px 0;
+  padding: 16px 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
   writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  letter-spacing: 0.04em;
+  text-orientation: mixed;
+  letter-spacing: 0.06em;
   font-size: 12px;
 }
 
