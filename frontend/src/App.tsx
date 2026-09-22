@@ -21,6 +21,17 @@ import {
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { InboxConnectChecklist } from "./features/inbox/InboxConnectChecklist";
+import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
+import {
+  emptyOnboardingState,
+  firstIncompleteStep,
+  onboardingUserKey,
+  readOnboarding,
+  saveOnboarding,
+  usesDemoSampleData,
+  type OnboardingState,
+  type OnboardingStatus
+} from "./features/onboarding/onboardingStorage";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
@@ -813,6 +824,10 @@ export function App(): JSX.Element {
   const [toastMessage, setToastMessage] = useState<string>("");
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const [toastKind, setToastKind] = useState<ToastKind>("success");
+  const [onboardingMode, setOnboardingMode] = useState<"hidden" | "overlay" | "dock">("hidden");
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [onboardingState, setOnboardingState] = useState<OnboardingState>(() => emptyOnboardingState());
+  const onboardingBootstrappedFor = useRef("");
   const toastTimerRef = useRef<number | null>(null);
   const [softphoneReady, setSoftphoneReady] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
@@ -1234,6 +1249,22 @@ export function App(): JSX.Element {
     })();
   }, []);
 
+  const onboardingKey = onboardingUserKey(sessionUser);
+
+  useEffect(() => {
+    if (!token || sessionRestoring || !onboardingKey || isSuperAdminUser(sessionUser)) {
+      return;
+    }
+    if (onboardingBootstrappedFor.current === onboardingKey) {
+      return;
+    }
+    onboardingBootstrappedFor.current = onboardingKey;
+    const saved = readOnboarding(onboardingKey);
+    setOnboardingState(saved);
+    setOnboardingStep(firstIncompleteStep(saved.steps));
+    setOnboardingMode(saved.status === "pending" ? "overlay" : "hidden");
+  }, [token, sessionRestoring, onboardingKey, sessionUser]);
+
   useEffect(() => {
     if (!conversations.length) {
       return;
@@ -1498,6 +1529,10 @@ export function App(): JSX.Element {
   }
 
   function logout(): void {
+    onboardingBootstrappedFor.current = "";
+    setOnboardingMode("hidden");
+    setOnboardingStep(0);
+    setOnboardingState(emptyOnboardingState());
     clearStoredSession();
     setToken("");
     setSessionUser(null);
@@ -2999,6 +3034,86 @@ export function App(): JSX.Element {
     setCustomerDealStage("");
   }, [selectedConversation, deals, dealStages]);
 
+  function writeOnboarding(next: OnboardingState): void {
+    const key = onboardingUserKey(sessionUser);
+    setOnboardingState(next);
+    if (key) saveOnboarding(key, next);
+  }
+
+  function openOnboardingFromMenu(): void {
+    const key = onboardingUserKey(sessionUser);
+    const saved = key ? readOnboarding(key) : onboardingState;
+    setOnboardingState(saved);
+    setOnboardingStep(firstIncompleteStep(saved.steps));
+    setOnboardingMode("overlay");
+  }
+
+  function skipOnboarding(): void {
+    if (onboardingState.status === "completed") {
+      setOnboardingMode("hidden");
+      return;
+    }
+    writeOnboarding({ status: "skipped", steps: onboardingState.steps });
+    setOnboardingMode("hidden");
+  }
+
+  function completeOnboarding(): void {
+    writeOnboarding({
+      status: "completed",
+      steps: { channel: true, lead: true, next: true }
+    });
+    setOnboardingMode("hidden");
+  }
+
+  function minimizeOnboarding(): void {
+    setOnboardingMode(onboardingState.status === "pending" ? "dock" : "hidden");
+  }
+
+  function markOnboardingStep(stepId: "channel" | "lead" | "next"): OnboardingStatus {
+    const steps = { ...onboardingState.steps, [stepId]: true };
+    const status = onboardingState.status;
+    writeOnboarding({ status, steps });
+    return status;
+  }
+
+  function leaveOnboardingForWork(): void {
+    setMobileThreadOpen(false);
+    setOnboardingMode(onboardingState.status === "pending" ? "dock" : "hidden");
+  }
+
+  function openOnboardingChannel(): void {
+    const status = markOnboardingStep("channel");
+    if (sessionUser?.role !== "admin") {
+      setOnboardingStep(1);
+      return;
+    }
+    setCurrentSection("integrations");
+    setMobileThreadOpen(false);
+    setOnboardingStep(1);
+    setOnboardingMode(status === "pending" ? "dock" : "hidden");
+  }
+
+  function openOnboardingDialogs(): void {
+    markOnboardingStep("lead");
+    setCurrentSection("dialogs");
+    setOnboardingStep(2);
+    leaveOnboardingForWork();
+  }
+
+  function openOnboardingTasks(): void {
+    markOnboardingStep("next");
+    setCurrentSection("tasks");
+    void refreshCrmTasks();
+    void refreshFollowUpSettings();
+    leaveOnboardingForWork();
+  }
+
+  function openOnboardingPipeline(): void {
+    markOnboardingStep("next");
+    openPipelineSection("board");
+    leaveOnboardingForWork();
+  }
+
   if (sessionRestoring) {
     return (
       <main className="centered">
@@ -3468,6 +3583,20 @@ export function App(): JSX.Element {
               {"\u25AD"}
             </span>
             <span className="leftMenuButtonLabel">{UI.menuDialogs}</span>
+          </button>
+          <button
+            type="button"
+            className={`leftMenuButton firstRunMenuButton${
+              onboardingState.status === "pending" && onboardingMode !== "overlay" ? " attention" : ""
+            }`}
+            onClick={openOnboardingFromMenu}
+            title={FIRST_RUN_MENU_LABEL}
+            data-testid="first-run-menu"
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u2726"}
+            </span>
+            <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
           </button>
           <button
             type="button"
@@ -4754,6 +4883,10 @@ export function App(): JSX.Element {
                 <div className="mobilePageTitle">{sessionUser?.fullName || "Operator"}</div>
                 <div className="mobilePageSubtitle">{sessionUser?.login || sessionUser?.email}</div>
               </div>
+              <button type="button" className="profileMenuBtn" data-testid="first-run-menu-profile" onClick={openOnboardingFromMenu}>
+                <span>{FIRST_RUN_MENU_LABEL}</span>
+                <span>›</span>
+              </button>
               <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("contacts")}>
                 <span>{UI.menuContacts}</span>
                 <span>›</span>
@@ -5707,6 +5840,24 @@ export function App(): JSX.Element {
             ×
           </button>
         </div>
+      ) : null}
+      {!isSuperAdminUser(sessionUser) ? (
+        <FirstRunGuide
+          mode={onboardingMode}
+          step={onboardingStep}
+          stepsDone={onboardingState.steps}
+          isAdmin={sessionUser?.role === "admin"}
+          demoData={usesDemoSampleData(sessionUser, conversations)}
+          onStepChange={setOnboardingStep}
+          onOpenChannel={openOnboardingChannel}
+          onOpenDialogs={openOnboardingDialogs}
+          onOpenTasks={openOnboardingTasks}
+          onOpenPipeline={openOnboardingPipeline}
+          onSkip={skipOnboarding}
+          onComplete={completeOnboarding}
+          onMinimize={minimizeOnboarding}
+          onResume={() => setOnboardingMode("overlay")}
+        />
       ) : null}
     </div>
     </Suspense>

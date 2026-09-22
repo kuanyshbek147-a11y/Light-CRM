@@ -352,6 +352,238 @@ button {
   flex-wrap: wrap;
 }
 
+.firstRunMenuButton.attention {
+  background: #eef0ff;
+  border-color: #d8ddf8;
+  color: #30328c;
+}
+
+.firstRunOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(21, 26, 45, 0.38);
+}
+
+.firstRunCard {
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  padding: 22px 22px 18px;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(40, 52, 111, 0.22);
+}
+
+.firstRunHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.firstRunKicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #4f46e5;
+}
+
+.firstRunTitle {
+  margin: 4px 0 0;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.firstRunLead {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.firstRunSkip {
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+}
+
+.firstRunDemoNote {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.firstRunSteps {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.firstRunSteps li {
+  border: 1px solid #e8ebf7;
+  border-radius: 14px;
+  background: #fbfbfe;
+}
+
+.firstRunSteps li.active {
+  border-color: #cfd6ff;
+  background: #f7f8ff;
+}
+
+.firstRunSteps li.done .firstRunStepNum {
+  background: #166534;
+}
+
+.firstRunStepButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #1e1b4b;
+  font-weight: 750;
+}
+
+.firstRunStepNum {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: #5b5ce9;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.firstRunStepTitle {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.firstRunStepBody {
+  padding: 0 12px 12px 46px;
+}
+
+.firstRunStepBody p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.firstRunStepHint {
+  margin-top: 8px !important;
+}
+
+.firstRunStepActions,
+.firstRunFooterActions,
+.firstRunDockActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.firstRunStepActions {
+  margin-top: 12px;
+}
+
+.firstRunStepActions .primaryButton,
+.firstRunFooterActions .primaryButton,
+.firstRunDockActions .primaryButton {
+  height: 40px;
+  padding: 0 14px;
+  box-shadow: none;
+}
+
+.firstRunFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.firstRunProgress {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.firstRunDock {
+  position: fixed;
+  z-index: 70;
+  top: 76px;
+  right: 18px;
+  width: min(360px, calc(100vw - 36px));
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(40, 52, 111, 0.16);
+}
+
+.firstRunDockText {
+  display: grid;
+  gap: 2px;
+}
+
+.firstRunDockText strong {
+  font-size: 14px;
+}
+
+.firstRunDockText span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .firstRunCard {
+    padding: 16px;
+  }
+
+  .firstRunHeader {
+    flex-direction: column;
+  }
+
+  .firstRunStepBody {
+    padding-left: 12px;
+  }
+
+  .firstRunDock {
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: 88px;
+    width: auto;
+  }
+
+  .appShell.mobileChatOpen .firstRunDock {
+    bottom: auto;
+    top: 12px;
+  }
+}
+
 .adsWizardSteps {
   display: flex;
   gap: 8px;
