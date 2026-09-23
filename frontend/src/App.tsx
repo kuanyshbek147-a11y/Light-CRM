@@ -290,6 +290,22 @@ type ToastKind = "success" | "error";
 const API = API_BASE_URL;
 const INBOX_FILTER_PRESETS_KEY = "lightcrm.inboxFilterPresets";
 const LEFT_MENU_COLLAPSED_KEY = "lightcrm.leftMenuCollapsed";
+const FUNNEL_KPI_PANEL_KEY = "lightcrm.funnelKpiPanelOpen";
+const FUNNEL_KPI_OPEN_MIN_WIDTH_PX = 1361;
+
+function initialFunnelKpiPanelOpen(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  const saved = window.localStorage.getItem(FUNNEL_KPI_PANEL_KEY);
+  if (saved === "1") {
+    return true;
+  }
+  if (saved === "0") {
+    return false;
+  }
+  return window.matchMedia(`(min-width: ${FUNNEL_KPI_OPEN_MIN_WIDTH_PX}px)`).matches;
+}
 const DEFAULT_INBOX_FILTERS: InboxFilters = {
   city: "",
   inquiryReason: "",
@@ -353,6 +369,7 @@ const UI = {
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
   menuFunnelKpi: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u0438 KPI",
+  collapseKpi: "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c",
   funnelKpiTab: "KPI \u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
   menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
@@ -796,7 +813,7 @@ export function App(): JSX.Element {
   const [applyingRePreset, setApplyingRePreset] = useState(false);
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
   const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
-  const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(true);
+  const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(initialFunnelKpiPanelOpen);
   const [leftMenuCollapsed, setLeftMenuCollapsed] = useState(() => {
     return localStorage.getItem(LEFT_MENU_COLLAPSED_KEY) === "1";
   });
@@ -1212,6 +1229,10 @@ export function App(): JSX.Element {
   useEffect(() => {
     localStorage.setItem(LEFT_MENU_COLLAPSED_KEY, leftMenuCollapsed ? "1" : "0");
   }, [leftMenuCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem(FUNNEL_KPI_PANEL_KEY, funnelKpiPanelOpen ? "1" : "0");
+  }, [funnelKpiPanelOpen]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem(SESSION_TOKEN_KEY);
@@ -3742,9 +3763,14 @@ export function App(): JSX.Element {
           token ? <PlatformPanel authToken={token} /> : null
         ) : currentSection === "dialogs" ? (
         <div
-          className={`appGrid ${isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : ""}${
-            !funnelKpiPanelOpen ? " appGridNoRightRail" : ""
-          }`}
+          className={[
+            "appGrid",
+            isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : "",
+            !funnelKpiPanelOpen ? "appGridNoRightRail" : "",
+            !funnelKpiPanelOpen && !isMobileLayout ? "appGridKpiCollapsed" : ""
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
           <InboxSidebar
             ui={{
@@ -3969,8 +3995,20 @@ export function App(): JSX.Element {
               }}
               formatStageLabel={(stage) => formatStageLabel(stage, UI)}
               onDealStageChange={(dealId, stage) => void updateDealStage(dealId, stage)}
+              onCollapse={() => setFunnelKpiPanelOpen(false)}
+              collapseLabel={UI.collapseKpi}
             />
           </aside>
+          ) : !isMobileLayout ? (
+            <button
+              type="button"
+              className="kpiRailToggle"
+              onClick={() => setFunnelKpiPanelOpen(true)}
+              aria-expanded={false}
+              title={UI.menuFunnelKpi}
+            >
+              {UI.menuFunnelKpi}
+            </button>
           ) : null}
         </div>
         ) : currentSection === "knowledge" ? (
