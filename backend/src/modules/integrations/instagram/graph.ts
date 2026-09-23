@@ -35,6 +35,46 @@ function getInstagramAppSecret(): string {
   return process.env.INSTAGRAM_APP_SECRET || process.env.META_INSTAGRAM_APP_SECRET || "";
 }
 
+export type InstagramOAuthReadiness = {
+  appId: string;
+  appSecretConfigured: boolean;
+  credentialsReady: boolean;
+  missing: string[];
+  /** Russian explanation when OAuth cannot start. Null when credentials are ready. */
+  blockReason: string | null;
+};
+
+function instagramOAuthBlockReason(missing: string[]): string {
+  if (missing.length === 1 && missing[0] === "INSTAGRAM_APP_ID") {
+    return "Не задан INSTAGRAM_APP_ID (приложение Light CRM-IG). Добавьте его в окружение сервера и перезапустите backend. Ручной ввод токена остаётся доступен.";
+  }
+  if (missing.length === 1 && missing[0] === "INSTAGRAM_APP_SECRET") {
+    return "Не задан INSTAGRAM_APP_SECRET (приложение Light CRM-IG). Без секрета вход через Instagram Login не завершится. Добавьте его в окружение сервера и перезапустите backend. Ручной ввод токена остаётся доступен.";
+  }
+  const list = missing.join(" и ");
+  return `Не заданы ${list} (приложение Light CRM-IG). Добавьте их в окружение сервера и перезапустите backend. Кнопка «Подключить Instagram» откроет вход Meta, когда данные появятся. Ручной ввод токена остаётся доступен.`;
+}
+
+/** Whether the Meta app id/secret needed to start Instagram Login are configured. */
+export function describeInstagramOAuthReadiness(): InstagramOAuthReadiness {
+  const appId = getInstagramAppId();
+  const appSecretConfigured = Boolean(getInstagramAppSecret());
+  const missing: string[] = [];
+  if (!appId) {
+    missing.push("INSTAGRAM_APP_ID");
+  }
+  if (!appSecretConfigured) {
+    missing.push("INSTAGRAM_APP_SECRET");
+  }
+  return {
+    appId,
+    appSecretConfigured,
+    credentialsReady: missing.length === 0,
+    missing,
+    blockReason: missing.length === 0 ? null : instagramOAuthBlockReason(missing)
+  };
+}
+
 export function getInstagramLoginScopes(): string[] {
   return [
     "instagram_business_basic",

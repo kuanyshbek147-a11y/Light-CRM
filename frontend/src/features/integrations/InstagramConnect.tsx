@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   connectInstagram,
   connectInstagramOAuth,
@@ -15,6 +15,32 @@ type Props = {
 
 const OAUTH_STATE_KEY = "instagram_oauth_state";
 const OAUTH_REDIRECT_KEY = "instagram_oauth_redirect";
+
+const OAUTH_APP_ID_FALLBACK =
+  "Не задан INSTAGRAM_APP_ID (приложение Light CRM-IG). Добавьте его в окружение сервера и перезапустите backend. Ручной ввод токена остаётся доступен.";
+
+const OAUTH_APP_SECRET_FALLBACK =
+  "Не задан INSTAGRAM_APP_SECRET (приложение Light CRM-IG). Без секрета вход через Instagram Login не завершится. Добавьте его в окружение сервера и перезапустите backend. Ручной ввод токена остаётся доступен.";
+
+/** Why the connect button cannot start OAuth. Null when Instagram Login can open. */
+export function instagramOAuthBlockReason(setup: InstagramConnectSetup | null): string | null {
+  if (!setup) {
+    return null;
+  }
+  if (setup.blockReason) {
+    return setup.blockReason;
+  }
+  if (setup.credentialsReady === true && setup.appId) {
+    return null;
+  }
+  if (!setup.appId) {
+    return OAUTH_APP_ID_FALLBACK;
+  }
+  if (setup.appSecretConfigured === false || setup.credentialsReady === false) {
+    return OAUTH_APP_SECRET_FALLBACK;
+  }
+  return null;
+}
 
 function buildInstagramAuthUrl(setup: InstagramConnectSetup, state: string): string {
   const redirectUri = setup.redirectUri || `${window.location.origin}/`;
@@ -40,6 +66,9 @@ export function InstagramConnect({ authToken }: Props) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showManual, setShowManual] = useState(false);
+  const [alertPulse, setAlertPulse] = useState(0);
+  const [connectLabel, setConnectLabel] = useState("");
+  const blockAlertRef = useRef<HTMLDivElement | null>(null);
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -126,8 +155,15 @@ export function InstagramConnect({ authToken }: Props) {
   }, [authToken, refreshStatus]);
 
   async function onConnectOAuth(): Promise<void> {
-    if (!setup?.appId) {
-      setError("Не задан INSTAGRAM_APP_ID (приложение Light CRM-IG)");
+    if (!setup) {
+      setError("Не удалось загрузить настройки Instagram. Нажмите «Обновить статус» и попробуйте снова.");
+      return;
+    }
+    const reason = instagramOAuthBlockReason(setup);
+    if (reason) {
+      setError(reason);
+      setConnectLabel("Ключи Meta не заданы");
+      setAlertPulse((value) => value + 1);
       return;
     }
 
@@ -191,6 +227,31 @@ export function InstagramConnect({ authToken }: Props) {
     }
   }
 
+  const blockReason = instagramOAuthBlockReason(setup);
+  const visibleError = error || blockReason;
+
+  useEffect(() => {
+    if (alertPulse === 0) {
+      return;
+    }
+    const node = blockAlertRef.current;
+    if (!node) {
+      return;
+    }
+    node.classList.remove("isPulsing");
+    void node.offsetWidth;
+    node.classList.add("isPulsing");
+    node.focus();
+  }, [alertPulse]);
+
+  useEffect(() => {
+    if (!connectLabel) {
+      return;
+    }
+    const timer = window.setTimeout(() => setConnectLabel(""), 2200);
+    return () => window.clearTimeout(timer);
+  }, [connectLabel]);
+
   return (
     <div className="instagramConnectCard" id="integration-instagram">
       <div className="integrationsPanelHeader">
@@ -229,10 +290,10 @@ export function InstagramConnect({ authToken }: Props) {
         <button
           type="button"
           className="primaryButton"
-          disabled={oauthLoading || loading || !setup?.appId}
+          disabled={oauthLoading || loading}
           onClick={() => void onConnectOAuth()}
         >
-          {oauthLoading ? "Подключение..." : "Подключить Instagram"}
+          {oauthLoading ? "Подключение..." : connectLabel || "Подключить Instagram"}
         </button>
         {status?.connected ? (
           <button
@@ -251,6 +312,13 @@ export function InstagramConnect({ authToken }: Props) {
           {showManual ? "Скрыть ручной ввод" : "Ручной ввод токена"}
         </button>
       </div>
+
+      {visibleError ? (
+        <div ref={blockAlertRef} className="integrationsError" role="alert" tabIndex={-1}>
+          {visibleError}
+        </div>
+      ) : null}
+      {success ? <div className="integrationsSuccess">{success}</div> : null}
 
       {showManual ? (
         <div className="instagramConnectForm">
@@ -284,9 +352,6 @@ export function InstagramConnect({ authToken }: Props) {
           </button>
         </div>
       ) : null}
-
-      {error ? <div className="integrationsError">{error}</div> : null}
-      {success ? <div className="integrationsSuccess">{success}</div> : null}
 
       <div className="integrationsHint">
         В Meta App добавьте Valid OAuth Redirect URI:{" "}
