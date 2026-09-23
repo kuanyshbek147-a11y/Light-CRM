@@ -61,6 +61,22 @@ export function inlinePlainText(inlines: InlineNode[]): string {
   return inlines.map((node) => node.value).join("");
 }
 
+function withoutSubtitleLabel(inlines: InlineNode[]): { inlines: InlineNode[]; lead: boolean } {
+  const [first, ...rest] = inlines;
+  if (!first || first.kind !== "strong" || first.value !== "Подзаголовок:") {
+    return { inlines, lead: false };
+  }
+  const cleaned = rest
+    .map((node, index) => {
+      if (index === 0 && node.kind === "text") {
+        return { ...node, value: node.value.replace(/^\s+/, "") };
+      }
+      return node;
+    })
+    .filter((node) => node.kind !== "text" || node.value.length > 0);
+  return { inlines: cleaned, lead: true };
+}
+
 function paragraphFromLines(lines: string[]): GuideBlock {
   const text = lines
     .map((line) => line.trim())
@@ -68,13 +84,12 @@ function paragraphFromLines(lines: string[]): GuideBlock {
     .join(" ")
     .replace(/ {2,}/g, " ")
     .trim();
-  const inlines = parseInlines(text);
-  const plain = inlinePlainText(inlines);
+  const parsed = withoutSubtitleLabel(parseInlines(text));
   return {
     kind: "p",
-    inlines,
-    lead: plain.startsWith("Подзаголовок:"),
-    cta: inlines.some((node) => node.kind === "link")
+    inlines: parsed.inlines,
+    lead: parsed.lead,
+    cta: parsed.inlines.some((node) => node.kind === "link")
   };
 }
 

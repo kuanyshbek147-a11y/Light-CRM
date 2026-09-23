@@ -65,9 +65,12 @@ test("текст страницы не добавляет утверждений
     .replace(/^\s*(?:-|\d+\.)\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, "$1")
+    .replace(/Подзаголовок:\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
   assert.equal(rendered, source);
+  assert.match(doc.bodyHtml, /чаты, сделки и ответы команды в одном окне/);
+  assert.equal(doc.bodyHtml.includes("Подзаголовок:"), false);
 });
 
 test("статический документ содержит SEO-теги публичного лендинга", () => {
