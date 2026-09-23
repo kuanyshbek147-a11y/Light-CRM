@@ -122,6 +122,16 @@ button {
   font-weight: 600;
 }
 
+.landingGuideLink {
+  width: fit-content;
+  margin-top: 4px;
+  color: #4338ca;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-underline-offset: 3px;
+}
+
 .landingHighlights {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

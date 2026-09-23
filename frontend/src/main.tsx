@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { GuideArticlePage } from "./features/guides/GuideArticlePage";
+import { isCrmWhatsappGuidePath } from "./features/guides/guideArticle";
 import { startBackendKeepAlive } from "./shared/lib/backendWarmup";
 import "./styles.css";
 import "./mobile-crm-ui.css";
@@ -25,10 +27,12 @@ try {
   // ignore
 }
 
+const publicGuide = isCrmWhatsappGuidePath(window.location.pathname);
+
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      {publicGuide ? <GuideArticlePage /> : <App />}
     </ErrorBoundary>
   </React.StrictMode>
 );
