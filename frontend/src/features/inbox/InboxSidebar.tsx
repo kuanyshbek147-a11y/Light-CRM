@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
@@ -48,6 +48,124 @@ function formatSnippet(conversation: Conversation, fallback: string): string {
     return "📎 [Медиа]";
   }
   return body;
+}
+
+const CHANNEL_FILTERS = [
+  ["all", "Все"],
+  ["whatsapp", "WhatsApp"],
+  ["telegram", "Telegram"],
+  ["instagram", "Instagram"],
+  ["web", "Сайт"],
+  ["email", "Email"]
+] as const;
+
+function ChannelScrollChevron(props: { direction: "left" | "right" }): JSX.Element {
+  const path = props.direction === "left" ? "M12.5 4.5 7 10l5.5 5.5" : "M7.5 4.5 13 10l-5.5 5.5";
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChannelFilters(props: {
+  value: ChannelFilter;
+  onChange: (value: ChannelFilter) => void;
+}): JSX.Element {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const update = (): void => {
+      const max = el.scrollWidth - el.clientWidth;
+      const left = el.scrollLeft > 2;
+      const right = max - el.scrollLeft > 2;
+      setEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+
+    let cancelled = false;
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    window.addEventListener("resize", update);
+    if (document.fonts) {
+      void document.fonts.ready.then(() => {
+        if (!cancelled) {
+          update();
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  function scrollChannels(direction: -1 | 1): void {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+    const distance = Math.max(96, Math.round(el.clientWidth * 0.72));
+    el.scrollBy({ left: direction * distance, behavior: "smooth" });
+  }
+
+  return (
+    <div
+      className={`channelFiltersBar${edges.left ? " canScrollLeft" : ""}${edges.right ? " canScrollRight" : ""}`}
+    >
+      {edges.left ? (
+        <button
+          type="button"
+          className="channelScrollBtn channelScrollBtnPrev"
+          aria-label="Предыдущие каналы"
+          onClick={() => scrollChannels(-1)}
+        >
+          <ChannelScrollChevron direction="left" />
+        </button>
+      ) : null}
+      <div ref={scrollerRef} className="channelFilters" role="tablist" aria-label="Каналы">
+        {CHANNEL_FILTERS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={props.value === value}
+            className={`channelChip ${props.value === value ? "active" : ""}`}
+            onClick={() => props.onChange(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {edges.right ? (
+        <button
+          type="button"
+          className="channelScrollBtn channelScrollBtnNext"
+          aria-label="Следующие каналы"
+          onClick={() => scrollChannels(1)}
+        >
+          <ChannelScrollChevron direction="right" />
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 type InboxSidebarUi = {
@@ -251,27 +369,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         </div>
       </div>
 
-      <div className="channelFilters" role="tablist" aria-label="Channel filters">
-        {([
-          ["all", "Все"],
-          ["whatsapp", "WhatsApp"],
-          ["telegram", "Telegram"],
-          ["instagram", "Instagram"],
-          ["web", "Сайт"],
-          ["email", "Email"]
-        ] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={channelFilter === value}
-            className={`channelChip ${channelFilter === value ? "active" : ""}`}
-            onClick={() => setChannelFilter(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <ChannelFilters value={channelFilter} onChange={setChannelFilter} />
 
       <div className="sidebarHeader">
         <div>
