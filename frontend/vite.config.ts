@@ -1,8 +1,32 @@
-import { defineConfig } from "vite";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { renderGuideDocument } from "./src/features/guides/guideArticle";
+
+const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
+
+function guideStaticHtmlPlugin(): Plugin {
+  return {
+    name: "guide-static-html",
+    apply: "build",
+    writeBundle(options) {
+      if (!options.dir) return;
+      const markdown = readFileSync(
+        path.join(frontendRoot, "src/features/guides/crm-whatsapp-kazakhstan.md"),
+        "utf8"
+      );
+      const css = readFileSync(path.join(frontendRoot, "src/features/guides/guideArticle.css"), "utf8");
+      const target = path.join(options.dir, "guides/crm-whatsapp-kazakhstan");
+      mkdirSync(target, { recursive: true });
+      writeFileSync(path.join(target, "index.html"), renderGuideDocument(markdown, css), "utf8");
+    }
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), guideStaticHtmlPlugin()],
   server: {
     host: "0.0.0.0",
     port: 5173

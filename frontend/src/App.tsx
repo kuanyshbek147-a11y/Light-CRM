@@ -3446,6 +3446,9 @@ export function App(): JSX.Element {
               </div>
             </div>
           </div>
+          <a className="landingGuideLink" href="/guides/crm-whatsapp-kazakhstan">
+            CRM с WhatsApp для продаж и поддержки в Казахстане
+          </a>
         </section>
 
         <aside className="loginCard loginCardModern">
