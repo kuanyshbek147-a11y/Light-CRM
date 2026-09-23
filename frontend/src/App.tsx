@@ -20,17 +20,22 @@ import {
   type SessionUser
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
+import { InboxChannelEmpty } from "./features/inbox/InboxChannelEmpty";
+import { channelFilterIsEmpty, type InboxChannelFilter } from "./features/inbox/lib/channelFilter";
 import { InboxConnectChecklist } from "./features/inbox/InboxConnectChecklist";
 import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
 import {
+  closeOnboarding,
   emptyOnboardingState,
   firstIncompleteStep,
   onboardingUserKey,
   readOnboarding,
   saveOnboarding,
   usesDemoSampleData,
+  withOnboardingStep,
   type OnboardingState,
-  type OnboardingStatus
+  type OnboardingStatus,
+  type OnboardingStepId
 } from "./features/onboarding/onboardingStorage";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
@@ -736,6 +741,7 @@ export function App(): JSX.Element {
   const pendingStopAndSendRef = useRef<boolean>(false);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
+  const [inboxChannelFilter, setInboxChannelFilter] = useState<InboxChannelFilter>("all");
   const [notificationSoundOn, setNotificationSoundOn] = useState<boolean>(() => isNotificationSoundEnabled());
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<
@@ -1325,6 +1331,11 @@ export function App(): JSX.Element {
       }
     }
   }, [conversations, selectedConversation, token]);
+
+  useEffect(() => {
+    if (conversationsLoading || !channelFilterIsEmpty(conversations, inboxChannelFilter)) return;
+    setCustomerCardOpen(false);
+  }, [conversations, conversationsLoading, inboxChannelFilter]);
 
   useEffect(() => {
     if (!scripts.length) {
@@ -3288,19 +3299,12 @@ export function App(): JSX.Element {
   }
 
   function skipOnboarding(): void {
-    if (onboardingState.status === "completed") {
-      setOnboardingMode("hidden");
-      return;
-    }
-    writeOnboarding({ status: "skipped", steps: onboardingState.steps });
+    writeOnboarding(closeOnboarding(onboardingState, "skip"));
     setOnboardingMode("hidden");
   }
 
   function completeOnboarding(): void {
-    writeOnboarding({
-      status: "completed",
-      steps: { channel: true, lead: true, next: true }
-    });
+    writeOnboarding(closeOnboarding(onboardingState, "done"));
     setOnboardingMode("hidden");
   }
 
@@ -3308,11 +3312,10 @@ export function App(): JSX.Element {
     setOnboardingMode(onboardingState.status === "pending" ? "dock" : "hidden");
   }
 
-  function markOnboardingStep(stepId: "channel" | "lead" | "next"): OnboardingStatus {
-    const steps = { ...onboardingState.steps, [stepId]: true };
-    const status = onboardingState.status;
-    writeOnboarding({ status, steps });
-    return status;
+  function markOnboardingStep(stepId: OnboardingStepId): OnboardingStatus {
+    const next = withOnboardingStep(onboardingState, stepId);
+    writeOnboarding(next);
+    return next.status;
   }
 
   function leaveOnboardingForWork(): void {
@@ -3321,15 +3324,17 @@ export function App(): JSX.Element {
   }
 
   function openOnboardingChannel(): void {
+    if (sessionUser?.role !== "admin") return;
     const status = markOnboardingStep("channel");
-    if (sessionUser?.role !== "admin") {
-      setOnboardingStep(1);
-      return;
-    }
     setCurrentSection("integrations");
     setMobileThreadOpen(false);
     setOnboardingStep(1);
     setOnboardingMode(status === "pending" ? "dock" : "hidden");
+  }
+
+  function noteOnboardingChannelRequestCopied(): void {
+    markOnboardingStep("channel");
+    showToast("Просьба скопирована — отправьте её администратору.", "success");
   }
 
   function openOnboardingDialogs(): void {
@@ -3995,6 +4000,10 @@ export function App(): JSX.Element {
             .join(" ")}
         >
           <InboxSidebar
+            channelFilter={inboxChannelFilter}
+            onChannelFilterChange={setInboxChannelFilter}
+            isAdmin={sessionUser?.role === "admin"}
+            onConnectChannel={sessionUser?.role === "admin" ? () => openIntegrations() : undefined}
             ui={{
               inboxTitle: UI.inboxTitle,
               chatsSuffix: UI.chatsSuffix,
@@ -4050,6 +4059,18 @@ export function App(): JSX.Element {
           />
 
           <InboxThread
+            emptyOverride={
+              !conversationsLoading && channelFilterIsEmpty(conversations, inboxChannelFilter) ? (
+                <InboxChannelEmpty
+                  layout="pane"
+                  isAdmin={sessionUser?.role === "admin"}
+                  onReset={() => setInboxChannelFilter("all")}
+                  onConnect={sessionUser?.role === "admin" ? () => openIntegrations() : undefined}
+                  onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+                  backLabel={UI.backToChats}
+                />
+              ) : null
+            }
             ui={{
               replyBox: UI.replyBox,
               customerCard: UI.customerCard,
@@ -6179,6 +6200,7 @@ export function App(): JSX.Element {
           demoData={usesDemoSampleData(sessionUser, conversations)}
           onStepChange={setOnboardingStep}
           onOpenChannel={openOnboardingChannel}
+          onChannelRequestCopied={noteOnboardingChannelRequestCopied}
           onOpenDialogs={openOnboardingDialogs}
           onOpenTasks={openOnboardingTasks}
           onOpenPipeline={openOnboardingPipeline}
