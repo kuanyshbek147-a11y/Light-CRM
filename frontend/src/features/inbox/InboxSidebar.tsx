@@ -89,9 +89,12 @@ function ChannelFilters(props: {
     }
 
     const update = (): void => {
-      const max = el.scrollWidth - el.clientWidth;
+      const lastChip = el.querySelector<HTMLElement>(".channelChip:last-of-type");
+      const lastEnd = lastChip
+        ? lastChip.getBoundingClientRect().right - el.getBoundingClientRect().left + el.scrollLeft
+        : 0;
       const left = el.scrollLeft > 2;
-      const right = max - el.scrollLeft > 2;
+      const right = lastEnd - el.clientWidth - el.scrollLeft > 2;
       setEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
     };
 
@@ -122,24 +125,52 @@ function ChannelFilters(props: {
     if (!el) {
       return;
     }
-    const distance = Math.max(96, Math.round(el.clientWidth * 0.72));
-    el.scrollBy({ left: direction * distance, behavior: "smooth" });
+    const chips = Array.from(el.querySelectorAll<HTMLButtonElement>(".channelChip"));
+    const origin = el.getBoundingClientRect().left;
+    const starts = chips.map((chip) => chip.getBoundingClientRect().left - origin + el.scrollLeft);
+    const widths = chips.map((chip) => chip.getBoundingClientRect().width);
+    const viewLeft = el.scrollLeft;
+    const viewRight = viewLeft + el.clientWidth;
+    const edge = 4;
+
+    if (direction > 0) {
+      const index = starts.findIndex((start, chipIndex) => start + widths[chipIndex] > viewRight - edge);
+      const left = index >= 0 ? starts[index] : el.scrollWidth - el.clientWidth;
+      el.scrollTo({ left });
+      return;
+    }
+
+    let index = -1;
+    for (let chipIndex = starts.length - 1; chipIndex >= 0; chipIndex -= 1) {
+      if (starts[chipIndex] < viewLeft + edge) {
+        index = chipIndex;
+        break;
+      }
+    }
+    if (index < 0) {
+      el.scrollTo({ left: 0 });
+      return;
+    }
+    el.scrollTo({
+      left: Math.max(0, starts[index] + widths[index] - el.clientWidth)
+    });
   }
 
   return (
     <div
       className={`channelFiltersBar${edges.left ? " canScrollLeft" : ""}${edges.right ? " canScrollRight" : ""}`}
     >
-      {edges.left ? (
-        <button
-          type="button"
-          className="channelScrollBtn channelScrollBtnPrev"
-          aria-label="Предыдущие каналы"
-          onClick={() => scrollChannels(-1)}
-        >
-          <ChannelScrollChevron direction="left" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="channelScrollBtn channelScrollBtnPrev"
+        aria-label="Предыдущие каналы"
+        aria-hidden={!edges.left}
+        tabIndex={edges.left ? 0 : -1}
+        disabled={!edges.left}
+        onClick={() => scrollChannels(-1)}
+      >
+        <ChannelScrollChevron direction="left" />
+      </button>
       <div ref={scrollerRef} className="channelFilters" role="tablist" aria-label="Каналы">
         {CHANNEL_FILTERS.map(([value, label]) => (
           <button
@@ -153,17 +184,19 @@ function ChannelFilters(props: {
             {label}
           </button>
         ))}
+        <span className="channelFiltersSpacer" aria-hidden="true" />
       </div>
-      {edges.right ? (
-        <button
-          type="button"
-          className="channelScrollBtn channelScrollBtnNext"
-          aria-label="Следующие каналы"
-          onClick={() => scrollChannels(1)}
-        >
-          <ChannelScrollChevron direction="right" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="channelScrollBtn channelScrollBtnNext"
+        aria-label="Следующие каналы"
+        aria-hidden={!edges.right}
+        tabIndex={edges.right ? 0 : -1}
+        disabled={!edges.right}
+        onClick={() => scrollChannels(1)}
+      >
+        <ChannelScrollChevron direction="right" />
+      </button>
     </div>
   );
 }

@@ -292,7 +292,9 @@
 
 /* ── Channel filter chips ── */
 .channelFiltersBar {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
   width: 100%;
   margin-bottom: 14px;
@@ -306,62 +308,64 @@
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  flex: 1 1 auto;
   padding-bottom: 2px;
   margin-bottom: 0;
   scrollbar-width: none;
-  scroll-behavior: smooth;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
 
 .channelFiltersBar.canScrollLeft .channelFilters {
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
 }
 
 .channelFiltersBar.canScrollRight .channelFilters {
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
 }
 
 .channelFiltersBar.canScrollLeft.canScrollRight .channelFilters {
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0,
-    #000 28px,
-    #000 calc(100% - 28px),
+    #000 14px,
+    #000 calc(100% - 14px),
     transparent 100%
   );
-  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
 }
 
 .channelScrollBtn {
-  position: absolute;
-  top: 0;
-  z-index: 2;
-  width: 26px;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 28px;
+  width: 28px;
   height: 32px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 1px solid #e2e8f7;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
+  background: #fff;
   color: #4338ca;
   box-shadow: 0 2px 8px rgba(40, 52, 111, 0.16);
   cursor: pointer;
 }
 
-.channelScrollBtnPrev {
-  left: 0;
-}
-
-.channelScrollBtnNext {
-  right: 0;
+.channelScrollBtn:disabled {
+  visibility: hidden;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .channelFilters::-webkit-scrollbar {
   display: none;
+}
+
+.channelFiltersSpacer {
+  flex: 0 0 calc(100% - 40px);
 }
 
 .channelChip {
