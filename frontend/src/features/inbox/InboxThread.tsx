@@ -67,6 +67,8 @@ type InboxThreadProps = {
   onOpenDealFromChat?: () => void;
   createTaskLabel?: string;
   openDealLabel?: string;
+  dealChipActive?: boolean;
+  linkedDeal?: { stageLabel: string; nextStepLabel: string | null } | null;
   onCallPhone?: () => void;
   onMessagesDragOver: (event: DragEvent<HTMLDivElement>) => void;
   onMessagesDragLeave: (event: DragEvent<HTMLDivElement>) => void;
@@ -128,6 +130,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onOpenDealFromChat,
     createTaskLabel,
     openDealLabel,
+    dealChipActive,
+    linkedDeal,
     onCallPhone,
     onMessagesDragOver,
     onMessagesDragLeave,
@@ -411,6 +415,14 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                     : selectedConversationData.phone || selectedConversationData.channel}
                 </span>
               </div>
+              {linkedDeal ? (
+                <div className="threadDealStatus">
+                  Сделка: {linkedDeal.stageLabel}
+                  {linkedDeal.nextStepLabel
+                    ? ` · след. шаг ${linkedDeal.nextStepLabel}`
+                    : " · след. шаг не задан"}
+                </div>
+              ) : null}
             </div>
             <div className="threadHeaderActions">
               {onCallPhone ? (
@@ -534,7 +546,11 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               </button>
             ) : null}
             {onOpenDealFromChat ? (
-              <button type="button" className="quickChip outline" onClick={onOpenDealFromChat}>
+              <button
+                type="button"
+                className={`quickChip outline${dealChipActive ? " hasDeal" : ""}`}
+                onClick={onOpenDealFromChat}
+              >
                 {openDealLabel || "Сделка"}
               </button>
             ) : null}

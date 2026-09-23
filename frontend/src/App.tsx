@@ -126,9 +126,12 @@ import {
 } from "./features/inbox/model/actions";
 import { requestTelephonyDial, type CallLogResult } from "./features/telephony/api";
 import { loadStaffUnreadCount, shareConversationToStaff } from "./features/staff/api";
+import { DealLinkDialog } from "./features/crm/DealLinkDialog";
+import { groupDealsForBoard, ruDealCount } from "./features/crm/pipelineBoard";
 import {
   createCrmTask,
   globalSearch,
+  linkDealToConversation,
   loadCrmContactDetails,
   loadCrmContacts,
   loadCrmTasks,
@@ -137,6 +140,7 @@ import {
   saveFollowUpSettingsApi,
   updateCrmTask,
   updateDealDetails,
+  upsertConversationDeal,
   type CrmContactDetails,
   type CrmContactListItem,
   type CrmTask,
@@ -153,6 +157,10 @@ type Deal = {
   contact_name: string;
   manager_name: string;
   contact_id?: string;
+  phone?: string | null;
+  conversation_status?: "open" | "closed" | null;
+  channel?: Conversation["channel"] | null;
+  last_message_body?: string | null;
 };
 
 type StageOutcome = "open" | "won" | "lost";
@@ -562,7 +570,8 @@ const UI = {
   contactFieldsRequired: "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438",
   stageChangeBlockedFields: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043c\u0435\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f: \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
-  pipelineBoardHint: "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0441\u0433\u0440\u0443\u043f\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u044b \u043f\u043e \u0448\u0430\u0433\u0430\u043c \u0438\u0437 \u043f\u0440\u043e\u0444\u0438\u043b\u044f \u043a\u043b\u0438\u0435\u043d\u0442\u0430.",
+  pipelineBoardHint:
+    "Каждая карточка — сделка. Счётчик у клиента совпадает с числом карточек на вкладках «Открытые» и «Закрытые».",
   noCardsInStage: "\u0412 \u044d\u0442\u043e\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a.",
   closeCard: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
@@ -836,6 +845,10 @@ export function App(): JSX.Element {
   const [quickTaskByConversation, setQuickTaskByConversation] = useState<Record<string, string>>({});
   const [quickDeferMinutesByConversation, setQuickDeferMinutesByConversation] = useState<Record<string, number>>({});
   const [customerCardOpen, setCustomerCardOpen] = useState<boolean>(false);
+  const [dealFlowOpen, setDealFlowOpen] = useState(false);
+  const [dealFlowDeals, setDealFlowDeals] = useState<CrmContactDetails["deals"]>([]);
+  const [dealFlowSaving, setDealFlowSaving] = useState(false);
+  const [dealFlowError, setDealFlowError] = useState("");
   const [contactCard, setContactCard] = useState<ContactCard | null>(null);
   const [metricSnapshots, setMetricSnapshots] = useState<MetricSnapshot[]>([]);
   const [autoAssignmentStrategy, setAutoAssignmentStrategy] = useState<AutoAssignmentStrategy>("round_robin");
@@ -1413,6 +1426,7 @@ export function App(): JSX.Element {
     key: stageName,
     label: formatStageLabel(stageName, UI)
   }));
+  const pipelineBoard = groupDealsForBoard(deals, pipelineColumns, pipelineStatusFilter);
 
   async function hydrateWorkspace(authToken: string): Promise<void> {
     setConversationsLoading(true);
@@ -1601,6 +1615,7 @@ export function App(): JSX.Element {
     setSearch("");
     setFilters(DEFAULT_INBOX_FILTERS);
     setCustomerCardOpen(false);
+    setDealFlowOpen(false);
     setContactCard(null);
   }
 
@@ -1831,22 +1846,219 @@ export function App(): JSX.Element {
     setDealNextStepDraft(deal.next_step_at ? toDatetimeLocalValue(deal.next_step_at) : "");
   }
 
+  function dealSavePayload(): { stage: string; amount: number; next_step_at: string | null } | null {
+    if (!dealStageDraft.trim()) {
+      setDealFlowError("Выберите этап сделки");
+      return null;
+    }
+    const amount = Number(dealAmountDraft || "0");
+    if (Number.isNaN(amount) || amount < 0) {
+      setDealFlowError("Укажите сумму от 0");
+      return null;
+    }
+    return {
+      stage: dealStageDraft,
+      amount,
+      next_step_at: dealNextStepDraft.trim() ? new Date(dealNextStepDraft).toISOString() : null
+    };
+  }
+
+  function dealErrorText(error?: string): string {
+    if (error === "contact_fields_required") {
+      return UI.stageChangeBlockedFields;
+    }
+    if (error === "conversation_has_deal") {
+      return "У этого чата уже есть сделка";
+    }
+    if (error === "different_contact") {
+      return "Сделку можно привязать только к чату этого клиента";
+    }
+    return "Не удалось сохранить сделку";
+  }
+
+  async function refreshDealSurfaces(): Promise<void> {
+    if (!token) {
+      return;
+    }
+    await Promise.all([
+      loadDeals(token, setDeals),
+      loadConversations(token, search, filters, setConversations),
+      refreshCrmContacts()
+    ]);
+  }
+
   async function saveSelectedDeal(): Promise<void> {
     if (!token || !selectedDealId) {
       return;
     }
-    const amount = Number(dealAmountDraft);
-    const ok = await updateDealDetails(token, selectedDealId, {
-      stage: dealStageDraft,
-      amount: Number.isNaN(amount) ? 0 : amount,
-      next_step_at: dealNextStepDraft.trim() ? new Date(dealNextStepDraft).toISOString() : null
-    });
-    if (!ok) {
-      showToast("Не удалось сохранить сделку", "error");
+    const payload = dealSavePayload();
+    if (!payload) {
+      showToast("Проверьте этап и сумму сделки", "error");
       return;
     }
-    await loadDeals(token, setDeals);
+    const result = await updateDealDetails(token, selectedDealId, payload);
+    if (!result.ok) {
+      showToast(dealErrorText(result.error), "error");
+      return;
+    }
+    await refreshDealSurfaces();
     showToast("Сделка сохранена", "success");
+  }
+
+  function formatDealNextStep(value?: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toLocaleString("ru-RU", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  async function openDealFlowFromChat(): Promise<void> {
+    if (!token || !selectedConversation || !selectedConversationData) {
+      showToast("Сначала выберите диалог", "error");
+      return;
+    }
+    const linked = deals.find((deal) => deal.conversation_id === selectedConversation) || null;
+    if (linked) {
+      beginEditDeal(linked);
+    } else {
+      setSelectedDealId("");
+      setDealAmountDraft("");
+      setDealNextStepDraft("");
+      setDealStageDraft(availableStageNames[0] || "");
+    }
+    setDealFlowError("");
+    setDealFlowOpen(true);
+    const contactId = selectedConversationData.contact_id || linked?.contact_id;
+    if (!contactId) {
+      setDealFlowDeals([]);
+      return;
+    }
+    const details = await loadCrmContactDetails(token, contactId);
+    setDealFlowDeals(details?.deals || []);
+  }
+
+  async function createDealFromChat(): Promise<void> {
+    if (!token || !selectedConversation) {
+      return;
+    }
+    const payload = dealSavePayload();
+    if (!payload) {
+      return;
+    }
+    setDealFlowSaving(true);
+    setDealFlowError("");
+    try {
+      const result = await upsertConversationDeal(token, selectedConversation, payload);
+      if (!result.ok) {
+        setDealFlowError(dealErrorText(result.error));
+        return;
+      }
+      await refreshDealSurfaces();
+      showToast("Сделка создана и привязана к чату", "success");
+      setDealFlowOpen(false);
+    } finally {
+      setDealFlowSaving(false);
+    }
+  }
+
+  async function saveDealFromChat(): Promise<void> {
+    if (!token || !selectedDealId) {
+      return;
+    }
+    const payload = dealSavePayload();
+    if (!payload) {
+      return;
+    }
+    setDealFlowSaving(true);
+    setDealFlowError("");
+    try {
+      const result = await updateDealDetails(token, selectedDealId, payload);
+      if (!result.ok) {
+        setDealFlowError(dealErrorText(result.error));
+        return;
+      }
+      await refreshDealSurfaces();
+      showToast("Сделка сохранена", "success");
+      setDealFlowOpen(false);
+    } finally {
+      setDealFlowSaving(false);
+    }
+  }
+
+  async function linkExistingDealToChat(dealId: string): Promise<void> {
+    if (!token || !selectedConversation) {
+      return;
+    }
+    setDealFlowSaving(true);
+    setDealFlowError("");
+    try {
+      const result = await linkDealToConversation(token, dealId, selectedConversation);
+      if (!result.ok) {
+        setDealFlowError(dealErrorText(result.error));
+        return;
+      }
+      await refreshDealSurfaces();
+      showToast("Сделка привязана к чату", "success");
+      setDealFlowOpen(false);
+    } finally {
+      setDealFlowSaving(false);
+    }
+  }
+
+  async function openConversationFromDeal(deal: Deal): Promise<void> {
+    setCurrentSection("dialogs");
+    setSelectedConversation(deal.conversation_id);
+    const existing = conversations.find((item) => item.id === deal.conversation_id);
+    setSelectedConversationData(
+      existing
+        ? { ...existing, stage: deal.stage, amount: String(deal.amount ?? "") }
+        : {
+            id: deal.conversation_id,
+            contact_id: deal.contact_id,
+            contact_name: deal.contact_name,
+            phone: deal.phone || "",
+            channel: deal.channel || "whatsapp",
+            status: deal.conversation_status || "open",
+            updated_at: new Date().toISOString(),
+            assigned_manager_id: "",
+            stage: deal.stage,
+            amount: String(deal.amount ?? ""),
+            last_message_body: deal.last_message_body || null,
+            last_message_direction: null
+          }
+    );
+    if (isMobileLayout) {
+      setMobileThreadOpen(true);
+    }
+    if (!token) {
+      return;
+    }
+    await loadMessages(token, deal.conversation_id, setMessages);
+    await loadContactCard(token, deal.conversation_id, setContactCard);
+    if (existing) {
+      const fresh = await loadConversations(token, search, filters, setConversations);
+      const match = fresh.find((item) => item.id === deal.conversation_id);
+      if (match) {
+        setSelectedConversationData(match);
+      }
+      return;
+    }
+    const fresh = await loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+    const match = fresh.find((item) => item.id === deal.conversation_id);
+    if (match) {
+      setSelectedConversationData(match);
+      setSearch("");
+      setFilters(DEFAULT_INBOX_FILTERS);
+    }
   }
 
   async function mergeSelectedContact(): Promise<void> {
@@ -2729,6 +2941,7 @@ export function App(): JSX.Element {
     }
     await apiSetConversationStatus(token, conversationId, status);
     await refreshConversationList({ token, search, filters, setConversations });
+    await loadDeals(token, setDeals);
   }
 
   async function toggleConversationStatus(conversationId: string, currentStatus: "open" | "closed"): Promise<void> {
@@ -3368,6 +3581,9 @@ export function App(): JSX.Element {
     setPipelineSubview(subview);
     setMobileThreadOpen(false);
     setCurrentSection("pipeline");
+    if (token) {
+      void loadDeals(token, setDeals);
+    }
   }
 
   function handleBottomNavChange(section: MobileNavSection): void {
@@ -3383,6 +3599,9 @@ export function App(): JSX.Element {
   }
 
   const openConversationsWithFollowUp = conversations.filter((conversation) => conversation.has_sla_follow_up);
+  const linkedChatDeal = selectedConversation
+    ? deals.find((deal) => deal.conversation_id === selectedConversation) || null
+    : null;
 
   return (
     <Suspense
@@ -3886,9 +4105,18 @@ export function App(): JSX.Element {
             onShareToTeam={() => void shareSelectedConversationToTeam()}
             shareToTeamLabel={UI.shareToTeamShort}
             createTaskLabel="Задача"
-            openDealLabel="Сделка"
+            openDealLabel={linkedChatDeal ? "Сделка" : "Создать/привязать сделку"}
+            dealChipActive={Boolean(linkedChatDeal)}
+            linkedDeal={
+              linkedChatDeal
+                ? {
+                    stageLabel: formatStageLabel(linkedChatDeal.stage, UI),
+                    nextStepLabel: formatDealNextStep(linkedChatDeal.next_step_at)
+                  }
+                : null
+            }
             onCreateTaskFromChat={() => void createTaskFromSelectedChat()}
-            onOpenDealFromChat={() => setCustomerCardOpen(true)}
+            onOpenDealFromChat={() => void openDealFlowFromChat()}
             onCallPhone={
               selectedConversationData?.phone
                 ? () => requestTelephonyDial(selectedConversationData.phone)
@@ -4833,7 +5061,7 @@ export function App(): JSX.Element {
                       <span className="scriptCardBody">
                         {contact.phone}
                         {contact.city ? ` · ${contact.city}` : ""}
-                        {` · ${contact.conversations_count} диал. · ${contact.deals_count} сделок`}
+                        {` · ${contact.conversations_count} диал. · ${ruDealCount(contact.deals_count)}`}
                       </span>
                     </button>
                   ))}
@@ -5067,18 +5295,28 @@ export function App(): JSX.Element {
                 </button>
               </div>
             </div>
+            {pipelineBoard.hiddenCount > 0 ? (
+              <div className="sidebarHint" style={{ marginBottom: 8 }}>
+                {pipelineStatusFilter === "open"
+                  ? `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в закрытых диалогах.`
+                  : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в открытых диалогах.`}
+              </div>
+            ) : null}
             <div className="pipelineBoardGrid">
-              {pipelineColumns.map((column) => {
-                const columnConversations = conversations.filter(
-                  (conversation) => conversation.status === pipelineStatusFilter && (conversation.stage || "") === column.key
-                );
+              {pipelineBoard.columns.map((column) => {
+                const columnDeals = column.items;
+                const canDrop =
+                  pipelineStatusFilter === "open" &&
+                  availableStageNames.some(
+                    (stageName) => stageName.trim().toLowerCase() === column.key.trim().toLowerCase()
+                  );
                 return (
                   <div
                     className={`pipelineBoardColumn ${dragOverStageKey === column.key ? "dragOver" : ""}`}
                     key={column.key || "empty-stage"}
                     onDragOver={(event) => {
                       event.preventDefault();
-                      if (pipelineStatusFilter === "open") {
+                      if (canDrop) {
                         setDragOverStageKey(column.key);
                       }
                     }}
@@ -5092,7 +5330,7 @@ export function App(): JSX.Element {
                       const conversationId = event.dataTransfer.getData("text/plain") || draggingConversationId;
                       setDragOverStageKey("");
                       setDraggingConversationId("");
-                      if (pipelineStatusFilter !== "open" || !conversationId) {
+                      if (!canDrop || !conversationId) {
                         return;
                       }
                       void moveConversationToStage(conversationId, column.key);
@@ -5100,67 +5338,58 @@ export function App(): JSX.Element {
                   >
                     <div className="pipelineBoardColumnHeader">
                       <span className="pipelineBoardColumnTitle">{column.label}</span>
-                      <span className="pipelineBoardColumnCount">{columnConversations.length}</span>
+                      <span className="pipelineBoardColumnCount">{columnDeals.length}</span>
                     </div>
                     <div className="pipelineBoardCards">
-                      {columnConversations.length ? (
-                        columnConversations.map((conversation) => {
-                          const deal = deals.find((item) => item.conversation_id === conversation.id);
-                          return (
+                      {columnDeals.length ? (
+                        columnDeals.map((deal) => (
                           <button
                             type="button"
                             className="pipelineBoardCard"
-                            key={conversation.id}
+                            key={deal.id}
                             draggable={pipelineStatusFilter === "open"}
                             onDragStart={(event) => {
-                              event.dataTransfer.setData("text/plain", conversation.id);
-                              setDraggingConversationId(conversation.id);
+                              event.dataTransfer.setData("text/plain", deal.conversation_id);
+                              setDraggingConversationId(deal.conversation_id);
                             }}
                             onDragEnd={() => {
                               setDraggingConversationId("");
                               setDragOverStageKey("");
                             }}
                             onClick={() => {
-                              if (deal) {
-                                beginEditDeal(deal);
-                              }
-                              setCurrentSection("dialogs");
-                              void onSelectConversation(conversation.id);
+                              beginEditDeal(deal);
+                              void openConversationFromDeal(deal);
                             }}
                           >
-                            <div className="pipelineBoardCardName">{conversation.contact_name}</div>
-                            <div className="pipelineBoardCardMeta">{conversation.phone}</div>
-                            {deal ? (
-                              <div className="pipelineBoardCardMeta">
-                                {UI.dealAmount}: {deal.amount}
-                                {deal.next_step_at
-                                  ? ` · ${new Date(deal.next_step_at).toLocaleDateString()}`
-                                  : ""}
-                              </div>
-                            ) : null}
+                            <div className="pipelineBoardCardName">{deal.contact_name}</div>
+                            <div className="pipelineBoardCardMeta">{deal.phone || ""}</div>
+                            <div className="pipelineBoardCardMeta">
+                              {UI.dealAmount}: {deal.amount}
+                              {deal.next_step_at
+                                ? ` · ${new Date(deal.next_step_at).toLocaleDateString("ru-RU")}`
+                                : ""}
+                            </div>
                             <div className="pipelineBoardCardSnippet">
-                              {conversation.last_message_body || UI.noMessages}
+                              {deal.last_message_body || UI.noMessages}
                             </div>
                             <div className="pipelineBoardCardActions">
-                              {deal ? (
-                                <button
-                                  type="button"
-                                  className="textButton"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    beginEditDeal(deal);
-                                  }}
-                                >
-                                  {UI.editArticle}
-                                </button>
-                              ) : null}
+                              <button
+                                type="button"
+                                className="textButton"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  beginEditDeal(deal);
+                                }}
+                              >
+                                {UI.editArticle}
+                              </button>
                               <button
                                 type="button"
                                 className="textButton dangerButton"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   void setConversationStatus(
-                                    conversation.id,
+                                    deal.conversation_id,
                                     pipelineStatusFilter === "open" ? "closed" : "open"
                                   );
                                 }}
@@ -5169,8 +5398,7 @@ export function App(): JSX.Element {
                               </button>
                             </div>
                           </button>
-                          );
-                        })
+                        ))
                       ) : (
                         <div className="emptyScriptState">{UI.noCardsInStage}</div>
                       )}
@@ -5291,6 +5519,55 @@ export function App(): JSX.Element {
             }}
           />
         </>
+      ) : null}
+
+      {dealFlowOpen && selectedConversationData ? (
+        <DealLinkDialog
+          contactName={selectedConversationData.contact_name}
+          hasCurrentDeal={Boolean(linkedChatDeal)}
+          currentSummary={
+            linkedChatDeal
+              ? `Сделка: ${formatStageLabel(linkedChatDeal.stage, UI)}${
+                  formatDealNextStep(linkedChatDeal.next_step_at)
+                    ? ` · след. шаг ${formatDealNextStep(linkedChatDeal.next_step_at)}`
+                    : " · след. шаг не задан"
+                }`
+              : null
+          }
+          stages={availableStageNames.map((stageName) => ({
+            name: stageName,
+            label: formatStageLabel(stageName, UI)
+          }))}
+          stageDraft={dealStageDraft}
+          amountDraft={dealAmountDraft}
+          nextStepDraft={dealNextStepDraft}
+          otherDeals={dealFlowDeals
+            .filter((deal) => deal.conversation_id !== selectedConversation)
+            .map((deal) => ({
+              id: deal.id,
+              stageLabel: formatStageLabel(deal.stage, UI),
+              amount: String(deal.amount),
+              nextStepLabel: formatDealNextStep(deal.next_step_at)
+            }))}
+          saving={dealFlowSaving}
+          error={dealFlowError}
+          onStageDraft={(value) => {
+            setDealStageDraft(value);
+            if (dealFlowError) {
+              setDealFlowError("");
+            }
+          }}
+          onAmountDraft={setDealAmountDraft}
+          onNextStepDraft={setDealNextStepDraft}
+          onCreate={() => void createDealFromChat()}
+          onSave={() => void saveDealFromChat()}
+          onLink={(dealId) => void linkExistingDealToChat(dealId)}
+          onOpenClient={() => {
+            setDealFlowOpen(false);
+            setCustomerCardOpen(true);
+          }}
+          onClose={() => setDealFlowOpen(false)}
+        />
       ) : null}
 
       {customerCardOpen && contactCard ? (

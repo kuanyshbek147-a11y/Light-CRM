@@ -183,7 +183,7 @@ export async function updateDealDetails(
   token: string,
   dealId: string,
   payload: { stage?: string; amount?: number; next_step_at?: string | null }
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   const response = await fetch(`${API}/deals/${dealId}`, {
     method: "PATCH",
     headers: {
@@ -192,7 +192,51 @@ export async function updateDealDetails(
     },
     body: JSON.stringify(payload)
   });
-  return response.ok;
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: data.error };
+  }
+  return { ok: true };
+}
+
+export async function upsertConversationDeal(
+  token: string,
+  conversationId: string,
+  payload: { stage: string; amount?: number; next_step_at?: string | null }
+): Promise<{ ok: boolean; error?: string }> {
+  const response = await fetch(`${API}/deals/conversation/${conversationId}/stage`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: data.error };
+  }
+  return { ok: true };
+}
+
+export async function linkDealToConversation(
+  token: string,
+  dealId: string,
+  conversationId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const response = await fetch(`${API}/deals/${dealId}/link`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ conversationId })
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: data.error };
+  }
+  return { ok: true };
 }
 
 export async function globalSearch(token: string, q: string): Promise<GlobalSearchResult> {

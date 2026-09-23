@@ -747,6 +747,48 @@
   color: #2563eb;
 }
 
+.quickChip.hasDeal {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+}
+
+.threadDealStatus {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.dealFlowSectionTitle {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.dealLinkList {
+  display: grid;
+  gap: 8px;
+}
+
+.dealLinkRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e8ebf7;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: #f8f9ff;
+}
+
+.dealLinkRowMeta {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
 /* ── WhatsApp-style composer ── */
 .composer.composerWa {
   display: block;

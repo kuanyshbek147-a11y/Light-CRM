@@ -26,8 +26,8 @@ contactsRouter.get("/", async (req: AuthRequest, res) => {
             COUNT(DISTINCT d.id)::text AS deals_count,
             MAX(GREATEST(c.updated_at, ct.created_at)) AS last_activity_at
      FROM contacts ct
-     LEFT JOIN conversations c ON c.contact_id = ct.id
-     LEFT JOIN deals d ON d.conversation_id = c.id
+     LEFT JOIN conversations c ON c.contact_id = ct.id AND c.workspace_id = ct.workspace_id
+     LEFT JOIN deals d ON d.conversation_id = c.id AND d.workspace_id = ct.workspace_id
      WHERE ct.workspace_id = $1
        AND ($2::text IS NULL OR lower(ct.name) LIKE $2 OR lower(COALESCE(ct.phone, '')) LIKE $2
             OR lower(COALESCE(ct.city, '')) LIKE $2)
