@@ -14,46 +14,76 @@ function rectsOverlap(a: DOMRect, b: DOMRect, pad = 8): boolean {
   return a.left < b.right + pad && a.right > b.left - pad && a.top < b.bottom + pad && a.bottom > b.top - pad;
 }
 
-function widgetObstacle(host: HTMLElement): HTMLElement | null {
-  const root = host.shadowRoot;
-  if (!root) {
-    return null;
+const BUBBLE_SIZE = 58;
+const BUBBLE_INSET = 20;
+
+function widgetObstacleRect(host: HTMLElement): DOMRect {
+  const panelOpen = host.shadowRoot?.querySelector(".panel.open");
+  if (panelOpen) {
+    const width = Math.min(360, window.innerWidth - 24);
+    const height = Math.min(480, window.innerHeight - 110);
+    const right = window.innerWidth - BUBBLE_INSET;
+    const bottom = window.innerHeight - BUBBLE_INSET - 72;
+    return new DOMRect(right - width, bottom - height, width, height);
   }
-  return (root.querySelector(".panel.open") || root.querySelector(".bubble")) as HTMLElement | null;
+  return new DOMRect(
+    window.innerWidth - BUBBLE_INSET - BUBBLE_SIZE,
+    window.innerHeight - BUBBLE_INSET - BUBBLE_SIZE,
+    BUBBLE_SIZE,
+    BUBBLE_SIZE
+  );
 }
 
 /**
  * Hides the landing chat bubble while it would cover «Войти» or operator quick-login.
  * The widget is position:fixed inside an open shadow root, so clearance is applied there.
+ * The bubble stays out of the document while it overlaps those controls, so it cannot take the click.
  */
-function applyLandingChatClearance(): void {
-  const host = document.getElementById("lightcrm-webchat-root");
-  const obstacle = host ? widgetObstacle(host) : null;
-  const wrap = host?.shadowRoot?.querySelector(".wrap") as HTMLElement | null;
-  if (!host || !obstacle || !wrap) {
-    return;
-  }
-
-  const obstacleRect = obstacle.getBoundingClientRect();
-  const covered = Array.from(document.querySelectorAll(LOGIN_CTA_SELECTOR)).some((node) =>
-    rectsOverlap(obstacleRect, node.getBoundingClientRect())
+function loginCtasCovered(host: HTMLElement): boolean {
+  const obstacle = widgetObstacleRect(host);
+  return Array.from(document.querySelectorAll(LOGIN_CTA_SELECTOR)).some((node) =>
+    rectsOverlap(obstacle, node.getBoundingClientRect())
   );
-
-  wrap.style.visibility = covered ? "hidden" : "";
-  wrap.style.pointerEvents = covered ? "none" : "";
-  host.toggleAttribute("data-landing-chat-clear", covered);
-  host.setAttribute("aria-hidden", covered ? "true" : "false");
 }
 
 function watchLandingChatClearance(): () => void {
   let frame = 0;
+  let hostRef: HTMLElement | null = null;
+  let parkedByUs = false;
+
+  const apply = (): void => {
+    const found = document.getElementById("lightcrm-webchat-root");
+    if (found) {
+      hostRef = found;
+    }
+    const host = hostRef;
+    if (!host) {
+      return;
+    }
+
+    const covered = loginCtasCovered(host);
+    host.toggleAttribute("data-landing-chat-clear", covered);
+    host.setAttribute("aria-hidden", covered ? "true" : "false");
+    if (covered) {
+      if (host.isConnected) {
+        parkedByUs = true;
+        host.remove();
+      }
+      return;
+    }
+    if (parkedByUs && !host.isConnected) {
+      parkedByUs = false;
+      document.body.appendChild(host);
+    }
+  };
+
   const schedule = (): void => {
     if (frame) {
       return;
     }
     frame = window.requestAnimationFrame(() => {
       frame = 0;
-      applyLandingChatClearance();
+      apply();
     });
   };
 
@@ -84,7 +114,8 @@ function watchLandingChatClearance(): () => void {
     observer.disconnect();
     window.removeEventListener("scroll", schedule, true);
     window.removeEventListener("resize", schedule);
-    document.getElementById("lightcrm-webchat-root")?.removeEventListener("click", onHostClick);
+    hostRef?.removeEventListener("click", onHostClick);
+    hostRef?.remove();
   };
 }
 
