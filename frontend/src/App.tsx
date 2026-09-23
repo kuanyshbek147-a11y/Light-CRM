@@ -884,10 +884,15 @@ export function App(): JSX.Element {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
-    if (!code || !state) return;
+    const oauthError = params.get("error") || params.get("error_description");
     try {
       const expected = sessionStorage.getItem("instagram_oauth_state");
-      if (expected && expected === state) {
+      const pending = sessionStorage.getItem("instagram_oauth_pending") === "1";
+      if (code && state && expected && expected === state) {
+        openIntegrations("instagram");
+        return;
+      }
+      if ((oauthError || pending) && (expected || pending)) {
         openIntegrations("instagram");
       }
     } catch {
