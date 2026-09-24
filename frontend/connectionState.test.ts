@@ -4,6 +4,7 @@ import {
   describeTelegramConnectError,
   interpretInstagramOAuthReturn,
   plainWhatsAppOAuthError,
+  WHATSAPP_POPUP_BLOCKED,
   resolveLinkBadge,
   telegramTokenMessage,
   telegramTokenProblem
@@ -89,6 +90,8 @@ test("отмена WhatsApp формулируется без жаргона", (
     plainWhatsAppOAuthError("Авторизация Meta отменена или не завершена."),
     "Подключение WhatsApp отменено или не завершено."
   );
+  assert.equal(plainWhatsAppOAuthError("Не удалось открыть окно SDK"), WHATSAPP_POPUP_BLOCKED);
+  assert.equal(/Meta|Cloud API|Direct/.test(WHATSAPP_POPUP_BLOCKED), false);
 });
 
 test("пустой токен Telegram — подсказка, неверный — явная ошибка", () => {

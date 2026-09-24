@@ -481,6 +481,24 @@ button {
   .dialogsAtZero .sidebar .dialogsEmptyCenter {
     display: none;
   }
+
+  .sidebar .inboxChannelEmptyActions,
+  .sidebar .dialogsEmptyActions {
+    display: none;
+  }
+}
+
+.telephonyEnableRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.telephonyEnableRow .integrationsField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settingsField,

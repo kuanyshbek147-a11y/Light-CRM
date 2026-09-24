@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
 import { UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   deleteTelephonyExtension,
@@ -48,7 +49,7 @@ export function TelephonyConnect({ authToken }: Props) {
         setUsers([]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить телефонию");
+      setError(plainFetchError(err, "Не удалось загрузить телефонию"));
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ export function TelephonyConnect({ authToken }: Props) {
       setSettings(saved);
       setSuccess("Настройки АТС сохранены");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка сохранения");
+      setError(plainFetchError(err, "Ошибка сохранения"));
     } finally {
       setSaving(false);
     }
@@ -104,7 +105,7 @@ export function TelephonyConnect({ authToken }: Props) {
       setSuccess("Учётка телефона сохранена");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось сохранить учётку телефона");
+      setError(plainFetchError(err, "Не удалось сохранить учётку телефона"));
     } finally {
       setSaving(false);
     }
@@ -118,7 +119,7 @@ export function TelephonyConnect({ authToken }: Props) {
       setSuccess("Учётка удалена");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось удалить");
+      setError(plainFetchError(err, "Не удалось удалить"));
     } finally {
       setSaving(false);
     }
@@ -141,16 +142,21 @@ export function TelephonyConnect({ authToken }: Props) {
         хранит учётки и журнал звонков.
       </p>
 
-      <label className="integrationsField">
-        <span>Включено</span>
-        <input
-          type="checkbox"
-          checked={Boolean(settings?.enabled)}
-          onChange={(event) =>
-            setSettings((prev) => (prev ? { ...prev, enabled: event.target.checked } : prev))
-          }
-        />
-      </label>
+      <div className="telephonyEnableRow">
+        <label className="integrationsField">
+          <span>Включено</span>
+          <input
+            type="checkbox"
+            checked={Boolean(settings?.enabled)}
+            onChange={(event) =>
+              setSettings((prev) => (prev ? { ...prev, enabled: event.target.checked } : prev))
+            }
+          />
+        </label>
+        <button type="button" className="primaryButton" disabled={saving} onClick={() => void onSaveSettings()}>
+          Сохранить АТС
+        </button>
+      </div>
 
       <details className="integrationsDetails">
         <summary>Для специалиста</summary>
@@ -210,13 +216,8 @@ export function TelephonyConnect({ authToken }: Props) {
               />
             </label>
           </div>
-          <div className="integrationsActions">
-            <button type="button" className="primaryButton" disabled={saving} onClick={() => void onSaveSettings()}>
-              Сохранить АТС
-            </button>
-          </div>
           <div className="telephonyGuide">
-            <div className="sidebarTitle">
+            <div className="integrationsTitle">
               Что настроить на АТС
               <span className="fieldTechHint">{UI_LABELS_RU.telephonyTitleHint}</span>
             </div>
@@ -228,11 +229,9 @@ export function TelephonyConnect({ authToken }: Props) {
               <li>Правила набора исходящих номеров</li>
             </ul>
           </div>
-        </div>
-      </details>
 
-      <div className="sidebarTitle">Учётки телефона менеджеров</div>
-      <div className="integrationsFormGrid">
+          <div className="integrationsTitle">Учётки телефона менеджеров</div>
+          <div className="integrationsFormGrid">
         <label className="integrationsField">
           <span>Менеджер</span>
           <select className="filterInput" value={userId} onChange={(event) => setUserId(event.target.value)}>
@@ -313,7 +312,9 @@ export function TelephonyConnect({ authToken }: Props) {
         {!extensions.length ? (
           <div className="integrationsHint">Пока нет привязанных учёток телефона.</div>
         ) : null}
-      </div>
+          </div>
+        </div>
+      </details>
 
       {error ? <div className="drawerInlineError">{error}</div> : null}
       {success ? <div className="integrationsSuccess">{success}</div> : null}

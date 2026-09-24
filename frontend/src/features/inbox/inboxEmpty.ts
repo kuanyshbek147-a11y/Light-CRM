@@ -19,11 +19,21 @@ export function resolveInboxEmptyKind(input: {
   if (input.loading || input.visibleCount > 0) {
     return null;
   }
-  if (input.conversationCount > 0 && input.channelFilter !== "all") {
-    return "channel-filter";
-  }
   if (input.search.trim() || input.filtersActive) {
     return "query";
   }
+  if (input.channelFilter !== "all") {
+    return "channel-filter";
+  }
   return "activate";
+}
+
+export type IntegrationsFocusChannel = "whatsapp" | "telegram" | "instagram" | "email" | "web";
+
+/** Пустой фильтр канала открывает карточку этого канала, а не всегда WhatsApp. */
+export function integrationsFocusForChannel(channel: string): IntegrationsFocusChannel {
+  if (channel === "telegram" || channel === "instagram" || channel === "email" || channel === "web") {
+    return channel;
+  }
+  return "whatsapp";
 }

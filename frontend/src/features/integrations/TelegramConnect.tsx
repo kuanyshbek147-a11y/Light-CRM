@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
 import { formatIntegrationSource, UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   connectTelegram,
@@ -34,7 +35,7 @@ export function TelegramConnect({ authToken }: Props) {
         setShowTokenForm(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить статус Telegram");
+      setError(plainFetchError(err, "Не удалось загрузить статус Telegram"));
     } finally {
       setLoading(false);
     }
@@ -76,8 +77,9 @@ export function TelegramConnect({ authToken }: Props) {
       );
       await refreshStatus();
     } catch (err) {
-      const raw = err instanceof Error ? err.message : "";
-      showConnectError(describeTelegramConnectError(raw));
+      showConnectError(
+        plainFetchError(err, describeTelegramConnectError(err instanceof Error ? err.message : ""))
+      );
     } finally {
       window.clearTimeout(timer);
       setSaving(false);
@@ -95,7 +97,7 @@ export function TelegramConnect({ authToken }: Props) {
       setShowTokenForm(true);
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка отключения Telegram");
+      setError(plainFetchError(err, "Ошибка отключения Telegram"));
     } finally {
       setSaving(false);
     }

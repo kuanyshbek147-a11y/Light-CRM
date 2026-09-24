@@ -7,9 +7,11 @@ import { WebChatConnect } from "./WebChatConnect";
 import { WhatsAppEmbeddedSignup } from "./WhatsAppEmbeddedSignup";
 import { TelephonyConnect } from "../telephony/TelephonyConnect";
 
+export type IntegrationsFocus = "whatsapp" | "telegram" | "instagram" | "email" | "web";
+
 type Props = {
   authToken: string;
-  focus?: "whatsapp" | "telegram" | "instagram" | null;
+  focus?: IntegrationsFocus | null;
 };
 
 export function IntegrationsPanel({ authToken, focus }: Props) {

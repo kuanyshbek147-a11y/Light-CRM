@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inboxFiltersActive, resolveInboxEmptyKind } from "./src/features/inbox/inboxEmpty.ts";
+import { inboxFiltersActive, integrationsFocusForChannel, resolveInboxEmptyKind } from "./src/features/inbox/inboxEmpty.ts";
 import { canCreateDealFromPipeline, createDealHint } from "./src/features/crm/pipelineEmpty.ts";
 
 test("ноль диалогов без фильтра — пустое состояние без сброса", () => {
@@ -30,6 +30,38 @@ test("активный поиск при нуле диалогов просит 
     "query"
   );
   assert.equal(inboxFiltersActive({ city: "Алматы", inquiryReason: "" }), true);
+});
+
+test("фильтр канала без диалогов в нём — не пустая активация", () => {
+  assert.equal(
+    resolveInboxEmptyKind({
+      loading: false,
+      conversationCount: 0,
+      visibleCount: 0,
+      channelFilter: "instagram",
+      search: "",
+      filtersActive: false
+    }),
+    "channel-filter"
+  );
+  assert.equal(integrationsFocusForChannel("instagram"), "instagram");
+  assert.equal(integrationsFocusForChannel("email"), "email");
+  assert.equal(integrationsFocusForChannel("web"), "web");
+  assert.equal(integrationsFocusForChannel("all"), "whatsapp");
+});
+
+test("поиск важнее фильтра канала", () => {
+  assert.equal(
+    resolveInboxEmptyKind({
+      loading: false,
+      conversationCount: 3,
+      visibleCount: 0,
+      channelFilter: "telegram",
+      search: "иван",
+      filtersActive: false
+    }),
+    "query"
+  );
 });
 
 test("фильтр канала предлагает сбросить чип, если диалоги есть", () => {

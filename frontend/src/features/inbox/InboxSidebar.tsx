@@ -6,6 +6,8 @@ import { conversationsForChannel, type InboxChannelFilter } from "./lib/channelF
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import { DialogsEmptyState } from "./DialogsEmptyState";
+import { DialogsLoadError } from "./DialogsLoadError";
+import { InboxChannelEmpty } from "./InboxChannelEmpty";
 import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
@@ -327,6 +329,8 @@ type InboxSidebarProps = {
   onOpenCustomerCard: (conversationId: string) => void;
   onClearSearchAndFilters?: () => void;
   onOpenIntegrations?: () => void;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
   channelFilter: InboxChannelFilter;
   onChannelFilterChange: (next: InboxChannelFilter) => void;
   isAdmin?: boolean;
@@ -356,6 +360,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onOpenCustomerCard,
     onClearSearchAndFilters,
     onOpenIntegrations,
+    loadError,
+    onRetryLoad,
     channelFilter,
     onChannelFilterChange,
     isAdmin = false,
@@ -535,28 +541,52 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         ) : null}
         {!loading && !visibleConversations.length ? (
           <li className="chatListEmptyItem">
-            <DialogsEmptyState
-              filterActive={
-                resolveInboxEmptyKind({
-                  loading,
-                  conversationCount: conversations.length,
-                  visibleCount: visibleConversations.length,
-                  channelFilter,
-                  search,
-                  filtersActive: inboxFiltersActive(filters)
-                }) !== "activate"
-              }
-              isAdmin={isAdmin}
-              onResetFilter={() => {
-                onChannelFilterChange("all");
-                if (onClearSearchAndFilters) {
-                  onClearSearchAndFilters();
-                  return;
+            {loadError && conversations.length === 0 ? (
+              <DialogsLoadError onRetry={() => onRetryLoad?.()} />
+            ) : resolveInboxEmptyKind({
+                loading,
+                conversationCount: conversations.length,
+                visibleCount: visibleConversations.length,
+                channelFilter,
+                search,
+                filtersActive: inboxFiltersActive(filters)
+              }) === "channel-filter" ? (
+              <InboxChannelEmpty
+                isAdmin={Boolean(isAdmin)}
+                onReset={() => {
+                  onChannelFilterChange("all");
+                  if (onClearSearchAndFilters) {
+                    onClearSearchAndFilters();
+                    return;
+                  }
+                  onResetFilters();
+                }}
+                onConnect={isAdmin ? () => onOpenIntegrations?.() : undefined}
+              />
+            ) : (
+              <DialogsEmptyState
+                filterActive={
+                  resolveInboxEmptyKind({
+                    loading,
+                    conversationCount: conversations.length,
+                    visibleCount: visibleConversations.length,
+                    channelFilter,
+                    search,
+                    filtersActive: inboxFiltersActive(filters)
+                  }) === "query"
                 }
-                onResetFilters();
-              }}
-              onOpenIntegrations={() => onOpenIntegrations?.()}
-            />
+                isAdmin={isAdmin}
+                onResetFilter={() => {
+                  onChannelFilterChange("all");
+                  if (onClearSearchAndFilters) {
+                    onClearSearchAndFilters();
+                    return;
+                  }
+                  onResetFilters();
+                }}
+                onOpenIntegrations={() => onOpenIntegrations?.()}
+              />
+            )}
           </li>
         ) : null}
         {!loading

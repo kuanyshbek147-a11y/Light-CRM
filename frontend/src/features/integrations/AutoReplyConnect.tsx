@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
 import {
   loadAutoReplySettings,
   saveAutoReplySettings,
@@ -33,7 +34,7 @@ export function AutoReplyConnect({ authToken }: Props) {
       setDefaultText(next.defaultText);
       setSystemPrompt(next.systemPrompt);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить автоответчик");
+      setError(plainFetchError(err, "Не удалось загрузить автоответчик"));
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ export function AutoReplyConnect({ authToken }: Props) {
       setSettings(next);
       setSuccess(next.enabled ? "Автоответчик включён" : "Автоответчик выключен");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось сохранить");
+      setError(plainFetchError(err, "Не удалось сохранить"));
     } finally {
       setSaving(false);
     }

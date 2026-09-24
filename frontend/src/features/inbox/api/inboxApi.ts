@@ -14,11 +14,14 @@ const fetchOpts = (token: string): RequestInit => ({
   cache: "no-store"
 });
 
+export const DIALOGS_LOAD_ERROR = "Не удалось загрузить диалоги. Проверьте интернет.";
+
 export async function loadConversations(
   token: string,
   search: string,
   filters: InboxFilters,
-  setConversations: (data: Conversation[]) => void
+  setConversations: (data: Conversation[]) => void,
+  onError?: (message: string | null) => void
 ): Promise<Conversation[]> {
   const params = new URLSearchParams({
     q: search,
@@ -35,12 +38,15 @@ export async function loadConversations(
     const data = (await response.json()) as Conversation[] | { error?: string };
     if (!response.ok || !Array.isArray(data)) {
       console.error("loadConversations failed", response.status, data);
+      onError?.(DIALOGS_LOAD_ERROR);
       return [];
     }
     setConversations(data);
+    onError?.(null);
     return data;
   } catch (error) {
     console.error("loadConversations failed", error);
+    onError?.(DIALOGS_LOAD_ERROR);
     return [];
   }
 }

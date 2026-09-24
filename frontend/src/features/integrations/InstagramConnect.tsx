@@ -426,7 +426,7 @@ export function InstagramConnect({ authToken }: Props) {
       </div>
 
       {showConnected ? (
-        <p className="integrationsHint">Сообщения из Instagram Direct приходят в диалоги.</p>
+        <p className="integrationsHint">Сообщения из Instagram приходят в диалоги.</p>
       ) : (
         <ol className="integrationsSteps">
           <li>Нажмите «Подключить Instagram» и войдите в профессиональный аккаунт.</li>

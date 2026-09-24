@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
 import {
   connectWebChat,
   disconnectWebChat,
@@ -33,7 +34,7 @@ export function WebChatConnect({ authToken }: Props) {
       setGreeting(next.greeting || "Здравствуйте! Напишите нам — ответим в ближайшее время.");
       setPrimaryColor(next.primaryColor || "#5b5ce9");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить статус виджета");
+      setError(plainFetchError(err, "Не удалось загрузить статус виджета"));
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ export function WebChatConnect({ authToken }: Props) {
       setSuccess("Виджет чата включён. Скопируйте код и вставьте на сайт.");
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка включения виджета");
+      setError(plainFetchError(err, "Ошибка включения виджета"));
     } finally {
       setSaving(false);
     }
@@ -84,7 +85,7 @@ export function WebChatConnect({ authToken }: Props) {
       setSuccess("Виджет отключён. Код на сайте перестанет работать.");
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка отключения виджета");
+      setError(plainFetchError(err, "Ошибка отключения виджета"));
     } finally {
       setSaving(false);
     }
@@ -104,7 +105,7 @@ export function WebChatConnect({ authToken }: Props) {
   }
 
   return (
-    <div className="instagramConnectCard">
+    <div className="instagramConnectCard" id="integration-web">
       <div className="integrationsPanelHeader">
         <div>
           <h3 className="integrationsPanelTitle">Чат на сайте</h3>

@@ -11,7 +11,8 @@ import {
 import {
   CONNECT_BUTTON_RESET_MS,
   plainWhatsAppOAuthError,
-  resolveLinkBadge
+  resolveLinkBadge,
+  WHATSAPP_POPUP_BLOCKED
 } from "./connectionState";
 
 type EmbeddedSignupMessage = {
@@ -313,7 +314,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     const stuckTimer = window.setTimeout(() => {
       if (!connectFinishedRef.current && !popupTookFocusRef.current) {
         stopWatchingPopup();
-        resetConnectState("Не удалось открыть окно Meta. Нажмите «Повторить подключение».");
+        resetConnectState(WHATSAPP_POPUP_BLOCKED);
       }
     }, CONNECT_BUTTON_RESET_MS);
 
@@ -375,7 +376,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     } catch {
       stopWatchingPopup();
       window.clearTimeout(stuckTimer);
-      resetConnectState("Не удалось открыть окно Meta. Нажмите «Повторить подключение».");
+      resetConnectState(WHATSAPP_POPUP_BLOCKED);
     }
   }
 

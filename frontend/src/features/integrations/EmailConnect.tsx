@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
 import { UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   connectEmail,
@@ -74,7 +75,7 @@ export function EmailConnect({ authToken }: Props) {
         applyPreset(preset);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить статус почты");
+      setError(plainFetchError(err, "Не удалось загрузить статус почты"));
     } finally {
       setLoading(false);
     }
@@ -131,7 +132,7 @@ export function EmailConnect({ authToken }: Props) {
       setSuccess(result.email ? `Почта ${result.email} подключена` : "Почта подключена");
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка подключения почты");
+      setError(plainFetchError(err, "Ошибка подключения почты"));
     } finally {
       setSaving(false);
     }
@@ -148,14 +149,14 @@ export function EmailConnect({ authToken }: Props) {
       setShowForm(true);
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка отключения почты");
+      setError(plainFetchError(err, "Ошибка отключения почты"));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="instagramConnectCard">
+    <div className="instagramConnectCard" id="integration-email">
       <div className="integrationsPanelHeader">
         <div>
           <h3 className="integrationsPanelTitle">Почта</h3>

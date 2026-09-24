@@ -67,6 +67,7 @@ type RefreshConversationListParams = {
   search: string;
   filters: InboxFilters;
   setConversations: (data: Conversation[]) => void;
+  onConversationsError?: (message: string | null) => void;
 };
 
 type RefreshAfterMessageParams<TMetrics> = {
@@ -77,20 +78,31 @@ type RefreshAfterMessageParams<TMetrics> = {
   metricsQuery: MetricsQuery;
   setMessages: (data: Message[]) => void;
   setConversations: (data: Conversation[]) => void;
+  onConversationsError?: (message: string | null) => void;
   setMetrics: (data: TMetrics) => void;
   loadMetrics: (token: string, setMetrics: (data: TMetrics) => void, query: MetricsQuery) => Promise<void>;
 };
 
 export async function refreshConversationList(params: RefreshConversationListParams): Promise<void> {
-  const { token, search, filters, setConversations } = params;
-  await loadConversations(token, search, filters, setConversations);
+  const { token, search, filters, setConversations, onConversationsError } = params;
+  await loadConversations(token, search, filters, setConversations, onConversationsError);
 }
 
 export async function refreshAfterMessage<TMetrics>(params: RefreshAfterMessageParams<TMetrics>): Promise<void> {
-  const { token, conversationId, search, filters, setMessages, setConversations, setMetrics, loadMetrics, metricsQuery } =
-    params;
+  const {
+    token,
+    conversationId,
+    search,
+    filters,
+    setMessages,
+    setConversations,
+    onConversationsError,
+    setMetrics,
+    loadMetrics,
+    metricsQuery
+  } = params;
   await loadMessages(token, conversationId, setMessages);
-  void loadConversations(token, search, filters, setConversations);
+  void loadConversations(token, search, filters, setConversations, onConversationsError);
   void loadMetrics(token, setMetrics, metricsQuery);
 }
 

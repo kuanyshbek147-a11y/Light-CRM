@@ -62,6 +62,9 @@ export function interpretInstagramOAuthReturn(input: {
   return { kind: "ignore" };
 }
 
+export const WHATSAPP_POPUP_BLOCKED =
+  "Не удалось открыть окно входа WhatsApp. Нажмите «Повторить подключение».";
+
 export function plainWhatsAppOAuthError(raw: string): string {
   if (/отмен|не заверш|cancel|closed/i.test(raw)) {
     return "Подключение WhatsApp отменено или не завершено.";
@@ -70,7 +73,7 @@ export function plainWhatsAppOAuthError(raw: string): string {
     return "Не удалось дождаться ответа. Нажмите «Повторить подключение».";
   }
   if (/открыть окно|sdk|загружается/i.test(raw)) {
-    return "Не удалось открыть окно Meta. Нажмите «Повторить подключение».";
+    return WHATSAPP_POPUP_BLOCKED;
   }
   if (/[А-Яа-яЁё]/.test(raw) && raw.length <= 160) {
     return raw;
