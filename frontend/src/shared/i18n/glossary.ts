@@ -4,7 +4,7 @@ export type BuiltinStageLabels = Record<BuiltinStageKey, string>;
 
 export const DEFAULT_STAGE_LABELS_RU: BuiltinStageLabels = {
   new: "новая",
-  qualified: "интерес есть",
+  qualified: "Квалифицирована",
   proposal: "предложение",
   won: "выиграна",
   lost: "проиграна"

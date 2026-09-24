@@ -150,7 +150,7 @@ export function DealLinkDialog(props: DealLinkDialogProps): JSX.Element {
                       <div className="dealLinkRowMeta">{deal.stageLabel}</div>
                       <div className="sidebarHint">
                         {deal.amount}
-                        {deal.nextStepLabel ? ` · след. шаг ${deal.nextStepLabel}` : ""}
+                        {deal.nextStepLabel ? ` · Следующий шаг ${deal.nextStepLabel}` : ""}
                       </div>
                     </div>
                     <button

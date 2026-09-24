@@ -1101,47 +1101,6 @@ body.pwa-standalone {
   max-width: 100%;
 }
 
-.localeSwitch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.localeSwitchGroup {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.localeSwitchBtn {
-  height: 28px;
-  min-width: 36px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-
-.localeSwitchBtn.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
-}
-
-.localeSwitchNote {
-  flex-basis: 100%;
-  margin: 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .topbarIconGroup {
   display: inline-flex;
   align-items: center;

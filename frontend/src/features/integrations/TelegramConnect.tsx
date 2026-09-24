@@ -126,11 +126,19 @@ export function TelegramConnect({ authToken }: Props) {
             <div className="sidebarHint">Источник</div>
             <div className="scriptCardTitle">{status?.source || "—"}</div>
           </div>
-          <div>
-            <div className="sidebarHint">Webhook</div>
-            <div className="scriptCardTitle">{status?.webhookUrl || status?.webhookPath || "—"}</div>
-          </div>
         </div>
+      ) : null}
+
+      {connected ? (
+        <details className="integrationsDetails">
+          <summary>Подробности</summary>
+          <div className="integrationsDetailsBody">
+            <div>
+              <div className="integrationsLabel">Webhook</div>
+              <div className="integrationsValue">{status?.webhookUrl || status?.webhookPath || "—"}</div>
+            </div>
+          </div>
+        </details>
       ) : null}
 
       <div className="instagramConnectActions">

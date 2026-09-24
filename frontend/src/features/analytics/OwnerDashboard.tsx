@@ -70,7 +70,7 @@ export function OwnerDashboard({
         </div>
         <div className="ownerKpiCard">
           <div className="analyticsValue">{ownerKpi?.avgFirstResponseMinutes ?? 0} мин</div>
-          <div className="analyticsLabel">Ср. время ответа</div>
+          <div className="analyticsLabel">Время первого ответа</div>
         </div>
       </div>
       <div className="ownerMetaLine">
@@ -89,7 +89,7 @@ export function OwnerDashboard({
               <div key={row.managerId} className="ownerLaggingRow">
                 <span>{row.managerName}</span>
                 <strong>
-                  {money(row.wonAmount || 0)} ₸ · {row.winRate ?? 0}% · первый ответ {row.avgFirstResponseMinutes ?? 0} мин
+                  {money(row.wonAmount || 0)} ₸ · {row.winRate ?? 0}% · время первого ответа {row.avgFirstResponseMinutes ?? 0} мин
                 </strong>
               </div>
             ))}
@@ -104,7 +104,7 @@ export function OwnerDashboard({
           <span>Менеджер</span>
           <span>Выручка</span>
           <span>Доля побед</span>
-          <span>Первый ответ</span>
+          <span>Время первого ответа</span>
           <span>Просрочки</span>
           <span>Диалоги</span>
         </div>

@@ -40,7 +40,6 @@ import {
 import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
-import { LanguageSwitcher } from "./shared/i18n/LanguageSwitcher";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 
@@ -359,7 +358,7 @@ const UI = {
   tryDemo: "Попробовать демо",
   unifiedInbox: "Все диалоги в одном окне",
   unifiedInboxHint: "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0438\u0437 WhatsApp \u0438 Telegram \u0432 \u043e\u0434\u043d\u043e\u043c \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0435.",
-  smartCohorts: "Группы клиентов",
+  smartCohorts: "Сегменты клиентов",
   smartCohortsHint: "\u0424\u0438\u043b\u044c\u0442\u0440\u0443\u0439\u0442\u0435 \u043f\u043e \u0433\u043e\u0440\u043e\u0434\u0443, \u043f\u0440\u0438\u0447\u0438\u043d\u0435, \u0442\u0438\u043f\u0443 \u0438 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438.",
   fastReplies: "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b",
   fastRepliesHint: "\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0434\u0438\u0430\u043b\u043e\u0433 \u0438 \u043e\u0442\u0432\u0435\u0447\u0430\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c \u043f\u0440\u044f\u043c\u043e \u0438\u0437 CRM.",
@@ -408,16 +407,16 @@ const UI = {
   openTasksTab: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   doneTasksTab: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435",
   noTasks: "\u0417\u0430\u0434\u0430\u0447 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
-  followUpSettings: "Автонапоминания",
-  followUpEnabled: "\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f",
+  followUpSettings: "Напоминание",
+  followUpEnabled: "Включить напоминание",
   followUpOnStage: "\u041f\u0440\u0438 \u0441\u043c\u0435\u043d\u0435 \u044d\u0442\u0430\u043f\u0430 \u0441\u0434\u0435\u043b\u043a\u0438",
   followUpStageHours: "\u0427\u0435\u0440\u0435\u0437 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0430\u0441\u043e\u0432 \u043d\u0430\u043f\u043e\u043c\u043d\u0438\u0442\u044c (\u044d\u0442\u0430\u043f)",
   followUpOnSilence: "\u0415\u0441\u043b\u0438 \u0434\u043e\u043b\u0433\u043e \u043d\u0435\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0432 \u0434\u0438\u0430\u043b\u043e\u0433\u0435",
   followUpSilenceHours: "\u0422\u0438\u0448\u0438\u043d\u0430, \u0447\u0430\u0441\u043e\u0432",
   followUpSkipClosed: "\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u0432\u044b\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445/\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445 \u044d\u0442\u0430\u043f\u0430\u0445",
-  saveFollowUp: "Сохранить напоминания",
+  saveFollowUp: "Сохранить напоминание",
   followUpSettingsHint:
-    "Система сама создаст задачу-напоминание: после смены этапа или если в чате долго тишина.",
+    "Система сама создаст напоминание: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
   mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
@@ -431,7 +430,7 @@ const UI = {
   fabSearchFilters: "Поиск и фильтры",
   fabNewTask: "Новая задача",
   fabSearchClients: "Поиск клиентов",
-  slaFollowUpTitle: "Напоминания о сроке ответа",
+  slaFollowUpTitle: "Напоминание",
   wonAmount: "\u0412\u044b\u0440\u0443\u0447\u043a\u0430",
   pipelineAmountLabel: "\u0412 \u0432\u043e\u0440\u043e\u043d\u043a\u0435",
   sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
@@ -536,7 +535,7 @@ const UI = {
   pipelineAndKpi: "Воронка и показатели",
   salesOverview: "\u041e\u0431\u0437\u043e\u0440 \u043f\u0440\u043e\u0434\u0430\u0436",
   min: "\u043c\u0438\u043d",
-  firstResponse: "\u041f\u0435\u0440\u0432\u044b\u0439 \u043e\u0442\u0432\u0435\u0442",
+  firstResponse: "Время первого ответа",
   chats7d: "\u0414\u0438\u0430\u043b\u043e\u0433\u043e\u0432 \u0437\u0430 7 \u0434\u043d\u0435\u0439",
   outgoing7d: "\u0418\u0441\u0445\u043e\u0434\u044f\u0449\u0438\u0445 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0437\u0430 7 \u0434\u043d\u0435\u0439",
   deals: "\u0421\u0434\u0435\u043b\u043a\u0438",
@@ -544,7 +543,7 @@ const UI = {
   amount: "\u0421\u0443\u043c\u043c\u0430",
   stage: "\u042d\u0442\u0430\u043f",
   stageNew: "\u043d\u043e\u0432\u0430\u044f",
-  stageQualified: "интерес есть",
+  stageQualified: "Квалифицирована",
   stageProposal: "\u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435",
   stageWon: "\u0432\u044b\u0438\u0433\u0440\u0430\u043d\u0430",
   stageLost: "\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u0430",
@@ -609,7 +608,7 @@ const UI = {
   stageLabel: "\u042d\u0442\u0430\u043f",
   stageDealsLabel: "\u0421\u0434\u0435\u043b\u043e\u043a",
   stageAmountLabel: "\u0421\u0443\u043c\u043c\u0430",
-  slaKpiTitle: "Просроченные ответы",
+  slaKpiTitle: "Срок ответа",
   slaEscalationsLabel: "Просрочек сейчас",
   slaDelayLabel: "\u0421\u0440\u0435\u0434\u043d\u044f\u044f \u043f\u0440\u043e\u0441\u0440\u043e\u0447\u043a\u0430 (\u043c\u0438\u043d)",
   slaManagerEscalationsLabel: "Просрочек",
@@ -1785,11 +1784,11 @@ export function App(): JSX.Element {
     }
     const saved = await saveFollowUpSettingsApi(token, followUpSettings);
     if (!saved) {
-      showToast("Не удалось сохранить напоминания", "error");
+      showToast("Не удалось сохранить напоминание", "error");
       return;
     }
     setFollowUpSettings(saved);
-    showToast("Настройки напоминаний сохранены", "success");
+    showToast("Напоминание сохранено", "success");
   }
 
   async function refreshCrmContacts(q = contactsSearch): Promise<void> {
@@ -3495,7 +3494,6 @@ export function App(): JSX.Element {
           </div>
 
           <div className="loginCardBody">
-            <LanguageSwitcher showNote />
             <h2 className="loginTitle">{UI.openWorkspace}</h2>
             <p className="loginText">{UI.loginText}</p>
             <div className="loginForm">
@@ -3792,7 +3790,6 @@ export function App(): JSX.Element {
         </div>
 
         <div className="topbarRight">
-          <LanguageSwitcher />
           <div className="topbarIconGroup" aria-label="Уведомления и настройки">
             <NotificationBellButton
               enabled={notificationSoundOn}
@@ -5172,7 +5169,7 @@ export function App(): JSX.Element {
                       <div key={deal.id} className="taskCardMeta">
                         {formatStageLabel(deal.stage, UI)} · {deal.amount}
                         {deal.next_step_at
-                          ? ` · след. ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
+                          ? ` · Следующий шаг ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
                           : ""}
                       </div>
                     ))}
@@ -5602,8 +5599,8 @@ export function App(): JSX.Element {
             linkedChatDeal
               ? `Сделка: ${formatStageLabel(linkedChatDeal.stage, UI)}${
                   formatDealNextStep(linkedChatDeal.next_step_at)
-                    ? ` · след. шаг ${formatDealNextStep(linkedChatDeal.next_step_at)}`
-                    : " · след. шаг не задан"
+                    ? ` · Следующий шаг ${formatDealNextStep(linkedChatDeal.next_step_at)}`
+                    : " · Следующий шаг не задан"
                 }`
               : null
           }

@@ -417,8 +417,8 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                 <div className="threadDealStatus">
                   Сделка: {linkedDeal.stageLabel}
                   {linkedDeal.nextStepLabel
-                    ? ` · след. шаг ${linkedDeal.nextStepLabel}`
-                    : " · след. шаг не задан"}
+                    ? ` · Следующий шаг ${linkedDeal.nextStepLabel}`
+                    : " · Следующий шаг не задан"}
                 </div>
               ) : null}
             </div>
