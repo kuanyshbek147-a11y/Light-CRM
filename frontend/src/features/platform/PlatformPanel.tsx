@@ -227,9 +227,20 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
             <p className="integrationsHint">
               ID: {detail.workspace.id}
               {detail.whatsapp.connected
-                ? ` · WhatsApp подключён (WABA ${detail.whatsapp.wabaId || "—"})`
+                ? " · WhatsApp подключён"
                 : " · WhatsApp не подключён — клиент подключает сам как admin"}
             </p>
+            {detail.whatsapp.connected ? (
+              <details className="integrationsDetails">
+                <summary>Подробности</summary>
+                <div className="integrationsDetailsBody">
+                  <div>
+                    <div className="integrationsLabel">WABA ID</div>
+                    <div className="integrationsValue">{detail.whatsapp.wabaId || "—"}</div>
+                  </div>
+                </div>
+              </details>
+            ) : null}
 
             <div className="platformUsersHeader">Пользователи</div>
             <div className="platformUsersTable">

@@ -1962,11 +1962,11 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
           <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
             <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1.4fr repeat(6, 0.7fr)" }}>
               <span>Реклама</span>
-              <span>Spend</span>
-              <span>Clicks</span>
+              <span>Расход</span>
+              <span>Клики</span>
               <span>Лиды</span>
-              <span>Won</span>
-              <span>Revenue</span>
+              <span>Выиграно</span>
+              <span>Выручка</span>
               <span title="Окупаемость: выручка разделить на расходы на рекламу">Окупаемость</span>
             </div>
             {roiReport.ads.map((row) => (
@@ -1994,8 +1994,8 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
               <span>Лендинг</span>
               <span>Клики</span>
               <span>Лиды</span>
-              <span>Won</span>
-              <span>Revenue</span>
+              <span>Выиграно</span>
+              <span>Выручка</span>
             </div>
             {roiReport.landings.map((row) => (
               <div

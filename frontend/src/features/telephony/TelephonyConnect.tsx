@@ -136,8 +136,8 @@ export function TelephonyConnect({ authToken }: Props) {
     <div className="integrationCard">
       <div className="integrationsTitle">Телефония (Asterisk WebRTC)</div>
       <p className="integrationsHint">
-        Softphone в браузере подключается к вашему Asterisk по WSS. Медиа идёт напрямую браузер ↔
-        АТС, CRM хранит учётки и лог звонков.
+        Телефон в браузере подключается к вашей АТС Asterisk. Звук идёт напрямую между браузером и
+        АТС, CRM хранит учётки и журнал звонков.
       </p>
 
       <div className="integrationsFormGrid">

@@ -104,7 +104,7 @@ export function TelegramConnect({ authToken }: Props) {
     <div className="instagramConnectCard" id="integration-telegram">
       <div className="integrationsPanelHeader">
         <div>
-          <h3 className="integrationsPanelTitle">Telegram Bot</h3>
+          <h3 className="integrationsPanelTitle">Бот Telegram</h3>
           <p className="integrationsHint">
             Подключите или отключите бота прямо здесь. Сообщения появятся в диалогах как канал Telegram.
           </p>
@@ -126,11 +126,19 @@ export function TelegramConnect({ authToken }: Props) {
             <div className="sidebarHint">Источник</div>
             <div className="scriptCardTitle">{status?.source || "—"}</div>
           </div>
-          <div>
-            <div className="sidebarHint">Webhook</div>
-            <div className="scriptCardTitle">{status?.webhookUrl || status?.webhookPath || "—"}</div>
-          </div>
         </div>
+      ) : null}
+
+      {connected ? (
+        <details className="integrationsDetails">
+          <summary>Подробности</summary>
+          <div className="integrationsDetailsBody">
+            <div>
+              <div className="integrationsLabel">Webhook</div>
+              <div className="integrationsValue">{status?.webhookUrl || status?.webhookPath || "—"}</div>
+            </div>
+          </div>
+        </details>
       ) : null}
 
       <div className="instagramConnectActions">

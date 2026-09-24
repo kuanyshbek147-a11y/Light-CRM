@@ -450,7 +450,7 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
       <button
         type="button"
         className={`telephonyFab ${status === "registered" ? "online" : ""} ${callState !== "idle" ? "busy" : ""}`}
-        title="Softphone"
+        title="Телефон"
         onClick={() => setPanelOpen((prev) => !prev)}
       >
         ☎
@@ -459,7 +459,7 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
         <aside className="telephonyPanel">
           <div className="telephonyPanelHeader">
             <div>
-              <div className="telephonyPanelTitle">Softphone</div>
+              <div className="telephonyPanelTitle">Телефон</div>
               <div className={`telephonyStatus ${status}`}>{statusText}</div>
             </div>
             <button type="button" className="drawerClose" onClick={() => setPanelOpen(false)}>
