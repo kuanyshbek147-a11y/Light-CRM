@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { formatRuDateTime, userTimeZone, zonedLocalInputToIso } from "../../shared/lib/dateTime";
+import { RuDateTimeField } from "../../shared/ui/RuDateTimeField";
 import {
   activateAdsCampaign,
   createAdsCampaign,
@@ -119,14 +121,7 @@ const audienceStatusLabel: Record<string, string> = {
 const AI_UNAVAILABLE = "ИИ пока не подключён. Напишите текст вручную.";
 
 function fromLocalInputValue(value: string): string | null {
-  if (!value.trim()) {
-    return null;
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toISOString();
+  return zonedLocalInputToIso(value, userTimeZone());
 }
 
 export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props) {
@@ -955,11 +950,11 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                 </label>
                 <label className="marketingFieldLabel">
                   <span>Когда опубликовать</span>
-                  <input
+                  <RuDateTimeField
                     className="filterInput"
-                    type="datetime-local"
+                    ariaLabel="Когда опубликовать"
                     value={postPlannedLocal}
-                    onChange={(event) => setPostPlannedLocal(event.target.value)}
+                    onChange={setPostPlannedLocal}
                   />
                 </label>
                 {postChannel === "instagram" ? (
@@ -1086,7 +1081,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                     <div className="taskCardTitle">{post.title}</div>
                     <div className="taskCardMeta">
                       {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
-                      {post.planned_at ? ` · на ${new Date(post.planned_at).toLocaleString("ru-RU")}` : ""}
+                      {post.planned_at ? ` · на ${formatRuDateTime(post.planned_at)}` : ""}
                       {post.auto_publish_social ? " · опубликуется сам" : ""}
                       {post.auto_broadcast ? " · уйдёт клиентам" : ""}
                       {post.campaign_id ? " · есть рассылка" : ""}
@@ -1645,7 +1640,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                     <div className="taskCardMeta">
                       {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
                       {post.planned_at
-                        ? ` · ${new Date(post.planned_at).toLocaleString("ru-RU")}`
+                        ? ` · ${formatRuDateTime(post.planned_at)}`
                         : ""}
                       {post.auto_publish_social ? " · авто-соцсеть" : ""}
                       {post.auto_broadcast ? " · авто-рассылка" : ""}
@@ -1911,9 +1906,9 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                 <strong>{postStatusLabel[row.status as MarketingContentPost["status"]] || row.status}</strong>
                 <span>
                   {row.published_at
-                    ? new Date(row.published_at).toLocaleString()
+                    ? formatRuDateTime(row.published_at)
                     : row.planned_at
-                      ? new Date(row.planned_at).toLocaleString()
+                      ? formatRuDateTime(row.planned_at)
                       : "—"}
                 </span>
                 <span>{row.publish_error || "—"}</span>

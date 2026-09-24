@@ -1,3 +1,5 @@
+import { RuDateTimeField } from "../../shared/ui/RuDateTimeField";
+
 export type DealLinkOption = {
   id: string;
   stageLabel: string;
@@ -117,10 +119,10 @@ export function DealLinkDialog(props: DealLinkDialogProps): JSX.Element {
               <span className="clientCardInputIcon" aria-hidden="true">
                 ⏱
               </span>
-              <input
-                type="datetime-local"
+              <RuDateTimeField
+                ariaLabel="Следующий шаг"
                 value={nextStepDraft}
-                onChange={(event) => onNextStepDraft(event.target.value)}
+                onChange={onNextStepDraft}
               />
             </div>
           </div>

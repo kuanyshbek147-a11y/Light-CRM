@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
+import { formatRuDateTime } from "../../shared/lib/dateTime";
 import {
   createOpsBackup,
   loadOpsQueue,
@@ -94,7 +95,7 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
             <div className="taskCardMeta">
               {formatChannelLabel(item.channel)} · {item.phone || "—"} ·{" "}
               {item.first_response_due_at
-                ? `срок ответа ${new Date(item.first_response_due_at).toLocaleString("ru-RU")}`
+                ? `срок ответа ${formatRuDateTime(item.first_response_due_at)}`
                 : "без срока"}
             </div>
             <button

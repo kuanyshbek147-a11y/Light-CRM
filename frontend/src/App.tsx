@@ -42,8 +42,10 @@ import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
 import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
+import { formatRuDateTime, isoToLocalInput, userTimeZone, zonedLocalInputToIso } from "./shared/lib/dateTime";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
+import { RuDateField, RuDateTimeField } from "./shared/ui/RuDateTimeField";
 
 const LandingWebChat = lazy(() =>
   import("./features/landing/LandingWebChat").then((m) => ({ default: m.LandingWebChat }))
@@ -1885,7 +1887,7 @@ export function App(): JSX.Element {
     if (!token || !newTaskTitle.trim()) {
       return;
     }
-    const dueAt = newTaskDueLocal.trim() ? new Date(newTaskDueLocal).toISOString() : null;
+    const dueAt = fromDatetimeLocalValue(newTaskDueLocal);
     const created = await createCrmTask(token, { title: newTaskTitle.trim(), dueAt });
     if (!created) {
       showToast("Не удалось создать задачу", "error");
@@ -1938,7 +1940,7 @@ export function App(): JSX.Element {
     return {
       stage: dealStageDraft,
       amount,
-      next_step_at: dealNextStepDraft.trim() ? new Date(dealNextStepDraft).toISOString() : null
+      next_step_at: fromDatetimeLocalValue(dealNextStepDraft)
     };
   }
 
@@ -1985,19 +1987,8 @@ export function App(): JSX.Element {
   }
 
   function formatDealNextStep(value?: string | null): string | null {
-    if (!value) {
-      return null;
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-    return date.toLocaleString("ru-RU", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
+    const formatted = formatRuDateTime(value, { style: "short", timeZone: userTimeZone() });
+    return formatted || null;
   }
 
   async function beginCreateDealForConversation(conversation: Conversation): Promise<void> {
@@ -2650,27 +2641,11 @@ export function App(): JSX.Element {
   }
 
   function toDatetimeLocalValue(iso?: string | null): string {
-    if (!iso) {
-      return "";
-    }
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) {
-      return "";
-    }
-    const pad = (value: number) => String(value).padStart(2, "0");
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return isoToLocalInput(iso, userTimeZone());
   }
 
   function fromDatetimeLocalValue(local: string): string | null {
-    const trimmed = local.trim();
-    if (!trimmed) {
-      return null;
-    }
-    const date = new Date(trimmed);
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-    return date.toISOString();
+    return zonedLocalInputToIso(local, userTimeZone());
   }
 
   const knowledgeTemplates = [
@@ -4605,12 +4580,11 @@ export function App(): JSX.Element {
                   </label>
                   <label className="sidebarHint" style={{ display: "block" }}>
                     {UI.articleExpires}
-                    <input
+                    <RuDateTimeField
                       className="filterInput"
-                      type="datetime-local"
+                      ariaLabel={UI.articleExpires}
                       value={articleExpiresLocal}
-                      onChange={(event) => setArticleExpiresLocal(event.target.value)}
-                      style={{ marginTop: 4 }}
+                      onChange={setArticleExpiresLocal}
                     />
                   </label>
                   <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -4719,19 +4693,11 @@ export function App(): JSX.Element {
               <div className="analyticsDateFilters">
                 <label className="analyticsDateField">
                   <span>{UI.fromDate}</span>
-                  <input
-                    type="date"
-                    value={analyticsFrom}
-                    onChange={(event) => setAnalyticsFrom(event.target.value)}
-                  />
+                  <RuDateField ariaLabel={UI.fromDate} value={analyticsFrom} onChange={setAnalyticsFrom} />
                 </label>
                 <label className="analyticsDateField">
                   <span>{UI.toDate}</span>
-                  <input
-                    type="date"
-                    value={analyticsTo}
-                    onChange={(event) => setAnalyticsTo(event.target.value)}
-                  />
+                  <RuDateField ariaLabel={UI.toDate} value={analyticsTo} onChange={setAnalyticsTo} />
                 </label>
                 {!isCustomRangeValid ? <div className="analyticsDateError">Укажите корректный диапазон дат.</div> : null}
               </div>
@@ -5047,11 +5013,11 @@ export function App(): JSX.Element {
                 value={newTaskTitle}
                 onChange={(event) => setNewTaskTitle(event.target.value)}
               />
-              <input
+              <RuDateTimeField
                 className="filterInput"
-                type="datetime-local"
+                ariaLabel="Срок задачи"
                 value={newTaskDueLocal}
-                onChange={(event) => setNewTaskDueLocal(event.target.value)}
+                onChange={setNewTaskDueLocal}
               />
               <button
                 type="button"
@@ -5068,7 +5034,7 @@ export function App(): JSX.Element {
                   <div className="taskCardTitle">{task.title}</div>
                   <div className="taskCardMeta">
                     {task.contact_name || "—"}
-                    {task.due_at ? ` · ${new Date(task.due_at).toLocaleString("ru-RU")}` : ""}
+                    {task.due_at ? ` · ${formatRuDateTime(task.due_at)}` : ""}
                     {task.deal_stage ? ` · ${formatStageLabel(task.deal_stage, UI)}` : ""}
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
@@ -5294,9 +5260,7 @@ export function App(): JSX.Element {
                     {contactDetails.deals.map((deal) => (
                       <div key={deal.id} className="taskCardMeta">
                         {formatStageLabel(deal.stage, UI)} · {deal.amount}
-                        {deal.next_step_at
-                          ? ` · Следующий шаг ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
-                          : ""}
+                        {deal.next_step_at ? ` · Следующий шаг ${formatRuDateTime(deal.next_step_at)}` : ""}
                       </div>
                     ))}
                     <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
@@ -5307,7 +5271,7 @@ export function App(): JSX.Element {
                         <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
                           <div className="taskCardTitle">{item.title}</div>
                           <div className="taskCardMeta">
-                            {new Date(item.created_at).toLocaleString("ru-RU")}
+                            {formatRuDateTime(item.created_at)}
                             {item.detail ? ` · ${item.detail}` : ""}
                           </div>
                         </div>
@@ -5399,6 +5363,12 @@ export function App(): JSX.Element {
                 <span>{UI.menuAnalytics}</span>
                 <span>›</span>
               </button>
+              {sessionUser?.role === "admin" ? (
+                <button type="button" className="profileMenuBtn" onClick={() => setCurrentSection("ops")}>
+                  <span>{UI.menuOps}</span>
+                  <span>›</span>
+                </button>
+              ) : null}
               {sessionUser?.role === "admin" ? (
                 <button type="button" className="profileMenuBtn" onClick={() => openIntegrations()}>
                   <span>{UI.menuIntegrations}</span>
@@ -5583,9 +5553,7 @@ export function App(): JSX.Element {
                             <div className="pipelineBoardCardMeta">{deal.phone || ""}</div>
                             <div className="pipelineBoardCardMeta">
                               {UI.dealAmount}: {deal.amount}
-                              {deal.next_step_at
-                                ? ` · ${new Date(deal.next_step_at).toLocaleDateString("ru-RU")}`
-                                : ""}
+                              {deal.next_step_at ? ` · ${formatRuDateTime(deal.next_step_at, { style: "short" })}` : ""}
                             </div>
                             <div className="pipelineBoardCardSnippet">
                               {deal.last_message_body || UI.noMessages}
@@ -5652,12 +5620,11 @@ export function App(): JSX.Element {
                   />
                   <label className="sidebarHint" style={{ display: "block" }}>
                     {UI.dealNextStep}
-                    <input
+                    <RuDateTimeField
                       className="filterInput"
-                      type="datetime-local"
+                      ariaLabel={UI.dealNextStep}
                       value={dealNextStepDraft}
-                      onChange={(event) => setDealNextStepDraft(event.target.value)}
-                      style={{ marginTop: 4 }}
+                      onChange={setDealNextStepDraft}
                     />
                   </label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
