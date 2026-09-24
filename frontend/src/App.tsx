@@ -39,6 +39,8 @@ import {
 } from "./features/onboarding/onboardingStorage";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
+import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
+import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
 import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
@@ -722,6 +724,10 @@ export function App(): JSX.Element {
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginFieldsInvalid, setLoginFieldsInvalid] = useState({ login: false, password: false });
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const selfServeRegistrationEnabled = isSelfServeRegistrationEnabled(
+    import.meta.env.VITE_SELF_SERVE_REGISTRATION
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<string>("");
@@ -1515,6 +1521,32 @@ export function App(): JSX.Element {
     }
   }
 
+  async function enterWorkspace(nextToken: string, user: SessionUser | null): Promise<void> {
+    setSessionUser(user);
+    setToken(nextToken);
+    persistSession(nextToken, user);
+    setLoginError("");
+    setRegisterOpen(false);
+    if (isSuperAdminUser(user)) {
+      setCurrentSection("platform");
+      return;
+    }
+    setConversationsLoading(true);
+    try {
+      await hydrateWorkspace(nextToken);
+    } finally {
+      setConversationsLoading(false);
+    }
+  }
+
+  function openDemoLogin(): void {
+    setRegisterOpen(false);
+    window.setTimeout(() => {
+      document.getElementById("workspace-login")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      loginInputRef.current?.focus();
+    }, 0);
+  }
+
   async function login(override?: { login?: string; password?: string }): Promise<void> {
     setLoginError("");
     const loginValue = (
@@ -1573,20 +1605,7 @@ export function App(): JSX.Element {
           return;
         }
 
-        setSessionUser(data.user ?? null);
-        setToken(data.token);
-        persistSession(data.token, data.user ?? null);
-        setLoginError("");
-        if (isSuperAdminUser(data.user ?? null)) {
-          setCurrentSection("platform");
-          return;
-        }
-        setConversationsLoading(true);
-        try {
-          await hydrateWorkspace(data.token);
-        } finally {
-          setConversationsLoading(false);
-        }
+        await enterWorkspace(data.token, data.user ?? null);
         return;
       } catch {
         if (attempt < maxAttempts) {
@@ -3458,6 +3477,15 @@ export function App(): JSX.Element {
           <p className="landingSubtitle">{UI.landingSubtitle}</p>
 
           <div className="landingCtaRow">
+            {selfServeRegistrationEnabled ? (
+              <button
+                type="button"
+                className="landingButton landingButtonModern landingCtaPrimary"
+                onClick={() => setRegisterOpen(true)}
+              >
+                Создать аккаунт
+              </button>
+            ) : null}
             <a
               className="landingButton landingButtonModern landingCtaPrimary"
               href={buildDemoWhatsAppUrl()}
@@ -3502,6 +3530,11 @@ export function App(): JSX.Element {
               </a>
             )}
           </div>
+          {selfServeRegistrationEnabled ? (
+            <button type="button" className="textButton landingAccountLink" onClick={openDemoLogin}>
+              Уже есть аккаунт? Войти
+            </button>
+          ) : null}
           <p className="landingCtaHint">{UI.bookDemoHint}</p>
 
           <div className="landingHighlights">
@@ -3645,6 +3678,13 @@ export function App(): JSX.Element {
             <IosHomeScreenHint />
           </div>
         </aside>
+        {registerOpen ? (
+          <RegisterAccountDialog
+            onClose={() => setRegisterOpen(false)}
+            onOpenDemo={openDemoLogin}
+            onAuthenticated={enterWorkspace}
+          />
+        ) : null}
         <Suspense fallback={null}>
           <LandingWebChat />
         </Suspense>
