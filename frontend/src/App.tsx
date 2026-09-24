@@ -20,7 +20,8 @@ import {
   type SessionUser
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
-import { InboxConnectChecklist } from "./features/inbox/InboxConnectChecklist";
+import { DialogsEmptyState } from "./features/inbox/DialogsEmptyState";
+import { inboxFiltersActive } from "./features/inbox/inboxEmpty";
 import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
 import {
   emptyOnboardingState,
@@ -1309,6 +1310,13 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!conversations.length) {
+      if (selectedConversation) {
+        setSelectedConversation("");
+        setSelectedConversationData(null);
+        setMessages([]);
+        setContactCard(null);
+        setMobileThreadOpen(false);
+      }
       return;
     }
 
@@ -1440,7 +1448,6 @@ export function App(): JSX.Element {
         phone: item.phone,
         status: item.status
       }))}
-      canOpenIntegrations={canManageChannels}
       otherTabHint={
         pipelineBoard.hiddenCount > 0
           ? pipelineStatusFilter === "open"
@@ -1453,11 +1460,6 @@ export function App(): JSX.Element {
         if (conversation) {
           void beginCreateDealForConversation(conversation);
         }
-      }}
-      onOpenIntegrations={() => openIntegrations()}
-      onGoToDialogs={() => {
-        setMobileThreadOpen(false);
-        setCurrentSection("dialogs");
       }}
     />
   );
@@ -3620,7 +3622,7 @@ export function App(): JSX.Element {
               : currentSection === "marketing"
                 ? UI.menuMarketing
                 : currentSection === "settings"
-                  ? "Каналы, язык, команда и уведомления"
+                  ? "Каналы, язык и команда"
                   : currentSection === "profile"
                     ? UI.sectionProfile
                     : UI.landingBadge;
@@ -4052,6 +4054,7 @@ export function App(): JSX.Element {
         <div
           className={[
             "appGrid",
+            !conversationsLoading && conversations.length === 0 ? "dialogsAtZero" : "",
             isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : "",
             !funnelKpiPanelOpen ? "appGridNoRightRail" : "",
             !funnelKpiPanelOpen && !isMobileLayout ? "appGridKpiCollapsed" : ""
@@ -4106,19 +4109,25 @@ export function App(): JSX.Element {
               setFilters(DEFAULT_INBOX_FILTERS);
               void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
             }}
+            onOpenIntegrations={() => openIntegrations()}
+            isAdmin={canManageChannels}
             loading={conversationsLoading}
-            emptyContent={
-              token ? (
-                <InboxConnectChecklist
-                  authToken={token}
-                  visible={!conversationsLoading && conversations.length === 0}
-                  isAdmin={sessionUser?.role === "admin" || sessionUser?.role === "superadmin"}
-                  onOpenIntegrations={() => openIntegrations()}
-                />
-              ) : null
-            }
           />
 
+          {!conversationsLoading && conversations.length === 0 ? (
+            <section className="thread card">
+              <DialogsEmptyState
+                filterActive={Boolean(search.trim()) || inboxFiltersActive(filters)}
+                isAdmin={canManageChannels}
+                onResetFilter={() => {
+                  setSearch("");
+                  setFilters(DEFAULT_INBOX_FILTERS);
+                  void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+                }}
+                onOpenIntegrations={() => openIntegrations()}
+              />
+            </section>
+          ) : (
           <InboxThread
             ui={{
               replyBox: UI.replyBox,
@@ -4275,6 +4284,7 @@ export function App(): JSX.Element {
               setEmojiPickerOpen(false);
             }}
           />
+          )}
 
           {funnelKpiPanelOpen ? (
           <aside className="rightRail card">
@@ -4966,7 +4976,20 @@ export function App(): JSX.Element {
                 </div>
               ))
             ) : (
-              <div className="emptyScriptState">{UI.noTasks}</div>
+              <div className="dialogsEmptyCenter" data-testid="tasks-empty-state">
+                <div className="emptyTitle">Пока нет задач</div>
+                <button
+                  type="button"
+                  className="primaryButton"
+                  data-testid="tasks-create"
+                  onClick={() => {
+                    newTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    newTaskInputRef.current?.focus();
+                  }}
+                >
+                  Создать задачу
+                </button>
+              </div>
             )}
             {openConversationsWithFollowUp.length ? (
               <div style={{ marginTop: 24 }}>
@@ -5291,18 +5314,7 @@ export function App(): JSX.Element {
           token ? (
             <SettingsPanel
               canManageChannels={canManageChannels}
-              notificationSoundOn={notificationSoundOn}
-              onToggleNotificationSound={() => {
-                const next = !notificationSoundOn;
-                setNotificationSoundEnabled(next);
-                setNotificationSoundOn(next);
-                unlockNotificationSound();
-              }}
               onOpenIntegrations={() => openIntegrations()}
-              onOpenTeamChat={() => {
-                setStaffUnreadCount(0);
-                setCurrentSection("staff");
-              }}
             />
           ) : null
         ) : currentSection === "pipeline" ? (

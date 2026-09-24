@@ -15,11 +15,8 @@ export type PipelineConversationOption = {
 
 type PipelineEmptyStateProps = {
   conversations: PipelineConversationOption[];
-  canOpenIntegrations: boolean;
   otherTabHint?: string | null;
   onCreateDeal: (conversationId: string) => void;
-  onOpenIntegrations: () => void;
-  onGoToDialogs: () => void;
 };
 
 function channelLabel(channel: string): string {
@@ -40,14 +37,7 @@ function channelLabel(channel: string): string {
 }
 
 export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element {
-  const {
-    conversations,
-    canOpenIntegrations,
-    otherTabHint,
-    onCreateDeal,
-    onOpenIntegrations,
-    onGoToDialogs
-  } = props;
+  const { conversations, otherTabHint, onCreateDeal } = props;
   const [pickerOpen, setPickerOpen] = useState(false);
   const canCreate = canCreateDealFromPipeline(conversations.length);
   const openConversations = conversations.filter((item) => item.status === "open");
@@ -65,15 +55,10 @@ export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element 
   }
 
   return (
-    <div className="pipelineEmptyState" data-testid="pipeline-empty-state">
-      <div className="inboxOnboardTitle">В воронке пока нет сделок</div>
-      <p className="inboxOnboardText">
-        {canCreate
-          ? "Диалоги уже есть. Создайте сделку из чата — карточка появится на доске."
-          : "Сделки появляются из диалогов. Подключите канал и дождитесь сообщения клиента."}
-      </p>
+    <div className="pipelineEmptyState dialogsEmptyCenter" data-testid="pipeline-empty-state">
+      <div className="emptyTitle">Пока нет сделок</div>
       {otherTabHint ? <p className="sidebarHint">{otherTabHint}</p> : null}
-      <div className="pipelineEmptyActions">
+      <div className="pipelineEmptyActions dialogsEmptyActions">
         <button
           type="button"
           className="primaryButton"
@@ -93,24 +78,11 @@ export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element 
         >
           Добавить клиента
         </button>
-        {!canCreate && canOpenIntegrations ? (
-          <button type="button" className="secondaryButton" data-testid="pipeline-open-integrations" onClick={onOpenIntegrations}>
-            Открыть интеграции
-          </button>
-        ) : null}
-        {canCreate ? (
-          <button type="button" className="secondaryButton" onClick={onGoToDialogs}>
-            К диалогам
-          </button>
-        ) : null}
       </div>
+      {!canCreate ? <p className="sidebarHint">{createDealHint(0)}</p> : null}
       <p className="sidebarHint" data-testid="pipeline-add-client-hint">
         {ADD_CLIENT_UNAVAILABLE_HINT}
       </p>
-      <p className="sidebarHint">{createDealHint(conversations.length)}</p>
-      {!canCreate && !canOpenIntegrations ? (
-        <p className="sidebarHint">Попросите администратора открыть «Интеграции» и подключить канал.</p>
-      ) : null}
       {pickerOpen ? (
         <div className="dealPickerList" data-testid="pipeline-deal-picker">
           <div className="scriptPanelTitle">Выберите диалог</div>

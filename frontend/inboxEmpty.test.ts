@@ -3,7 +3,7 @@ import test from "node:test";
 import { inboxFiltersActive, resolveInboxEmptyKind } from "./src/features/inbox/inboxEmpty.ts";
 import { canCreateDealFromPipeline, createDealHint } from "./src/features/crm/pipelineEmpty.ts";
 
-test("пустой inbox без фильтров ведёт к подключению канала", () => {
+test("ноль диалогов без фильтра — пустое состояние без сброса", () => {
   assert.equal(
     resolveInboxEmptyKind({
       loading: false,
@@ -17,7 +17,7 @@ test("пустой inbox без фильтров ведёт к подключе�
   );
 });
 
-test("пустой результат поиска не маскируется под «подключите канал»", () => {
+test("активный поиск при нуле диалогов просит сбросить фильтр", () => {
   assert.equal(
     resolveInboxEmptyKind({
       loading: false,
