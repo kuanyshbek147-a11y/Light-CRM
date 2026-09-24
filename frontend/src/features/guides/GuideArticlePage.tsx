@@ -1,9 +1,37 @@
 import { useLayoutEffect } from "react";
-import markdown from "./crm-whatsapp-kazakhstan.md?raw";
+import kazakhstanMarkdown from "./crm-whatsapp-kazakhstan.md?raw";
+import chatHistoryMarkdown from "./whatsapp-chat-history-in-deal.md?raw";
 import "./guideArticle.css";
-import { buildGuideDocument, guideHeadTags, type GuideHeadTag } from "./guideArticle";
+import {
+  GUIDE_PATH,
+  STATIC_GUIDES,
+  buildGuideDocument,
+  guideForPath,
+  guideHeadTags,
+  type GuideDocument,
+  type GuideHeadTag
+} from "./guideArticle";
 
-const documentModel = buildGuideDocument(markdown);
+const MARKDOWN_BY_FILE: Record<string, string> = {
+  "crm-whatsapp-kazakhstan.md": kazakhstanMarkdown,
+  "whatsapp-chat-history-in-deal.md": chatHistoryMarkdown
+};
+
+const documents = new Map<string, GuideDocument>(
+  STATIC_GUIDES.map((guide) => {
+    const markdown = MARKDOWN_BY_FILE[guide.sourceFile];
+    if (!markdown) {
+      throw new Error(`Guide markdown not found: ${guide.sourceFile}`);
+    }
+    return [
+      guide.path,
+      buildGuideDocument(markdown, {
+        canonicalUrl: guide.canonicalUrl,
+        description: guide.description
+      })
+    ];
+  })
+);
 const JSON_LD_ID = "guide-faq-jsonld";
 
 function upsertMeta(attr: "name" | "property", key: string, content: string): void {
@@ -52,12 +80,20 @@ function applyHeadTag(tag: GuideHeadTag): void {
 }
 
 export function GuideArticlePage() {
+  const guide = guideForPath(window.location.pathname);
+  const documentModel = documents.get(guide?.path ?? GUIDE_PATH) ?? documents.get(GUIDE_PATH);
+
   useLayoutEffect(() => {
+    if (!documentModel) return;
     document.title = documentModel.title;
     for (const tag of guideHeadTags(documentModel)) {
       applyHeadTag(tag);
     }
-  }, []);
+  }, [documentModel]);
+
+  if (!documentModel) {
+    return null;
+  }
 
   return <div dangerouslySetInnerHTML={{ __html: documentModel.bodyHtml }} />;
 }
