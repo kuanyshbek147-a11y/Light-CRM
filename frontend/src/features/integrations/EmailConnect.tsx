@@ -157,10 +157,9 @@ export function EmailConnect({ authToken }: Props) {
     <div className="instagramConnectCard">
       <div className="integrationsPanelHeader">
         <div>
-          <h3 className="integrationsPanelTitle">Email</h3>
+          <h3 className="integrationsPanelTitle">Почта</h3>
           <p className="integrationsHint">
-            Подключите корпоративную почту через SMTP/IMAP. Входящие письма появятся в диалогах как канал
-            Email.
+            Подключите корпоративную почту. Входящие письма появятся в диалогах как канал «Почта».
           </p>
         </div>
         <span className={`integrationStatusPill ${connected ? "ok" : ""}`}>

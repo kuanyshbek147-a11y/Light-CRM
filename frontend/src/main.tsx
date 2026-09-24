@@ -4,10 +4,12 @@ import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GuideArticlePage } from "./features/guides/GuideArticlePage";
 import { isPublicGuidePath } from "./features/guides/guideArticle";
+import { ensureRussianDocumentLang } from "./shared/i18n/locale";
 import { startBackendKeepAlive } from "./shared/lib/backendWarmup";
 import "./styles.css";
 import "./mobile-crm-ui.css";
 
+ensureRussianDocumentLang();
 startBackendKeepAlive();
 
 const rootElement = document.getElementById("root");

@@ -412,7 +412,7 @@ export function InstagramConnect({ authToken }: Props) {
     <div className="instagramConnectCard" id="integration-instagram">
       <div className="integrationsPanelHeader">
         <div>
-          <h3 className="integrationsPanelTitle">Instagram Direct</h3>
+          <h3 className="integrationsPanelTitle">Личные сообщения Instagram</h3>
           <p className="integrationsHint">
             Подключите профессиональный аккаунт, чтобы сообщения приходили в диалоги.
           </p>

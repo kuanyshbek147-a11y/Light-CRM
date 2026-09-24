@@ -120,7 +120,7 @@ export function WebChatConnect({ authToken }: Props) {
       {connected ? (
         <div className="instagramStatusGrid">
           <div>
-            <div className="sidebarHint">Widget ID</div>
+            <div className="sidebarHint">Код виджета</div>
             <div className="scriptCardTitle">{status?.widgetId || "—"}</div>
           </div>
           <div>

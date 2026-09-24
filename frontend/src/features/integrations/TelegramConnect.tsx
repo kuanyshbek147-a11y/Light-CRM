@@ -104,7 +104,7 @@ export function TelegramConnect({ authToken }: Props) {
     <div className="instagramConnectCard" id="integration-telegram">
       <div className="integrationsPanelHeader">
         <div>
-          <h3 className="integrationsPanelTitle">Telegram Bot</h3>
+          <h3 className="integrationsPanelTitle">Бот Telegram</h3>
           <p className="integrationsHint">
             Подключите или отключите бота прямо здесь. Сообщения появятся в диалогах как канал Telegram.
           </p>

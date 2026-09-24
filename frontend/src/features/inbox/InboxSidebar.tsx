@@ -6,23 +6,11 @@ import { InboxChannelEmpty } from "./InboxChannelEmpty";
 import { conversationsForChannel, type InboxChannelFilter } from "./lib/channelFilter";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
+import { formatChannelLabel } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
 function channelLabel(channel: Conversation["channel"]): string {
-  switch (channel) {
-    case "whatsapp":
-      return "WhatsApp";
-    case "telegram":
-      return "Telegram";
-    case "instagram":
-      return "Instagram";
-    case "web":
-      return "Сайт";
-    case "email":
-      return "Email";
-    default:
-      return channel;
-  }
+  return formatChannelLabel(channel);
 }
 
 function formatDialogTime(value: string): string {
@@ -56,7 +44,7 @@ const CHANNEL_FILTERS = [
   ["telegram", "Telegram"],
   ["instagram", "Instagram"],
   ["web", "Сайт"],
-  ["email", "Email"]
+  ["email", "Почта"]
 ] as const;
 
 function ChannelScrollChevron(props: { direction: "left" | "right" }): JSX.Element {
@@ -293,8 +281,8 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                     {channelLabel(conversation.channel)}
                   </span>
                   {conversation.landing_id || conversation.marketing_source === "landing" ? (
-                    <span className="groupBadge" title="Лид с лендинга">
-                      Лендинг
+                    <span className="groupBadge" title="Заявка со страницы">
+                      С сайта
                     </span>
                   ) : null}
                   <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
@@ -486,8 +474,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
             >
               <option value="">Фокус: все</option>
               <option value="unread">Только непрочитанные</option>
-              <option value="overdue">SLA просроченные</option>
-              <option value="escalated">Только SLA-эскалации</option>
+              <option value="overdue">Просрочен срок ответа</option>
+              <option value="escalated">Только переданные из-за просрочки</option>
             </select>
             <select
               className="filterInput"
@@ -500,7 +488,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
               }
             >
               <option value="">Источник: все</option>
-              <option value="landing">Лид с лендинга</option>
+              <option value="landing">Заявка со страницы</option>
             </select>
           </div>
 

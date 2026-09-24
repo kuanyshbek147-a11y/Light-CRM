@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatChannelLabel } from "../../shared/i18n/glossary";
 import {
   createOpsBackup,
   loadOpsQueue,
@@ -61,40 +62,40 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
       </div>
 
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">Бэкап и алерты</div>
+        <div className="scriptPanelTitle">Копия базы и уведомления</div>
         <div className="scriptForm">
           <button type="button" className="primaryButton" disabled={busy} onClick={() => void runBackup()}>
-            Сделать бэкап сейчас
+            Сделать копию сейчас
           </button>
           <input
             className="filterInput"
-            placeholder="Telegram chat id для алертов"
+            placeholder="Номер чата Telegram для уведомлений"
             value={alertChat}
             onChange={(event) => setAlertChat(event.target.value)}
           />
           <button type="button" className="dialogActionBtn" disabled={busy} onClick={() => void saveAlert()}>
-            Сохранить алерт-чат
+            Сохранить чат для уведомлений
           </button>
         </div>
         <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Сюда же уходят алерты о новых лидах с лендинга (нужен Telegram-бот workspace). Платный
-          Postgres на Render — вручную в Dashboard (Upgrade). Бэкапы — в /backups на сервере.
+          Сюда же приходят уведомления о новых заявках со страницы (нужен бот Telegram компании).
+          Платный Postgres включают вручную в панели хостинга. Копии лежат в /backups на сервере.
         </div>
       </div>
 
-      <div className="scriptPanelTitle">Очередь без назначения (SLA)</div>
+      <div className="scriptPanelTitle">Очередь без оператора (срок ответа)</div>
       {queue.length ? (
         queue.map((item) => (
           <div key={item.id} className="taskCard">
             <div className="taskCardTitle">
               {item.contact_name}
-              {item.sla_overdue ? " · SLA просрочен" : ""}
+              {item.sla_overdue ? " · срок ответа просрочен" : ""}
             </div>
             <div className="taskCardMeta">
-              {item.channel} · {item.phone || "—"} ·{" "}
+              {formatChannelLabel(item.channel)} · {item.phone || "—"} ·{" "}
               {item.first_response_due_at
-                ? `due ${new Date(item.first_response_due_at).toLocaleString()}`
-                : "без дедлайна"}
+                ? `срок ответа ${new Date(item.first_response_due_at).toLocaleString("ru-RU")}`
+                : "без срока"}
             </div>
             <button
               type="button"

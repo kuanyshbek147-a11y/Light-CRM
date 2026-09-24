@@ -74,11 +74,11 @@ export function OwnerDashboard({
         </div>
       </div>
       <div className="ownerMetaLine">
-        Лиды: <strong>{ownerKpi?.leads ?? 0}</strong>
+        Заявки: <strong>{ownerKpi?.leads ?? 0}</strong>
         {" · "}
         Выиграно: <strong>{ownerKpi?.wonDeals ?? 0}</strong>
         {" · "}
-        Конверсия лид→сделка: <strong>{ownerKpi?.conversion ?? 0}%</strong>
+        Конверсия заявка→сделка: <strong>{ownerKpi?.conversion ?? 0}%</strong>
       </div>
 
       {laggingManagers.length ? (
@@ -89,7 +89,7 @@ export function OwnerDashboard({
               <div key={row.managerId} className="ownerLaggingRow">
                 <span>{row.managerName}</span>
                 <strong>
-                  {money(row.wonAmount || 0)} ₸ · {row.winRate ?? 0}% · FRT {row.avgFirstResponseMinutes ?? 0}м
+                  {money(row.wonAmount || 0)} ₸ · {row.winRate ?? 0}% · первый ответ {row.avgFirstResponseMinutes ?? 0} мин
                 </strong>
               </div>
             ))}
@@ -103,9 +103,9 @@ export function OwnerDashboard({
           <span>#</span>
           <span>Менеджер</span>
           <span>Выручка</span>
-          <span>Win %</span>
-          <span>FRT</span>
-          <span>SLA</span>
+          <span>Доля побед</span>
+          <span>Первый ответ</span>
+          <span>Просрочки</span>
           <span>Диалоги</span>
         </div>
         {ranked.map((row, index) => (
