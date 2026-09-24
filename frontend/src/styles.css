@@ -1878,6 +1878,26 @@ body.pwa-standalone {
   background: #fff;
 }
 
+.ruDateField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ruDateField input {
+  width: 100%;
+  min-width: 0;
+}
+
+.ruDateFieldError {
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .searchInput {
   width: 100%;
   padding: 10px 12px;
@@ -3939,6 +3959,31 @@ body.pwa-standalone {
 
   .rightRail {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 769px) {
+  .leftMenu {
+    flex-flow: row nowrap;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .leftMenu > .leftMenuButton {
+    flex: 0 0 auto;
+    width: auto;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .leftMenu > .leftMenuButton .leftMenuButtonLabel {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 168px;
+    line-height: 1.2;
   }
 }
 

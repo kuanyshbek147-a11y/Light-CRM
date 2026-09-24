@@ -42,7 +42,15 @@ import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
 import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
-import { formatRuDateTime, isoToLocalInput, userTimeZone, zonedLocalInputToIso } from "./shared/lib/dateTime";
+import {
+  RU_DATETIME_ERROR,
+  calendarDateKey,
+  formatIsoDateRu,
+  formatRuDateTime,
+  isoToLocalInput,
+  userTimeZone,
+  zonedLocalInputToIso
+} from "./shared/lib/dateTime";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 import { RuDateField, RuDateTimeField } from "./shared/ui/RuDateTimeField";
@@ -718,6 +726,7 @@ export function App(): JSX.Element {
   const loginInputRef = useRef<HTMLInputElement | null>(null);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const newTaskInputRef = useRef<HTMLInputElement | null>(null);
+  const dealFormRef = useRef<HTMLDivElement | null>(null);
   const contactsSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [token, setToken] = useState<string>(initialSession.token);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(initialSession.user);
@@ -782,6 +791,7 @@ export function App(): JSX.Element {
   const [taskStatusFilter, setTaskStatusFilter] = useState<"open" | "done">("open");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueLocal, setNewTaskDueLocal] = useState("");
+  const [taskDueInvalid, setTaskDueInvalid] = useState(false);
   const [crmContacts, setCrmContacts] = useState<CrmContactListItem[]>([]);
   const [contactsSearch, setContactsSearch] = useState("");
   const [selectedContactId, setSelectedContactId] = useState("");
@@ -790,6 +800,7 @@ export function App(): JSX.Element {
   const [selectedDealId, setSelectedDealId] = useState("");
   const [dealAmountDraft, setDealAmountDraft] = useState("");
   const [dealNextStepDraft, setDealNextStepDraft] = useState("");
+  const [dealNextStepInvalid, setDealNextStepInvalid] = useState(false);
   const [dealStageDraft, setDealStageDraft] = useState("");
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [globalSearchResults, setGlobalSearchResults] = useState<GlobalSearchResult | null>(null);
@@ -820,6 +831,7 @@ export function App(): JSX.Element {
   const [articleBody, setArticleBody] = useState<string>("");
   const [articleStatus, setArticleStatus] = useState<"draft" | "published">("published");
   const [articleExpiresLocal, setArticleExpiresLocal] = useState<string>("");
+  const [articleExpiresInvalid, setArticleExpiresInvalid] = useState(false);
   const [articlePinned, setArticlePinned] = useState<boolean>(false);
   const [articleArchived, setArticleArchived] = useState<boolean>(false);
   const [editingArticleId, setEditingArticleId] = useState<string>("");
@@ -1211,6 +1223,16 @@ export function App(): JSX.Element {
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, []);
+
+  useEffect(() => {
+    if (!selectedDealId || !isMobileLayout || currentSection !== "pipeline") {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      dealFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedDealId, isMobileLayout, currentSection]);
 
   useEffect(() => {
     if (!token) {
@@ -1887,6 +1909,10 @@ export function App(): JSX.Element {
     if (!token || !newTaskTitle.trim()) {
       return;
     }
+    if (taskDueInvalid) {
+      showToast(RU_DATETIME_ERROR, "error");
+      return;
+    }
     const dueAt = fromDatetimeLocalValue(newTaskDueLocal);
     const created = await createCrmTask(token, { title: newTaskTitle.trim(), dueAt });
     if (!created) {
@@ -1895,6 +1921,7 @@ export function App(): JSX.Element {
     }
     setNewTaskTitle("");
     setNewTaskDueLocal("");
+    setTaskDueInvalid(false);
     await refreshCrmTasks();
     showToast("Задача создана", "success");
   }
@@ -1925,9 +1952,14 @@ export function App(): JSX.Element {
     setDealAmountDraft(String(deal.amount || "0"));
     setDealStageDraft(deal.stage || "");
     setDealNextStepDraft(deal.next_step_at ? toDatetimeLocalValue(deal.next_step_at) : "");
+    setDealNextStepInvalid(false);
   }
 
   function dealSavePayload(): { stage: string; amount: number; next_step_at: string | null } | null {
+    if (dealNextStepInvalid) {
+      setDealFlowError(RU_DATETIME_ERROR);
+      return null;
+    }
     if (!dealStageDraft.trim()) {
       setDealFlowError("Выберите этап сделки");
       return null;
@@ -2001,6 +2033,7 @@ export function App(): JSX.Element {
       setSelectedDealId("");
       setDealAmountDraft("");
       setDealNextStepDraft("");
+      setDealNextStepInvalid(false);
       setDealStageDraft(availableStageNames[0] || "");
     }
     setDealFlowError("");
@@ -2030,6 +2063,7 @@ export function App(): JSX.Element {
       setSelectedDealId("");
       setDealAmountDraft("");
       setDealNextStepDraft("");
+      setDealNextStepInvalid(false);
       setDealStageDraft(availableStageNames[0] || "");
     }
     setDealFlowError("");
@@ -2680,6 +2714,7 @@ export function App(): JSX.Element {
     setArticleBody("");
     setArticleStatus("published");
     setArticleExpiresLocal("");
+    setArticleExpiresInvalid(false);
     setArticlePinned(false);
     setArticleArchived(false);
     setEditingArticleId("");
@@ -2739,6 +2774,10 @@ export function App(): JSX.Element {
   }
 
   async function createKnowledgeArticle(): Promise<void> {
+    if (articleExpiresInvalid) {
+      showToast(RU_DATETIME_ERROR, "error");
+      return;
+    }
     if (!articleTitle.trim() || (!articleBody.trim() && !articleUrl.trim() && !articleSummary.trim())) {
       return;
     }
@@ -4585,6 +4624,7 @@ export function App(): JSX.Element {
                       ariaLabel={UI.articleExpires}
                       value={articleExpiresLocal}
                       onChange={setArticleExpiresLocal}
+                      onInvalidChange={setArticleExpiresInvalid}
                     />
                   </label>
                   <label className="sidebarHint" style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -4693,7 +4733,11 @@ export function App(): JSX.Element {
               <div className="analyticsDateFilters">
                 <label className="analyticsDateField">
                   <span>{UI.fromDate}</span>
-                  <RuDateField ariaLabel={UI.fromDate} value={analyticsFrom} onChange={setAnalyticsFrom} />
+                  <RuDateField
+                    ariaLabel={UI.fromDate}
+                    value={analyticsFrom}
+                    onChange={setAnalyticsFrom}
+                  />
                 </label>
                 <label className="analyticsDateField">
                   <span>{UI.toDate}</span>
@@ -4951,7 +4995,7 @@ export function App(): JSX.Element {
                 <div className="analyticsSnapshotsList">
                   {metricSnapshots.map((snapshot) => (
                     <div key={`${snapshot.periodStart}-${snapshot.periodEnd}-${snapshot.createdAt}`} className="analyticsSnapshotRow">
-                      <span>{`${snapshot.periodStart} - ${snapshot.periodEnd}`}</span>
+                      <span>{`${formatIsoDateRu(snapshot.periodStart)} - ${formatIsoDateRu(snapshot.periodEnd)}`}</span>
                       <span>{`${snapshot.totalConversations}/${snapshot.openConversations}/${snapshot.closedConversations}`}</span>
                       <span>{snapshot.messages}</span>
                     </div>
@@ -5018,14 +5062,15 @@ export function App(): JSX.Element {
                 ariaLabel="Срок задачи"
                 value={newTaskDueLocal}
                 onChange={setNewTaskDueLocal}
+                onInvalidChange={setTaskDueInvalid}
               />
               <button
                 type="button"
                 className="primaryButton"
-                data-testid={crmTasks.length === 0 ? "tasks-create" : undefined}
+                data-testid="tasks-create"
                 onClick={() => void submitNewCrmTask()}
               >
-                {crmTasks.length === 0 ? "Создать задачу" : UI.save}
+                Создать задачу
               </button>
             </div>
             {crmTasks.length ? (
@@ -5595,7 +5640,7 @@ export function App(): JSX.Element {
             </div>
             )}
             {selectedDealId ? (
-              <div className="knowledgeFormCard" style={{ marginTop: 16 }}>
+              <div className="knowledgeFormCard" style={{ marginTop: 16 }} ref={dealFormRef}>
                 <div className="scriptPanelTitle">{UI.saveDeal}</div>
                 <div className="scriptForm">
                   <select
@@ -5621,10 +5666,12 @@ export function App(): JSX.Element {
                   <label className="sidebarHint" style={{ display: "block" }}>
                     {UI.dealNextStep}
                     <RuDateTimeField
+                      key={selectedDealId}
                       className="filterInput"
                       ariaLabel={UI.dealNextStep}
                       value={dealNextStepDraft}
                       onChange={setDealNextStepDraft}
+                      onInvalidChange={setDealNextStepInvalid}
                     />
                   </label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -5745,6 +5792,7 @@ export function App(): JSX.Element {
           }}
           onAmountDraft={setDealAmountDraft}
           onNextStepDraft={setDealNextStepDraft}
+          onNextStepInvalid={setDealNextStepInvalid}
           onCreate={() => void createDealFromChat()}
           onSave={() => void saveDealFromChat()}
           onLink={(dealId) => void linkExistingDealToChat(dealId)}
@@ -6483,10 +6531,7 @@ async function loadAutoAssignmentLoad(
 }
 
 function dateOffsetISO(daysBeforeToday: number): string {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - daysBeforeToday);
-  return date.toISOString().slice(0, 10);
+  return calendarDateKey(daysBeforeToday, userTimeZone());
 }
 
 function diffDaysInclusive(from: string, to: string): number {

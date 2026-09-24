@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatRuDateTime } from "../../shared/lib/dateTime";
 import {
   createStaffThreadTask,
   loadStaffMembers,
@@ -269,7 +270,7 @@ export function StaffChatPanel({
                   {message.is_system
                     ? "Система"
                     : message.author_name || "Сотрудник"}{" "}
-                  · {new Date(message.created_at).toLocaleString("ru-RU")}
+                  · {formatRuDateTime(message.created_at)}
                 </div>
                 <div style={{ whiteSpace: "pre-wrap", fontStyle: message.is_system ? "italic" : "normal" }}>
                   {message.body}

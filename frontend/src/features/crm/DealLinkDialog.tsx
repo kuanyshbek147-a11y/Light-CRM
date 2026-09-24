@@ -21,6 +21,7 @@ type DealLinkDialogProps = {
   onStageDraft: (value: string) => void;
   onAmountDraft: (value: string) => void;
   onNextStepDraft: (value: string) => void;
+  onNextStepInvalid?: (invalid: boolean) => void;
   onCreate: () => void;
   onSave: () => void;
   onLink: (dealId: string) => void;
@@ -43,6 +44,7 @@ export function DealLinkDialog(props: DealLinkDialogProps): JSX.Element {
     onStageDraft,
     onAmountDraft,
     onNextStepDraft,
+    onNextStepInvalid,
     onCreate,
     onSave,
     onLink,
@@ -123,6 +125,7 @@ export function DealLinkDialog(props: DealLinkDialogProps): JSX.Element {
                 ariaLabel="Следующий шаг"
                 value={nextStepDraft}
                 onChange={onNextStepDraft}
+                onInvalidChange={onNextStepInvalid}
               />
             </div>
           </div>
