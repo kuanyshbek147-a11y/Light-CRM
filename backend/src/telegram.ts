@@ -181,7 +181,11 @@ export function createTelegramRouter(io: Server): Router {
         webhookPath: `/api/integrations/telegram/webhook/${webhookSecret}`
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Telegram connect failed";
+      const raw = error instanceof Error ? error.message : "";
+      const rejected = !raw || /unauthorized|not found|invalid token|bot token|401|404/i.test(raw);
+      const message = rejected
+        ? "Telegram не принял токен. Проверьте, что скопировали его у @BotFather без пробелов."
+        : raw;
       res.status(400).json({ ok: false, error: message });
     }
   });

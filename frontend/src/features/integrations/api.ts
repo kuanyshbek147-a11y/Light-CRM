@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../../shared/config/api";
+import { describeTelegramConnectError } from "./connectionState";
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -272,16 +273,30 @@ export async function loadTelegramStatus(token: string): Promise<TelegramStatus>
 
 export async function connectTelegram(
   token: string,
-  payload: { botToken: string; webhookSecret?: string }
+  payload: { botToken: string; webhookSecret?: string },
+  signal?: AbortSignal
 ): Promise<TelegramConnectResult> {
-  const response = await fetch(`${API_BASE_URL}/integrations/telegram/connect`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify(payload)
-  });
-  const data = (await response.json()) as TelegramConnectResult;
-  if (!response.ok) {
-    throw new Error(data.error || "Не удалось подключить Telegram");
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/integrations/telegram/connect`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(payload),
+      signal
+    });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : "";
+    throw new Error(describeTelegramConnectError(raw));
+  }
+
+  let data: TelegramConnectResult;
+  try {
+    data = (await response.json()) as TelegramConnectResult;
+  } catch {
+    throw new Error("Не удалось проверить токен. Сервер вернул непонятный ответ.");
+  }
+  if (!response.ok || !data.ok) {
+    throw new Error(describeTelegramConnectError(data.error || ""));
   }
   return data;
 }
