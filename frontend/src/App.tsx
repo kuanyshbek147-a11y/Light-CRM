@@ -22,19 +22,24 @@ import {
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { DialogsEmptyState } from "./features/inbox/DialogsEmptyState";
 import { inboxFiltersActive } from "./features/inbox/inboxEmpty";
+import { channelFilterIsEmpty, type InboxChannelFilter } from "./features/inbox/lib/channelFilter";
 import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
 import {
+  closeOnboarding,
   emptyOnboardingState,
   firstIncompleteStep,
   onboardingUserKey,
   readOnboarding,
   saveOnboarding,
   usesDemoSampleData,
+  withOnboardingStep,
   type OnboardingState,
-  type OnboardingStatus
+  type OnboardingStatus,
+  type OnboardingStepId
 } from "./features/onboarding/onboardingStorage";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
+import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 
@@ -347,23 +352,24 @@ const UI = {
   landingBadge: "\u0043\u0052\u004d \u0434\u043b\u044f WhatsApp \u0438 Telegram",
   landingTitle: "\u0423\u043f\u0440\u0430\u0432\u043b\u044f\u0439\u0442\u0435 \u0432\u0441\u0435\u043c\u0438 \u0434\u0438\u0430\u043b\u043e\u0433\u0430\u043c\u0438 \u0441 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c\u0438 \u0432 \u043e\u0434\u043d\u043e\u043c \u0441\u043e\u0432\u0440\u0435\u043c\u0435\u043d\u043d\u043e\u043c \u043e\u043a\u043d\u0435.",
   landingSubtitle:
-    "\u041e\u0442\u0432\u0435\u0447\u0430\u0439\u0442\u0435 \u0431\u044b\u0441\u0442\u0440\u0435\u0435, \u0441\u0435\u0433\u043c\u0435\u043d\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432, \u043e\u0431\u043d\u043e\u0432\u043b\u044f\u0439\u0442\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0438 \u043a\u043e\u043d\u0442\u0440\u043e\u043b\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u0440\u043e\u0434\u0430\u0436\u0438 \u0438\u0437 \u0435\u0434\u0438\u043d\u043e\u0433\u043e inbox.",
+    "Отвечайте быстрее, группируйте клиентов, обновляйте карточки и контролируйте продажи из общего списка диалогов.",
   bookDemo: "\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f \u043d\u0430 \u0434\u0435\u043c\u043e",
   bookDemoWhatsApp: "WhatsApp",
   bookDemoTelegram: "Telegram",
   bookDemoHint: "\u041f\u0438\u043b\u043e\u0442 14 \u0434\u043d\u0435\u0439 \u043f\u043e\u0434 \u043a\u043b\u044e\u0447 \u00b7 \u043f\u043e\u0441\u043b\u0435 \u043f\u0438\u043b\u043e\u0442\u0430 29 900 \u20b8/\u043c\u0435\u0441",
-  unifiedInbox: "\u0415\u0434\u0438\u043d\u044b\u0439 inbox",
+  tryDemo: "Попробовать демо",
+  unifiedInbox: "Все диалоги в одном окне",
   unifiedInboxHint: "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0438\u0437 WhatsApp \u0438 Telegram \u0432 \u043e\u0434\u043d\u043e\u043c \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0435.",
-  smartCohorts: "\u0423\u043c\u043d\u044b\u0435 \u043a\u043e\u0433\u043e\u0440\u0442\u044b",
+  smartCohorts: "Сегменты клиентов",
   smartCohortsHint: "\u0424\u0438\u043b\u044c\u0442\u0440\u0443\u0439\u0442\u0435 \u043f\u043e \u0433\u043e\u0440\u043e\u0434\u0443, \u043f\u0440\u0438\u0447\u0438\u043d\u0435, \u0442\u0438\u043f\u0443 \u0438 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438.",
   fastReplies: "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b",
   fastRepliesHint: "\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0434\u0438\u0430\u043b\u043e\u0433 \u0438 \u043e\u0442\u0432\u0435\u0447\u0430\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c \u043f\u0440\u044f\u043c\u043e \u0438\u0437 CRM.",
   brandTitle: "Light CRM",
   demoAccess: "\u0414\u0435\u043c\u043e-\u0434\u043e\u0441\u0442\u0443\u043f",
   openWorkspace: "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e",
-  loginText:
-    "\u0412\u043e\u0439\u0434\u0438\u0442\u0435 \u043b\u043e\u0433\u0438\u043d \u0438 \u043f\u0430\u0440\u043e\u043b\u044c \u043e\u043f\u0435\u0440\u0430\u0442\u043e\u0440\u0430. \u041c\u043e\u0436\u043d\u043e \u0443\u043a\u0430\u0437\u0430\u0442\u044c \u043b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 email.",
-  loginLabel: "\u041b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 email",
+  loginText: "Введите логин и пароль. Можно указать логин или почту.",
+  loginRequired: "Заполните логин и пароль",
+  loginLabel: "Логин или почта",
   loginPlaceholder: "operator",
   passwordPlaceholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
   signIn: "\u0412\u043e\u0439\u0442\u0438",
@@ -379,9 +385,9 @@ const UI = {
   expandMenu: "\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e",
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
-  menuFunnelKpi: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u0438 KPI",
+  menuFunnelKpi: "Воронка и показатели",
   collapseKpi: "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c",
-  funnelKpiTab: "KPI \u0438 \u0441\u0434\u0435\u043b\u043a\u0438",
+  funnelKpiTab: "Показатели и сделки",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
   menuTasks: "\u0417\u0430\u0434\u0430\u0447\u0438",
   menuStaff: "\u041a\u043e\u043c\u0430\u043d\u0434\u0430",
@@ -403,16 +409,16 @@ const UI = {
   openTasksTab: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   doneTasksTab: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435",
   noTasks: "\u0417\u0430\u0434\u0430\u0447 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
-  followUpSettings: "Автонапоминания",
-  followUpEnabled: "\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 \u043d\u0430\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u044f",
+  followUpSettings: "Напоминание",
+  followUpEnabled: "Включить напоминание",
   followUpOnStage: "\u041f\u0440\u0438 \u0441\u043c\u0435\u043d\u0435 \u044d\u0442\u0430\u043f\u0430 \u0441\u0434\u0435\u043b\u043a\u0438",
   followUpStageHours: "\u0427\u0435\u0440\u0435\u0437 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0430\u0441\u043e\u0432 \u043d\u0430\u043f\u043e\u043c\u043d\u0438\u0442\u044c (\u044d\u0442\u0430\u043f)",
   followUpOnSilence: "\u0415\u0441\u043b\u0438 \u0434\u043e\u043b\u0433\u043e \u043d\u0435\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0432 \u0434\u0438\u0430\u043b\u043e\u0433\u0435",
   followUpSilenceHours: "\u0422\u0438\u0448\u0438\u043d\u0430, \u0447\u0430\u0441\u043e\u0432",
   followUpSkipClosed: "\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u0432\u044b\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445/\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445 \u044d\u0442\u0430\u043f\u0430\u0445",
-  saveFollowUp: "Сохранить напоминания",
+  saveFollowUp: "Сохранить напоминание",
   followUpSettingsHint:
-    "Система сама создаст задачу-напоминание: после смены этапа или если в чате долго тишина.",
+    "Система сама создаст напоминание: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
   mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
@@ -426,7 +432,7 @@ const UI = {
   fabSearchFilters: "Поиск и фильтры",
   fabNewTask: "Новая задача",
   fabSearchClients: "Поиск клиентов",
-  slaFollowUpTitle: "Напоминания SLA",
+  slaFollowUpTitle: "Напоминание",
   wonAmount: "\u0412\u044b\u0440\u0443\u0447\u043a\u0430",
   pipelineAmountLabel: "\u0412 \u0432\u043e\u0440\u043e\u043d\u043a\u0435",
   sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
@@ -528,10 +534,10 @@ const UI = {
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
   send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
   selectChatHint: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0432 \u0441\u043f\u0438\u0441\u043a\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432, \u0447\u0442\u043e\u0431\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443.",
-  pipelineAndKpi: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u0438 KPI",
+  pipelineAndKpi: "Воронка и показатели",
   salesOverview: "\u041e\u0431\u0437\u043e\u0440 \u043f\u0440\u043e\u0434\u0430\u0436",
   min: "\u043c\u0438\u043d",
-  firstResponse: "\u041f\u0435\u0440\u0432\u044b\u0439 \u043e\u0442\u0432\u0435\u0442",
+  firstResponse: "Время первого ответа",
   chats7d: "\u0414\u0438\u0430\u043b\u043e\u0433\u043e\u0432 \u0437\u0430 7 \u0434\u043d\u0435\u0439",
   outgoing7d: "\u0418\u0441\u0445\u043e\u0434\u044f\u0449\u0438\u0445 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0437\u0430 7 \u0434\u043d\u0435\u0439",
   deals: "\u0421\u0434\u0435\u043b\u043a\u0438",
@@ -539,7 +545,7 @@ const UI = {
   amount: "\u0421\u0443\u043c\u043c\u0430",
   stage: "\u042d\u0442\u0430\u043f",
   stageNew: "\u043d\u043e\u0432\u0430\u044f",
-  stageQualified: "\u043a\u0432\u0430\u043b\u0438\u0444\u0438\u0446\u0438\u0440\u043e\u0432\u0430\u043d\u0430",
+  stageQualified: "Квалифицирована",
   stageProposal: "\u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435",
   stageWon: "\u0432\u044b\u0438\u0433\u0440\u0430\u043d\u0430",
   stageLost: "\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u0430",
@@ -564,12 +570,12 @@ const UI = {
   requiredFieldsHint:
     "\u0418\u043c\u044f \u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d \u0432\u0441\u0435\u0433\u0434\u0430 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b. \u041e\u0441\u0442\u0430\u043b\u044c\u043d\u043e\u0435 \u2014 \u043f\u043e \u0432\u044b\u0431\u043e\u0440\u0443.",
   requiredFieldsSaved: "\u041e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b",
-  applyRePresetTitle: "Пресет: Недвижимость KZ",
+  applyRePresetTitle: "Шаблон: Недвижимость KZ",
   applyRePresetHint:
-    "Этапы RU, 8 скриптов, обязательные город и повод обращения, черновик лендинга.",
-  applyRePresetButton: "Применить пресет",
-  applyRePresetDone: "Пресет «Недвижимость KZ» применён",
-  applyRePresetFailed: "Не удалось применить пресет",
+    "Этапы на русском, 8 шаблонов ответов, обязательные город и повод обращения, черновик страницы.",
+  applyRePresetButton: "Применить шаблон",
+  applyRePresetDone: "Шаблон «Недвижимость KZ» применён",
+  applyRePresetFailed: "Не удалось применить шаблон",
   contactFieldsRequired: "\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438",
   stageChangeBlockedFields: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043c\u0435\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f: \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
@@ -585,7 +591,7 @@ const UI = {
   closedCards: "\u0417\u0430\u043a\u0440\u044b\u0442\u044b\u0435",
   analyticsTitle: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u043e\u0442\u0434\u0435\u043b\u0430",
   analyticsHint:
-    "\u041e\u0441\u043d\u043e\u0432\u043d\u044b\u0435 KPI \u043f\u043e \u0434\u0438\u0430\u043b\u043e\u0433\u0430\u043c, \u0441\u043a\u043e\u0440\u043e\u0441\u0442\u0438 \u043e\u0442\u0432\u0435\u0442\u0430 \u0438 \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u044f\u043c.",
+    "Основные показатели по диалогам, скорости ответа и закрытиям.",
   customRange: "\u041f\u0435\u0440\u0438\u043e\u0434",
   fromDate: "\u0421",
   toDate: "\u041f\u043e",
@@ -596,26 +602,26 @@ const UI = {
   closeSpeed: "\u041e\u0442 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u0434\u043e \u0437\u0430\u043a\u0440\u044b\u0442\u0438\u044f",
   avgMessagesPerDialog: "\u0421\u0440\u0435\u0434\u043d\u0435\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043d\u0430 \u0434\u0438\u0430\u043b\u043e\u0433",
   channelSplit: "\u0420\u0430\u0437\u0440\u0435\u0437 \u043f\u043e \u043a\u0430\u043d\u0430\u043b\u0430\u043c",
-  managersKpiTitle: "KPI \u043f\u043e \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u0430\u043c",
+  managersKpiTitle: "Показатели менеджеров",
   managerLabel: "\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440",
   dialogsHandledLabel: "\u0414\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
   outgoingMessagesLabel: "\u0418\u0441\u0445\u043e\u0434\u044f\u0449\u0438\u0445",
-  stageKpiTitle: "KPI \u043f\u043e \u044d\u0442\u0430\u043f\u0430\u043c \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
+  stageKpiTitle: "Показатели по этапам воронки",
   stageLabel: "\u042d\u0442\u0430\u043f",
   stageDealsLabel: "\u0421\u0434\u0435\u043b\u043e\u043a",
   stageAmountLabel: "\u0421\u0443\u043c\u043c\u0430",
-  slaKpiTitle: "SLA \u044d\u0441\u043a\u0430\u043b\u0430\u0446\u0438\u0438",
-  slaEscalationsLabel: "\u042d\u0441\u043a\u0430\u043b\u0430\u0446\u0438\u0439 \u0441\u0435\u0439\u0447\u0430\u0441",
+  slaKpiTitle: "Срок ответа",
+  slaEscalationsLabel: "Просрочек сейчас",
   slaDelayLabel: "\u0421\u0440\u0435\u0434\u043d\u044f\u044f \u043f\u0440\u043e\u0441\u0440\u043e\u0447\u043a\u0430 (\u043c\u0438\u043d)",
-  slaManagerEscalationsLabel: "\u042d\u0441\u043a\u0430\u043b\u0430\u0446\u0438\u0439",
+  slaManagerEscalationsLabel: "Просрочек",
   slaManagerDelayLabel: "\u0421\u0440. \u043f\u0440\u043e\u0441\u0440\u043e\u0447\u043a\u0430 (\u043c\u0438\u043d)",
-  snapshotsTitle: "\u0421\u043d\u0438\u043c\u043a\u0438 KPI",
+  snapshotsTitle: "Снимки показателей",
   createSnapshot: "\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043d\u0438\u043c\u043e\u043a",
-  exportCsv: "CSV \u044d\u043a\u0441\u043f\u043e\u0440\u0442",
-  exportXlsx: "Excel \u044d\u043a\u0441\u043f\u043e\u0440\u0442",
+  exportCsv: "Выгрузить CSV",
+  exportXlsx: "Выгрузить Excel",
   autoAssignmentTitle: "\u0410\u0432\u0442\u043e\u0440\u0430\u0441\u043f\u0440\u0435\u0434\u0435\u043b\u0435\u043d\u0438\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432",
   autoAssignmentHint: "\u041d\u043e\u0432\u044b\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u0438 \u0431\u0443\u0434\u0443\u0442 \u043d\u0430\u0437\u043d\u0430\u0447\u0430\u0442\u044c\u0441\u044f \u043f\u043e \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0439 \u0441\u0442\u0440\u0430\u0442\u0435\u0433\u0438\u0438.",
-  strategyRoundRobin: "\u041f\u043e \u043e\u0447\u0435\u0440\u0435\u0434\u0438 (round-robin)",
+  strategyRoundRobin: "по очереди",
   strategyLeastLoad: "\u041f\u043e \u043c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0439 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0435",
   saveStrategy: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0442\u0440\u0430\u0442\u0435\u0433\u0438\u044e",
   loadTitle: "\u0422\u0435\u043a\u0443\u0449\u0430\u044f \u043d\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u043e\u0432",
@@ -715,6 +721,7 @@ export function App(): JSX.Element {
   const [loginInput, setLoginInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [loginFieldsInvalid, setLoginFieldsInvalid] = useState({ login: false, password: false });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<string>("");
@@ -739,6 +746,7 @@ export function App(): JSX.Element {
   const pendingStopAndSendRef = useRef<boolean>(false);
   const [mediaUploadError, setMediaUploadError] = useState<string>("");
   const [searchPanelOpen, setSearchPanelOpen] = useState<boolean>(false);
+  const [inboxChannelFilter, setInboxChannelFilter] = useState<InboxChannelFilter>("all");
   const [notificationSoundOn, setNotificationSoundOn] = useState<boolean>(() => isNotificationSoundEnabled());
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<
@@ -888,10 +896,15 @@ export function App(): JSX.Element {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
-    if (!code || !state) return;
+    const oauthError = params.get("error") || params.get("error_description");
     try {
       const expected = sessionStorage.getItem("instagram_oauth_state");
-      if (expected && expected === state) {
+      const pending = sessionStorage.getItem("instagram_oauth_pending") === "1";
+      if (code && state && expected && expected === state) {
+        openIntegrations("instagram");
+        return;
+      }
+      if ((oauthError || pending) && (expected || pending)) {
         openIntegrations("instagram");
       }
     } catch {
@@ -994,7 +1007,7 @@ export function App(): JSX.Element {
     }) => {
       if (payload?.kind === "landing_lead") {
         setToastKind("success");
-        setToastMessage(payload.title || "Новый лид с лендинга");
+        setToastMessage(payload.title || "Новая заявка со страницы");
         setToastVisible(true);
         if (toastTimerRef.current) {
           window.clearTimeout(toastTimerRef.current);
@@ -1338,6 +1351,11 @@ export function App(): JSX.Element {
   }, [conversations, selectedConversation, token]);
 
   useEffect(() => {
+    if (conversationsLoading || !channelFilterIsEmpty(conversations, inboxChannelFilter)) return;
+    setCustomerCardOpen(false);
+  }, [conversations, conversationsLoading, inboxChannelFilter]);
+
+  useEffect(() => {
     if (!scripts.length) {
       setSelectedScriptId("");
       return;
@@ -1508,10 +1526,16 @@ export function App(): JSX.Element {
         : passwordInput || passwordInputRef.current?.value || "";
     if (override?.login !== undefined) setLoginInput(override.login);
     if (override?.password !== undefined) setPasswordInput(override.password);
-    if (!loginValue || !passwordValue) {
-      setLoginError(UI.loginFailed);
+    const loginMissing = !loginValue;
+    const passwordMissing = !passwordValue.trim();
+    if (loginMissing || passwordMissing) {
+      setLoginFieldsInvalid({ login: loginMissing, password: passwordMissing });
+      setLoginError(UI.loginRequired);
+      if (loginMissing) loginInputRef.current?.focus();
+      else passwordInputRef.current?.focus();
       return;
     }
+    setLoginFieldsInvalid({ login: false, password: false });
 
     const maxAttempts = 4;
     void warmupBackend();
@@ -1795,11 +1819,11 @@ export function App(): JSX.Element {
     }
     const saved = await saveFollowUpSettingsApi(token, followUpSettings);
     if (!saved) {
-      showToast("Не удалось сохранить follow-up", "error");
+      showToast("Не удалось сохранить напоминание", "error");
       return;
     }
     setFollowUpSettings(saved);
-    showToast("Настройки follow-up сохранены", "success");
+    showToast("Напоминание сохранено", "success");
   }
 
   async function refreshCrmContacts(q = contactsSearch): Promise<void> {
@@ -2167,9 +2191,9 @@ export function App(): JSX.Element {
     try {
       await apiDeferSlaEscalation(token, conversationId, minutes);
       await refreshConversationList({ token, search, filters, setConversations });
-      showToast(`SLA отложен на ${minutes} мин`, "success");
+      showToast(`Срок ответа отложен на ${minutes} мин`, "success");
     } catch {
-      showToast("Не удалось отложить SLA", "error");
+      showToast("Не удалось отложить срок ответа", "error");
     }
   }
 
@@ -3351,19 +3375,12 @@ export function App(): JSX.Element {
   }
 
   function skipOnboarding(): void {
-    if (onboardingState.status === "completed") {
-      setOnboardingMode("hidden");
-      return;
-    }
-    writeOnboarding({ status: "skipped", steps: onboardingState.steps });
+    writeOnboarding(closeOnboarding(onboardingState, "skip"));
     setOnboardingMode("hidden");
   }
 
   function completeOnboarding(): void {
-    writeOnboarding({
-      status: "completed",
-      steps: { channel: true, lead: true, next: true }
-    });
+    writeOnboarding(closeOnboarding(onboardingState, "done"));
     setOnboardingMode("hidden");
   }
 
@@ -3371,11 +3388,10 @@ export function App(): JSX.Element {
     setOnboardingMode(onboardingState.status === "pending" ? "dock" : "hidden");
   }
 
-  function markOnboardingStep(stepId: "channel" | "lead" | "next"): OnboardingStatus {
-    const steps = { ...onboardingState.steps, [stepId]: true };
-    const status = onboardingState.status;
-    writeOnboarding({ status, steps });
-    return status;
+  function markOnboardingStep(stepId: OnboardingStepId): OnboardingStatus {
+    const next = withOnboardingStep(onboardingState, stepId);
+    writeOnboarding(next);
+    return next.status;
   }
 
   function leaveOnboardingForWork(): void {
@@ -3384,15 +3400,17 @@ export function App(): JSX.Element {
   }
 
   function openOnboardingChannel(): void {
+    if (sessionUser?.role !== "admin") return;
     const status = markOnboardingStep("channel");
-    if (sessionUser?.role !== "admin") {
-      setOnboardingStep(1);
-      return;
-    }
     setCurrentSection("integrations");
     setMobileThreadOpen(false);
     setOnboardingStep(1);
     setOnboardingMode(status === "pending" ? "dock" : "hidden");
+  }
+
+  function noteOnboardingChannelRequestCopied(): void {
+    markOnboardingStep("channel");
+    showToast("Просьба скопирована — отправьте её администратору.", "success");
   }
 
   function openOnboardingDialogs(): void {
@@ -3423,7 +3441,7 @@ export function App(): JSX.Element {
           <div className="integrationsTitle">Light CRM</div>
           <p className="integrationsHint">{UI.sessionRestoring}</p>
           <p className="integrationsHint" style={{ marginTop: 8 }}>
-            Backend на бесплатном Render иногда засыпает — первый заход после паузы дольше обычного.
+            Сервер иногда засыпает после паузы — первый вход может занять дольше обычного.
           </p>
         </div>
       </main>
@@ -3447,6 +3465,20 @@ export function App(): JSX.Element {
               rel="noreferrer"
             >
               {UI.bookDemo}
+            </a>
+            <a
+              className="landingButton landingCtaTryDemo"
+              href="#workspace-login"
+              onClick={(event) => {
+                const target = document.getElementById("workspace-login");
+                if (!target) return;
+                event.preventDefault();
+                target.scrollIntoView({ behavior: "smooth", block: "start" });
+                window.history.pushState(null, "", "#workspace-login");
+                window.setTimeout(() => loginInputRef.current?.focus(), 450);
+              }}
+            >
+              {UI.tryDemo}
             </a>
             {demoTelegramUrl ? (
               <a
@@ -3514,7 +3546,7 @@ export function App(): JSX.Element {
           </a>
         </section>
 
-        <aside className="loginCard loginCardModern">
+        <aside id="workspace-login" className="loginCard loginCardModern">
           <div className="loginCardBrandRow">
             <img className="loginBrandMark" src="/logo-mark.png" alt="" width={48} height={48} />
             <div className="loginBrandText">
@@ -3531,24 +3563,34 @@ export function App(): JSX.Element {
                 <span className="loginFieldLabel">{UI.loginLabel}</span>
                 <input
                   ref={loginInputRef}
-                  className="loginInput loginInputModern"
+                  className={`loginInput loginInputModern${loginFieldsInvalid.login ? " loginInputInvalid" : ""}`}
                   type="text"
                   autoComplete="username"
                   value={loginInput}
                   placeholder={UI.loginPlaceholder}
-                  onChange={(event) => setLoginInput(event.target.value)}
+                  aria-invalid={loginFieldsInvalid.login}
+                  onChange={(event) => {
+                    setLoginInput(event.target.value);
+                    setLoginError("");
+                    setLoginFieldsInvalid({ login: false, password: false });
+                  }}
                 />
               </label>
               <label className="loginField">
                 <span className="loginFieldLabel">{UI.password}</span>
                 <input
                   ref={passwordInputRef}
-                  className="loginInput loginInputModern"
+                  className={`loginInput loginInputModern${loginFieldsInvalid.password ? " loginInputInvalid" : ""}`}
                   type="password"
                   autoComplete="current-password"
                   value={passwordInput}
                   placeholder={UI.passwordPlaceholder}
-                  onChange={(event) => setPasswordInput(event.target.value)}
+                  aria-invalid={loginFieldsInvalid.password}
+                  onChange={(event) => {
+                    setPasswordInput(event.target.value);
+                    setLoginError("");
+                    setLoginFieldsInvalid({ login: false, password: false });
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       void login();
@@ -3556,13 +3598,21 @@ export function App(): JSX.Element {
                   }}
                 />
               </label>
-              {loginError ? <p className="loginError">{loginError}</p> : null}
+              {loginError ? (
+                <p className="loginError" role="alert">
+                  {loginError}
+                </p>
+              ) : null}
               <button className="landingButton landingButtonModern" type="button" onClick={() => void login()}>
                 {UI.signIn}
               </button>
             </div>
 
             <div className="demoCredentials demoCredentialsModern">
+              <div className="demoCredentialsHints">
+                <p>{UI.demoOperatorHint}</p>
+                <p>{UI.demoAdminHint}</p>
+              </div>
               <div className="demoQuickRow">
                 <button
                   type="button"
@@ -3728,7 +3778,7 @@ export function App(): JSX.Element {
                         void onSelectConversation(item.id);
                       }}
                     >
-                      {item.contact_name} · {item.channel}
+                      {item.contact_name} · {formatChannelLabel(item.channel)}
                     </button>
                   ))}
                 </div>
@@ -3768,7 +3818,7 @@ export function App(): JSX.Element {
                         void onSelectConversation(item.conversation_id);
                       }}
                     >
-                      {item.contact_name} · {item.stage} · {item.amount}
+                      {item.contact_name} · {formatStageLabel(item.stage, UI)} · {item.amount}
                     </button>
                   ))}
                 </div>
@@ -3804,7 +3854,7 @@ export function App(): JSX.Element {
         </div>
 
         <div className="topbarRight">
-          <div className="topbarIconGroup" aria-label="notifications and settings">
+          <div className="topbarIconGroup" aria-label="Уведомления и настройки">
             <NotificationBellButton
               enabled={notificationSoundOn}
               onToggle={() => {
@@ -4063,6 +4113,8 @@ export function App(): JSX.Element {
             .join(" ")}
         >
           <InboxSidebar
+            channelFilter={inboxChannelFilter}
+            onChannelFilterChange={setInboxChannelFilter}
             ui={{
               inboxTitle: UI.inboxTitle,
               chatsSuffix: UI.chatsSuffix,
@@ -4117,18 +4169,33 @@ export function App(): JSX.Element {
           {!conversationsLoading && conversations.length === 0 ? (
             <section className="thread card">
               <DialogsEmptyState
-                filterActive={Boolean(search.trim()) || inboxFiltersActive(filters)}
+                filterActive={Boolean(search.trim()) || inboxFiltersActive(filters) || inboxChannelFilter !== "all"}
                 isAdmin={canManageChannels}
                 onResetFilter={() => {
+                  setInboxChannelFilter("all");
                   setSearch("");
                   setFilters(DEFAULT_INBOX_FILTERS);
                   void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
                 }}
                 onOpenIntegrations={() => openIntegrations()}
+                onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+                backLabel={UI.backToChats}
               />
             </section>
           ) : (
           <InboxThread
+            emptyOverride={
+              !conversationsLoading && channelFilterIsEmpty(conversations, inboxChannelFilter) ? (
+                <DialogsEmptyState
+                  filterActive
+                  isAdmin={canManageChannels}
+                  onResetFilter={() => setInboxChannelFilter("all")}
+                  onOpenIntegrations={() => openIntegrations()}
+                  onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+                  backLabel={UI.backToChats}
+                />
+              ) : null
+            }
             ui={{
               replyBox: UI.replyBox,
               customerCard: UI.customerCard,
@@ -4629,7 +4696,7 @@ export function App(): JSX.Element {
                     onChange={(event) => setAnalyticsTo(event.target.value)}
                   />
                 </label>
-                {!isCustomRangeValid ? <div className="analyticsDateError">������� ���������� �������� ���.</div> : null}
+                {!isCustomRangeValid ? <div className="analyticsDateError">Укажите корректный диапазон дат.</div> : null}
               </div>
             ) : null}
             {sessionUser?.role === "admin" ? (
@@ -4720,7 +4787,7 @@ export function App(): JSX.Element {
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.closedConversations7d ?? 0}</div>
-                <div className="analyticsLabel">{`������� �� ${metrics?.periodDays ?? analyticsPeriod} ��.`}</div>
+                <div className="analyticsLabel">{`Закрыто за ${metrics?.periodDays ?? analyticsPeriod} дн.`}</div>
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.firstResponseMinutes ?? 0} {UI.min}</div>
@@ -4732,7 +4799,7 @@ export function App(): JSX.Element {
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.messages7d ?? 0}</div>
-                <div className="analyticsLabel">{`���� ��������� �� ${metrics?.periodDays ?? analyticsPeriod} ��.`}</div>
+                <div className="analyticsLabel">{`Всех сообщений за ${metrics?.periodDays ?? analyticsPeriod} дн.`}</div>
               </div>
               <div className="analyticsCard">
                 <div className="analyticsValue">{metrics?.avgMessagesPerConversation ?? 0}</div>
@@ -4754,11 +4821,11 @@ export function App(): JSX.Element {
                     <strong>{metrics?.instagramConversations ?? 0}</strong>
                   </div>
                   <div className="analyticsChannelItem">
-                    <span>Email</span>
+                    <span>Почта</span>
                     <strong>{metrics?.emailConversations ?? 0}</strong>
                   </div>
                   <div className="analyticsChannelItem">
-                    <span>Web</span>
+                    <span>Сайт</span>
                     <strong>{metrics?.webConversations ?? 0}</strong>
                   </div>
                 </div>
@@ -4779,7 +4846,7 @@ export function App(): JSX.Element {
                     <strong>{metrics?.salesKpi?.pipelineAmount ?? 0}</strong>
                   </div>
                   <div className="analyticsChannelItem">
-                    <span>Won / Lost</span>
+                    <span>Выиграно / проиграно</span>
                     <strong>
                       {metrics?.salesKpi?.wonDeals ?? 0} / {metrics?.salesKpi?.lostDeals ?? 0}
                     </strong>
@@ -4842,7 +4909,7 @@ export function App(): JSX.Element {
                     </div>
                   ))}
                   {metrics?.slaManagers?.length ? null : (
-                    <div className="analyticsManagersEmpty">Нет SLA-эскалаций за выбранный период.</div>
+                    <div className="analyticsManagersEmpty">Нет просроченных ответов за выбранный период.</div>
                   )}
                 </div>
                 <div className="analyticsChannels">
@@ -4969,8 +5036,8 @@ export function App(): JSX.Element {
                   <div className="taskCardTitle">{task.title}</div>
                   <div className="taskCardMeta">
                     {task.contact_name || "—"}
-                    {task.due_at ? ` · ${new Date(task.due_at).toLocaleString()}` : ""}
-                    {task.deal_stage ? ` · ${task.deal_stage}` : ""}
+                    {task.due_at ? ` · ${new Date(task.due_at).toLocaleString("ru-RU")}` : ""}
+                    {task.deal_stage ? ` · ${formatStageLabel(task.deal_stage, UI)}` : ""}
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     <button type="button" className="dialogActionBtn primary" onClick={() => void toggleCrmTaskDone(task)}>
@@ -4997,7 +5064,7 @@ export function App(): JSX.Element {
                 <div className="scriptPanelTitle">{UI.slaFollowUpTitle}</div>
                 {openConversationsWithFollowUp.map((conversation) => (
                   <div key={conversation.id} className="taskCard">
-                    <div className="taskCardTitle">SLA: {conversation.contact_name}</div>
+                    <div className="taskCardTitle">Срок ответа: {conversation.contact_name}</div>
                     <button
                       type="button"
                       className="dialogActionBtn primary"
@@ -5186,7 +5253,7 @@ export function App(): JSX.Element {
                           void onSelectConversation(conversation.id);
                         }}
                       >
-                        {conversation.channel} · {conversation.status}
+                        {formatChannelLabel(conversation.channel)} · {formatDialogStatus(conversation.status)}
                       </button>
                     ))}
                     <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
@@ -5194,9 +5261,9 @@ export function App(): JSX.Element {
                     </div>
                     {contactDetails.deals.map((deal) => (
                       <div key={deal.id} className="taskCardMeta">
-                        {deal.stage} · {deal.amount}
+                        {formatStageLabel(deal.stage, UI)} · {deal.amount}
                         {deal.next_step_at
-                          ? ` · след. ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
+                          ? ` · Следующий шаг ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
                           : ""}
                       </div>
                     ))}
@@ -5208,7 +5275,7 @@ export function App(): JSX.Element {
                         <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
                           <div className="taskCardTitle">{item.title}</div>
                           <div className="taskCardMeta">
-                            {new Date(item.created_at).toLocaleString()}
+                            {new Date(item.created_at).toLocaleString("ru-RU")}
                             {item.detail ? ` · ${item.detail}` : ""}
                           </div>
                         </div>
@@ -5649,8 +5716,8 @@ export function App(): JSX.Element {
             linkedChatDeal
               ? `Сделка: ${formatStageLabel(linkedChatDeal.stage, UI)}${
                   formatDealNextStep(linkedChatDeal.next_step_at)
-                    ? ` · след. шаг ${formatDealNextStep(linkedChatDeal.next_step_at)}`
-                    : " · след. шаг не задан"
+                    ? ` · Следующий шаг ${formatDealNextStep(linkedChatDeal.next_step_at)}`
+                    : " · Следующий шаг не задан"
                 }`
               : null
           }
@@ -5789,8 +5856,8 @@ export function App(): JSX.Element {
                       setContactCard((prev) => (prev ? { ...prev, client_type: event.target.value } : prev))
                     }
                   >
-                    <option value="B2C">B2C</option>
-                    <option value="B2B">B2B</option>
+                    <option value="B2C">Частное лицо</option>
+                    <option value="B2B">Компания</option>
                   </select>
                 </div>
               </div>
@@ -5806,7 +5873,7 @@ export function App(): JSX.Element {
                   >
                     <option value="Новый">Новый</option>
                     <option value="Повторный">Повторный</option>
-                    <option value="VIP">VIP</option>
+                    <option value="VIP">Важный клиент</option>
                   </select>
                 </div>
               </div>
@@ -6296,6 +6363,7 @@ export function App(): JSX.Element {
           demoData={usesDemoSampleData(sessionUser, conversations)}
           onStepChange={setOnboardingStep}
           onOpenChannel={openOnboardingChannel}
+          onChannelRequestCopied={noteOnboardingChannelRequestCopied}
           onOpenDialogs={openOnboardingDialogs}
           onOpenTasks={openOnboardingTasks}
           onOpenPipeline={openOnboardingPipeline}
@@ -6464,18 +6532,13 @@ function applyScriptVariables(
 }
 
 function formatStageLabel(stage: string, ui: typeof UI): string {
-  switch (stage) {
-    case "new":
-      return ui.stageNew;
-    case "qualified":
-      return ui.stageQualified;
-    case "proposal":
-      return ui.stageProposal;
-    case "won":
-      return ui.stageWon;
-    case "lost":
-      return ui.stageLost;
-    default:
-      return stage;
-  }
+  return (
+    formatBuiltinStageLabel(stage, {
+      new: ui.stageNew,
+      qualified: ui.stageQualified,
+      proposal: ui.stageProposal,
+      won: ui.stageWon,
+      lost: ui.stageLost
+    }) ?? stage
+  );
 }

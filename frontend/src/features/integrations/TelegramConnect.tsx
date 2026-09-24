@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   connectTelegram,
   disconnectTelegram,
   loadTelegramStatus,
   type TelegramStatus
 } from "./api";
+import { describeTelegramConnectError, telegramTokenMessage, telegramTokenProblem } from "./connectionState";
 
 type Props = {
   authToken: string;
@@ -18,6 +19,7 @@ export function TelegramConnect({ authToken }: Props) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showTokenForm, setShowTokenForm] = useState(false);
+  const errorRef = useRef<HTMLDivElement | null>(null);
 
   const connected = Boolean(status?.connected);
 
@@ -41,18 +43,26 @@ export function TelegramConnect({ authToken }: Props) {
     void refreshStatus();
   }, [refreshStatus]);
 
+  function showConnectError(message: string): void {
+    setError(message);
+    setShowTokenForm(true);
+    window.setTimeout(() => errorRef.current?.focus(), 0);
+  }
+
   async function onConnect(): Promise<void> {
-    if (!botToken.trim()) {
-      setError("Вставьте токен бота от @BotFather");
-      setShowTokenForm(true);
+    const problem = telegramTokenProblem(botToken);
+    if (problem) {
+      showConnectError(telegramTokenMessage(problem));
       return;
     }
 
     setSaving(true);
     setError("");
     setSuccess("");
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 20000);
     try {
-      const result = await connectTelegram(authToken, { botToken: botToken.trim() });
+      const result = await connectTelegram(authToken, { botToken: botToken.trim() }, controller.signal);
       if (!result.ok) {
         throw new Error(result.error || "Не удалось подключить Telegram");
       }
@@ -65,8 +75,10 @@ export function TelegramConnect({ authToken }: Props) {
       );
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка подключения Telegram");
+      const raw = err instanceof Error ? err.message : "";
+      showConnectError(describeTelegramConnectError(raw));
     } finally {
+      window.clearTimeout(timer);
       setSaving(false);
     }
   }
@@ -92,7 +104,7 @@ export function TelegramConnect({ authToken }: Props) {
     <div className="instagramConnectCard" id="integration-telegram">
       <div className="integrationsPanelHeader">
         <div>
-          <h3 className="integrationsPanelTitle">Telegram Bot</h3>
+          <h3 className="integrationsPanelTitle">Бот Telegram</h3>
           <p className="integrationsHint">
             Подключите или отключите бота прямо здесь. Сообщения появятся в диалогах как канал Telegram.
           </p>
@@ -114,11 +126,19 @@ export function TelegramConnect({ authToken }: Props) {
             <div className="sidebarHint">Источник</div>
             <div className="scriptCardTitle">{status?.source || "—"}</div>
           </div>
-          <div>
-            <div className="sidebarHint">Webhook</div>
-            <div className="scriptCardTitle">{status?.webhookUrl || status?.webhookPath || "—"}</div>
-          </div>
         </div>
+      ) : null}
+
+      {connected ? (
+        <details className="integrationsDetails">
+          <summary>Подробности</summary>
+          <div className="integrationsDetailsBody">
+            <div>
+              <div className="integrationsLabel">Webhook</div>
+              <div className="integrationsValue">{status?.webhookUrl || status?.webhookPath || "—"}</div>
+            </div>
+          </div>
+        </details>
       ) : null}
 
       <div className="instagramConnectActions">
@@ -144,6 +164,7 @@ export function TelegramConnect({ authToken }: Props) {
               void onConnect();
             }}
           >
+            {saving ? <span className="integrationsSpinner" aria-hidden="true" /> : null}
             {saving ? "Подключение..." : "Подключить Telegram"}
           </button>
         )}
@@ -177,7 +198,13 @@ export function TelegramConnect({ authToken }: Props) {
             onChange={(event) => setBotToken(event.target.value)}
             type="password"
             autoComplete="off"
+            aria-describedby={botToken.trim() ? undefined : "telegram-token-hint"}
           />
+          {!botToken.trim() ? (
+            <p id="telegram-token-hint" className="integrationsHint">
+              Поле пустое — вставьте токен от @BotFather. Без него бот не подключится.
+            </p>
+          ) : null}
           <div className="instagramConnectActions">
             <button
               type="button"
@@ -185,7 +212,8 @@ export function TelegramConnect({ authToken }: Props) {
               disabled={saving || !botToken.trim()}
               onClick={() => void onConnect()}
             >
-              {saving ? "Сохранение..." : connected ? "Сохранить и подключить" : "Подключить Telegram"}
+              {saving ? <span className="integrationsSpinner" aria-hidden="true" /> : null}
+              {saving ? "Подключение..." : connected ? "Сохранить и подключить" : "Подключить Telegram"}
             </button>
             {connected ? (
               <button
@@ -204,7 +232,11 @@ export function TelegramConnect({ authToken }: Props) {
         </div>
       ) : null}
 
-      {error ? <div className="integrationsError">{error}</div> : null}
+      {error ? (
+        <div ref={errorRef} className="integrationsError" role="alert" tabIndex={-1}>
+          {error}
+        </div>
+      ) : null}
       {success ? <div className="integrationsSuccess">{success}</div> : null}
       {status?.lastError ? <div className="integrationsError">{status.lastError}</div> : null}
 

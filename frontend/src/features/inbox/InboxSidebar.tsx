@@ -1,30 +1,17 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
+import { conversationsForChannel, type InboxChannelFilter } from "./lib/channelFilter";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import { DialogsEmptyState } from "./DialogsEmptyState";
 import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
+import { formatChannelLabel } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
-type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web" | "email";
-
 function channelLabel(channel: Conversation["channel"]): string {
-  switch (channel) {
-    case "whatsapp":
-      return "WhatsApp";
-    case "telegram":
-      return "Telegram";
-    case "instagram":
-      return "Instagram";
-    case "web":
-      return "Сайт";
-    case "email":
-      return "Email";
-    default:
-      return channel;
-  }
+  return formatChannelLabel(channel);
 }
 
 function formatDialogTime(value: string): string {
@@ -50,6 +37,158 @@ function formatSnippet(conversation: Conversation, fallback: string): string {
     return "📎 [Медиа]";
   }
   return body;
+}
+
+const CHANNEL_FILTERS = [
+  ["all", "Все"],
+  ["whatsapp", "WhatsApp"],
+  ["telegram", "Telegram"],
+  ["instagram", "Instagram"],
+  ["web", "Сайт"],
+  ["email", "Почта"]
+] as const;
+
+function ChannelScrollChevron(props: { direction: "left" | "right" }): JSX.Element {
+  const path = props.direction === "left" ? "M12.5 4.5 7 10l5.5 5.5" : "M7.5 4.5 13 10l-5.5 5.5";
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChannelFilters(props: {
+  value: InboxChannelFilter;
+  onChange: (value: InboxChannelFilter) => void;
+}): JSX.Element {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const update = (): void => {
+      const lastChip = el.querySelector<HTMLElement>(".channelChip:last-of-type");
+      const lastEnd = lastChip
+        ? lastChip.getBoundingClientRect().right - el.getBoundingClientRect().left + el.scrollLeft
+        : 0;
+      const left = el.scrollLeft > 2;
+      const right = lastEnd - el.clientWidth - el.scrollLeft > 2;
+      setEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+
+    let cancelled = false;
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    window.addEventListener("resize", update);
+    if (document.fonts) {
+      void document.fonts.ready.then(() => {
+        if (!cancelled) {
+          update();
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  function scrollChannels(direction: -1 | 1): void {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+    const chips = Array.from(el.querySelectorAll<HTMLButtonElement>(".channelChip"));
+    const origin = el.getBoundingClientRect().left;
+    const starts = chips.map((chip) => chip.getBoundingClientRect().left - origin + el.scrollLeft);
+    const widths = chips.map((chip) => chip.getBoundingClientRect().width);
+    const viewLeft = el.scrollLeft;
+    const viewRight = viewLeft + el.clientWidth;
+    const edge = 4;
+
+    if (direction > 0) {
+      const index = starts.findIndex((start, chipIndex) => start + widths[chipIndex] > viewRight - edge);
+      const left = index >= 0 ? starts[index] : el.scrollWidth - el.clientWidth;
+      el.scrollTo({ left });
+      return;
+    }
+
+    let index = -1;
+    for (let chipIndex = starts.length - 1; chipIndex >= 0; chipIndex -= 1) {
+      if (starts[chipIndex] < viewLeft + edge) {
+        index = chipIndex;
+        break;
+      }
+    }
+    if (index < 0) {
+      el.scrollTo({ left: 0 });
+      return;
+    }
+    el.scrollTo({
+      left: Math.max(0, starts[index] + widths[index] - el.clientWidth)
+    });
+  }
+
+  return (
+    <div
+      className={`channelFiltersBar${edges.left ? " canScrollLeft" : ""}${edges.right ? " canScrollRight" : ""}`}
+    >
+      <button
+        type="button"
+        className="channelScrollBtn channelScrollBtnPrev"
+        aria-label="Предыдущие каналы"
+        aria-hidden={!edges.left}
+        tabIndex={edges.left ? 0 : -1}
+        disabled={!edges.left}
+        onClick={() => scrollChannels(-1)}
+      >
+        <ChannelScrollChevron direction="left" />
+      </button>
+      <div ref={scrollerRef} className="channelFilters" role="tablist" aria-label="Каналы">
+        {CHANNEL_FILTERS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={props.value === value}
+            className={`channelChip ${props.value === value ? "active" : ""}`}
+            data-testid={`channel-filter-${value}`}
+            onClick={() => props.onChange(value)}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="channelFiltersSpacer" aria-hidden="true" />
+      </div>
+      <button
+        type="button"
+        className="channelScrollBtn channelScrollBtnNext"
+        aria-label="Следующие каналы"
+        aria-hidden={!edges.right}
+        tabIndex={edges.right ? 0 : -1}
+        disabled={!edges.right}
+        onClick={() => scrollChannels(1)}
+      >
+        <ChannelScrollChevron direction="right" />
+      </button>
+    </div>
+  );
 }
 
 type InboxSidebarUi = {
@@ -143,8 +282,8 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                     {channelLabel(conversation.channel)}
                   </span>
                   {conversation.landing_id || conversation.marketing_source === "landing" ? (
-                    <span className="groupBadge" title="Лид с лендинга">
-                      Лендинг
+                    <span className="groupBadge" title="Заявка со страницы">
+                      С сайта
                     </span>
                   ) : null}
                   <span className="dialogCardTime">{formatDialogTime(conversation.updated_at)}</span>
@@ -188,6 +327,8 @@ type InboxSidebarProps = {
   onOpenCustomerCard: (conversationId: string) => void;
   onClearSearchAndFilters?: () => void;
   onOpenIntegrations?: () => void;
+  channelFilter: InboxChannelFilter;
+  onChannelFilterChange: (next: InboxChannelFilter) => void;
   isAdmin?: boolean;
   loading?: boolean;
 };
@@ -215,18 +356,16 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onOpenCustomerCard,
     onClearSearchAndFilters,
     onOpenIntegrations,
+    channelFilter,
+    onChannelFilterChange,
     isAdmin = false,
     loading = false
   } = props;
 
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
-
-  const visibleConversations = useMemo(() => {
-    if (channelFilter === "all") {
-      return conversations;
-    }
-    return conversations.filter((conversation) => conversation.channel === channelFilter);
-  }, [channelFilter, conversations]);
+  const visibleConversations = useMemo(
+    () => conversationsForChannel(conversations, channelFilter),
+    [channelFilter, conversations]
+  );
 
   return (
     <aside className="sidebar card">
@@ -257,32 +396,12 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         </div>
       </div>
 
-      <div className="channelFilters" role="tablist" aria-label="Channel filters">
-        {([
-          ["all", "Все"],
-          ["whatsapp", "WhatsApp"],
-          ["telegram", "Telegram"],
-          ["instagram", "Instagram"],
-          ["web", "Сайт"],
-          ["email", "Email"]
-        ] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={channelFilter === value}
-            className={`channelChip ${channelFilter === value ? "active" : ""}`}
-            onClick={() => setChannelFilter(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <ChannelFilters value={channelFilter} onChange={onChannelFilterChange} />
 
       <div className="sidebarHeader">
         <div>
           <div className="sidebarTitle">{ui.inboxTitle}</div>
-          <div className="sidebarHint">{conversations.length} {ui.chatsSuffix}</div>
+          <div className="sidebarHint">{visibleConversations.length} {ui.chatsSuffix}</div>
         </div>
         <button
           type="button"
@@ -355,8 +474,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
             >
               <option value="">Фокус: все</option>
               <option value="unread">Только непрочитанные</option>
-              <option value="overdue">SLA просроченные</option>
-              <option value="escalated">Только SLA-эскалации</option>
+              <option value="overdue">Просрочен срок ответа</option>
+              <option value="escalated">Только переданные из-за просрочки</option>
             </select>
             <select
               className="filterInput"
@@ -369,7 +488,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
               }
             >
               <option value="">Источник: все</option>
-              <option value="landing">Лид с лендинга</option>
+              <option value="landing">Заявка со страницы</option>
             </select>
           </div>
 
@@ -423,7 +542,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
               }
               isAdmin={isAdmin}
               onResetFilter={() => {
-                setChannelFilter("all");
+                onChannelFilterChange("all");
                 if (onClearSearchAndFilters) {
                   onClearSearchAndFilters();
                   return;

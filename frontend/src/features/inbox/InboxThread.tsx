@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { DragEvent, RefObject } from "react";
+import { formatChannelLabel } from "../../shared/i18n/glossary";
 import type { Conversation, KnowledgeArticle, Message, MessageScript } from "./model/types";
 import { MessageAudio } from "./ui/MessageAudio";
 
@@ -92,6 +93,7 @@ type InboxThreadProps = {
   onAppendEmoji: (emoji: string) => void;
   onBack?: () => void;
   backLabel?: string;
+  emptyOverride?: JSX.Element | null;
 };
 
 export function InboxThread(props: InboxThreadProps): JSX.Element {
@@ -154,12 +156,18 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onSendMessage,
     onAppendEmoji,
     onBack,
-    backLabel
+    backLabel,
+    emptyOverride = null
   } = props;
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const micHoldRef = useRef(false);
   const micHoldStartedAtRef = useRef(0);
   const lastMicTapAtRef = useRef(0);
+
+  if (emptyOverride) {
+    return <section className="thread card">{emptyOverride}</section>;
+  }
 
   const contactInitial = (selectedConversationData?.contact_name || "?").trim().slice(0, 1).toUpperCase();
 
@@ -377,7 +385,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
         <>
           <div className="threadHeaderModern">
             {onBack ? (
-              <button type="button" className="threadBackBtn" onClick={onBack} aria-label={backLabel || "Back"}>
+              <button type="button" className="threadBackBtn" onClick={onBack} aria-label={backLabel || "Назад"}>
                 ‹
               </button>
             ) : null}
@@ -397,30 +405,20 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
               </button>
               <div className="threadContactPhone">
                 <span className={`channelBadge ${selectedConversationData.channel}`}>
-                  {selectedConversationData.channel === "whatsapp"
-                    ? "WhatsApp"
-                    : selectedConversationData.channel === "telegram"
-                      ? "Telegram"
-                      : selectedConversationData.channel === "instagram"
-                        ? "Instagram"
-                        : selectedConversationData.channel === "web"
-                          ? "Сайт"
-                          : selectedConversationData.channel === "email"
-                            ? "Email"
-                            : selectedConversationData.channel}
+                  {formatChannelLabel(selectedConversationData.channel)}
                 </span>
                 <span>
                   {selectedConversationData.is_group
                     ? "группа"
-                    : selectedConversationData.phone || selectedConversationData.channel}
+                    : selectedConversationData.phone || formatChannelLabel(selectedConversationData.channel)}
                 </span>
               </div>
               {linkedDeal ? (
                 <div className="threadDealStatus">
                   Сделка: {linkedDeal.stageLabel}
                   {linkedDeal.nextStepLabel
-                    ? ` · след. шаг ${linkedDeal.nextStepLabel}`
-                    : " · след. шаг не задан"}
+                    ? ` · Следующий шаг ${linkedDeal.nextStepLabel}`
+                    : " · Следующий шаг не задан"}
                 </div>
               ) : null}
             </div>
@@ -465,7 +463,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
           <div
             className={`messages ${isDragOverMessages ? "dragOver" : ""}`}
             role="log"
-            aria-label="Conversation messages"
+            aria-label="Сообщения диалога"
             ref={messagesContainerRef}
             onDragOver={onMessagesDragOver}
             onDragLeave={onMessagesDragLeave}
@@ -482,7 +480,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                     <img
                       className="bubbleMedia bubbleMediaImage"
                       src={getMediaUrl(message.attachment_url)}
-                      alt={message.attachment_name || "image"}
+                      alt={message.attachment_name || "изображение"}
                       loading="lazy"
                     />
                   </a>

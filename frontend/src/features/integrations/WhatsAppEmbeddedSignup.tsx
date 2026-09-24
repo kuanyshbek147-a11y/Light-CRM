@@ -7,6 +7,11 @@ import {
   registerWhatsAppCloudApi,
   type WhatsAppConnectStatus
 } from "./api";
+import {
+  CONNECT_BUTTON_RESET_MS,
+  plainWhatsAppOAuthError,
+  resolveLinkBadge
+} from "./connectionState";
 
 type EmbeddedSignupMessage = {
   type?: string;
@@ -57,6 +62,8 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
   const [registering, setRegistering] = useState(false);
   const [connectStep, setConnectStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [attemptFailed, setAttemptFailed] = useState(false);
+  const [dismissedFailure, setDismissedFailure] = useState(false);
   const [status, setStatus] = useState<WhatsAppConnectStatus | null>(null);
   const [appId, setAppId] = useState<string | null>(null);
   const [configId, setConfigId] = useState<string | null>(null);
@@ -68,26 +75,42 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
   const signupErrorRef = useRef<string | null>(null);
   const connectTimeoutRef = useRef<number | null>(null);
   const connectFinishedRef = useRef(false);
+  const popupTookFocusRef = useRef(false);
 
-  const resetConnectState = useCallback((message?: string) => {
-    connectFinishedRef.current = true;
+  const clearConnectTimers = useCallback(() => {
     if (connectTimeoutRef.current !== null) {
       window.clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = null;
     }
+  }, []);
+
+  const resetConnectState = useCallback((message?: string) => {
+    connectFinishedRef.current = true;
+    clearConnectTimers();
     setConnecting(false);
     setConnectStep(null);
     if (message) {
-      setError(message);
+      setError(plainWhatsAppOAuthError(message));
+      setAttemptFailed(true);
+      setDismissedFailure(false);
     }
-  }, []);
+  }, [clearConnectTimers]);
 
-  const refreshStatus = useCallback(async () => {
+  const refreshStatus = useCallback(async (options?: { syncBadge?: boolean }) => {
     const next = await loadWhatsAppConnectStatus(authToken);
     setStatus(next);
-    if (next.connected) {
+    if (options?.syncBadge) {
+      setAttemptFailed(false);
+      setDismissedFailure(false);
+      setError(null);
+    }
+    if (next.connected && !options?.syncBadge) {
       onConnected?.();
     }
+    if (next.connected && options?.syncBadge) {
+      onConnected?.();
+    }
+    return next;
   }, [authToken, onConnected]);
 
   useEffect(() => {
@@ -106,7 +129,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
         setSetupMissing(setup.missing || []);
       } catch (bootstrapError) {
         if (!cancelled) {
-          setError(bootstrapError instanceof Error ? bootstrapError.message : "Ошибка загрузки");
+          setError(bootstrapError instanceof Error ? bootstrapError.message : "Не удалось загрузить статус WhatsApp");
         }
       } finally {
         if (!cancelled) {
@@ -164,12 +187,12 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
       }
 
       if (payload.event === "ERROR") {
-        signupErrorRef.current = payload.data?.error_message || "Meta Embedded Signup завершился с ошибкой.";
+        signupErrorRef.current = payload.data?.error_message || "Подключение WhatsApp не завершено.";
         return;
       }
 
       if (payload.event === "CANCEL") {
-        signupErrorRef.current = "Подключение отменено в мастере Meta.";
+        signupErrorRef.current = "Подключение WhatsApp отменено или не завершено.";
         return;
       }
 
@@ -182,6 +205,8 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
+
+  useEffect(() => () => clearConnectTimers(), [clearConnectTimers]);
 
   async function waitForSignupData(timeoutMs: number): Promise<{ wabaId: string; phoneNumberId: string }> {
     const startedAt = Date.now();
@@ -206,9 +231,11 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     setRegistering(true);
     try {
       await disconnectWhatsApp(authToken);
-      await refreshStatus();
+      setAttemptFailed(false);
+      setDismissedFailure(false);
+      await refreshStatus({ syncBadge: true });
     } catch (disconnectError) {
-      setError(disconnectError instanceof Error ? disconnectError.message : "Ошибка сброса");
+      setError(disconnectError instanceof Error ? disconnectError.message : "Не удалось сбросить подключение");
     } finally {
       setRegistering(false);
     }
@@ -219,42 +246,88 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
     setRegistering(true);
     try {
       await registerWhatsAppCloudApi(authToken);
-      await refreshStatus();
+      await refreshStatus({ syncBadge: true });
     } catch (registerError) {
-      setError(registerError instanceof Error ? registerError.message : "Ошибка регистрации");
+      setError(registerError instanceof Error ? registerError.message : "Не удалось завершить регистрацию номера");
     } finally {
       setRegistering(false);
     }
   }
 
+  async function handleRefreshStatus() {
+    setError(null);
+    try {
+      await refreshStatus({ syncBadge: true });
+    } catch {
+      setAttemptFailed(true);
+      setDismissedFailure(false);
+      setError("Не удалось обновить статус. Проверьте соединение и попробуйте снова.");
+    }
+  }
+
+  function dismissFailure() {
+    setError(null);
+    setConnectStep(null);
+    setAttemptFailed(false);
+    setDismissedFailure(true);
+    setConnecting(false);
+  }
+
   async function handleConnect() {
     setError(null);
     setConnectStep(null);
+    setDismissedFailure(false);
 
     if (!fbReady || !window.FB) {
-      setError("Facebook SDK ещё загружается. Подождите несколько секунд.");
+      setError("Страница ещё готовится. Подождите пару секунд и нажмите снова.");
       return;
     }
-    if (!configId) {
-      setError("Не задан WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID. Создайте конфигурацию в Meta Developer Console.");
+    if (!configId || !setupReady) {
+      setError("Подключение WhatsApp сейчас недоступно. Откройте «Подробности».");
       return;
     }
 
     setConnecting(true);
+    setAttemptFailed(false);
     signupDataRef.current = { wabaId: "", phoneNumberId: "" };
     signupErrorRef.current = null;
     connectFinishedRef.current = false;
+    popupTookFocusRef.current = false;
+
+    const markPopup = () => {
+      popupTookFocusRef.current = true;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        markPopup();
+      }
+    };
+    const stopWatchingPopup = () => {
+      window.removeEventListener("blur", markPopup);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    window.addEventListener("blur", markPopup);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const stuckTimer = window.setTimeout(() => {
+      if (!connectFinishedRef.current && !popupTookFocusRef.current) {
+        stopWatchingPopup();
+        resetConnectState("Не удалось открыть окно Meta. Нажмите «Повторить подключение».");
+      }
+    }, CONNECT_BUTTON_RESET_MS);
 
     connectTimeoutRef.current = window.setTimeout(() => {
       if (!connectFinishedRef.current) {
-        resetConnectState(
-          "Мастер Meta не ответил. Закройте окно Meta. Если видите «не может подключать клиентов» — это ограничение Meta, не CRM."
-        );
+        stopWatchingPopup();
+        resetConnectState("Не удалось дождаться ответа. Нажмите «Повторить подключение».");
       }
     }, 120000);
 
-    window.FB.login(
+    try {
+      window.FB.login(
       (response) => {
+        stopWatchingPopup();
+        window.clearTimeout(stuckTimer);
         void (async () => {
           try {
             const code = response.authResponse?.code || "";
@@ -262,22 +335,27 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
               if (signupErrorRef.current) {
                 throw new Error(signupErrorRef.current);
               }
-              throw new Error("Авторизация Meta отменена или не завершена.");
+              throw new Error("Подключение WhatsApp отменено или не завершено.");
             }
 
-            setConnectStep("Ожидание данных от Meta...");
+            setConnectStep("Сохраняем подключение…");
             const signupData = await waitForSignupData(30000);
 
-            setConnectStep("Сохранение подключения...");
             await completeWhatsAppConnect(authToken, {
               code,
               wabaId: signupData.wabaId || undefined,
               phoneNumberId: signupData.phoneNumberId || undefined,
               webhookPublicBaseUrl: PUBLIC_WEBHOOK_BASE || undefined
             });
-            await refreshStatus();
+            setAttemptFailed(false);
+            setDismissedFailure(false);
+            setError(null);
+            await refreshStatus({ syncBadge: true });
           } catch (connectError) {
-            setError(connectError instanceof Error ? connectError.message : "Ошибка подключения");
+            const raw = connectError instanceof Error ? connectError.message : "Не удалось подключить WhatsApp";
+            setError(plainWhatsAppOAuthError(raw));
+            setAttemptFailed(true);
+            setDismissedFailure(false);
           } finally {
             resetConnectState();
           }
@@ -293,121 +371,105 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
         }
       }
     );
+    } catch {
+      stopWatchingPopup();
+      window.clearTimeout(stuckTimer);
+      resetConnectState("Не удалось открыть окно Meta. Нажмите «Повторить подключение».");
+    }
   }
 
   if (setupLoading) {
     return <div className="integrationsHint">Загрузка настроек WhatsApp...</div>;
   }
 
+  const badge = resolveLinkBadge({
+    serverConnected: Boolean(status?.connected),
+    attemptFailed,
+    dismissedFailure,
+    connectedLabel: "Подключено"
+  });
+  const showConnected = badge.kind === "connected" && Boolean(status?.connected);
+  const retryLabel = attemptFailed || dismissedFailure;
+  const primaryLabel = connecting
+    ? "Подключение..."
+    : retryLabel
+      ? "Повторить подключение"
+      : status?.connected
+        ? "Переподключить WhatsApp"
+        : "Подключить WhatsApp";
+  const webhookUrl = PUBLIC_WEBHOOK_BASE
+    ? `${PUBLIC_WEBHOOK_BASE}/api/integrations/whatsapp/webhook`
+    : "";
+
   return (
-    <div className="integrationsCard">
+    <div className="integrationsCard" id="integration-whatsapp">
       <div className="integrationsCardHeader">
         <div>
-          <div className="integrationsTitle">WhatsApp Cloud API</div>
+          <div className="integrationsTitle">WhatsApp</div>
           <div className="integrationsHint">
-            Полная миграция: номер работает только через CRM. WhatsApp Business на телефоне отключается.
+            Подключите номер, чтобы переписка с клиентами шла через CRM.
           </div>
         </div>
-        <span className={`integrationsBadge ${status?.connected ? "connected" : "pending"}`}>
-          {status?.connected ? "Подключено" : "Не подключено"}
+        <span className={`integrationsBadge ${badge.kind === "connected" ? "connected" : badge.kind === "error" ? "error" : "pending"}`}>
+          {badge.label}
         </span>
       </div>
 
-      {status?.connected ? (
-        <div className="integrationsStatusGrid">
-          <div>
-            <div className="integrationsLabel">Номер</div>
-            <div className="integrationsValue">{status.phone?.display_phone_number || "—"}</div>
-          </div>
-          <div>
-            <div className="integrationsLabel">WABA ID</div>
-            <div className="integrationsValue">{status.wabaId}</div>
-          </div>
-          <div>
-            <div className="integrationsLabel">Phone Number ID</div>
-            <div className="integrationsValue">{status.phoneNumberId}</div>
-          </div>
-          <div>
-            <div className="integrationsLabel">Cloud API</div>
-            <div className="integrationsValue">
-              {status.messagingReady
-                ? "Готов к отправке"
-                : `${status.phone?.platform_type || "?"} / ${status.phone?.status || "?"}`}
-            </div>
-          </div>
-        </div>
+      {showConnected ? (
+        <p className="integrationsHint">
+          Номер {status?.phone?.display_phone_number || "подключён"}. Сообщения приходят в диалоги.
+        </p>
       ) : (
-        <ul className="integrationsSteps">
-          <li>Экспортируйте важные чаты из WhatsApp Business (история не переносится)</li>
-          <li>На телефоне: Настройки → Аккаунт → Удалить мой аккаунт (+7 700 313 1055)</li>
-          <li>Подождите 5–10 минут, пока Meta освободит номер</li>
-          <li>Нажмите «Подключить WhatsApp» и пройдите мастер Meta (SMS-код на номер)</li>
-          <li>После подключения нажмите «Зарегистрировать в Cloud API», если статус не CONNECTED</li>
-        </ul>
+        <ol className="integrationsSteps">
+          <li>Удалите аккаунт WhatsApp Business на телефоне — история чатов не переносится.</li>
+          <li>Подождите несколько минут и нажмите «Подключить WhatsApp».</li>
+          <li>Введите код из SMS и дождитесь статуса «Подключено».</li>
+        </ol>
       )}
 
-      {status?.connected && status.needsReconnect ? (
+      {showConnected && status?.needsReconnect ? (
         <div className="integrationsWarning">
-          Сохранённые данные устарели после удаления аккаунта на телефоне. Нажмите «Сбросить подключение», затем
-          «Подключить WhatsApp» и пройдите мастер Meta заново (SMS-код на номер).
+          Номер больше не привязан. Сбросьте подключение и пройдите вход заново.
         </div>
       ) : null}
 
-      {status?.connected && status.needsRegistration && !status.needsReconnect ? (
+      {showConnected && status?.needsRegistration && !status.needsReconnect ? (
         <div className="integrationsWarning">
-          Токены сохранены, но Cloud API ещё не активен ({status.platformType || "?"} / {status.phoneStatus || "?"}).
-          Убедитесь, что аккаунт WhatsApp Business на телефоне удалён, затем нажмите «Зарегистрировать в Cloud API».
+          Номер сохранён, но отправка ещё не включена. Нажмите «Зарегистрировать номер».
+        </div>
+      ) : null}
+
+      {!setupReady || !configId || !appId ? (
+        <div className="integrationsWarning">
+          Подключение пока недоступно. Откройте «Подробности», чтобы увидеть, чего не хватает.
         </div>
       ) : null}
 
       {connectStep ? <div className="integrationsHint">{connectStep}</div> : null}
-      {error ? <div className="integrationsError">{error}</div> : null}
-
-      {!setupReady ? (
-        <div className="integrationsError">
-          На backend не заданы Meta-переменные: {setupMissing.join(", ") || "WHATSAPP_APP_SECRET"}.
-          Для Render откройте light-crm-backend → Environment и добавьте App Secret из Meta Developer Console.
-        </div>
-      ) : null}
-
-      {!configId || !appId ? (
-        <div className="integrationsError">
-          На backend не заданы Meta-переменные (appId/configId). Для Render добавьте `WHATSAPP_APP_ID` и
-          `WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID`, затем перезапустите сервис.
-        </div>
-      ) : null}
-
-      {!PUBLIC_WEBHOOK_BASE ? (
-        <div className="integrationsWarning">
-          Для webhook укажите `VITE_PUBLIC_WEBHOOK_BASE_URL` (HTTPS-туннель или прод-домен).
-        </div>
-      ) : null}
-
-      <div className="integrationsWarning">
-        Перед подключением удалите аккаунт WhatsApp Business на телефоне. После миграции переписка в приложении
-        недоступна — только через CRM.
-      </div>
+      {error ? <div className="integrationsError" role="alert">{error}</div> : null}
 
       <div className="integrationsActions">
         <button
           type="button"
           className="primaryButton"
+          aria-busy={connecting}
           disabled={connecting || registering || !configId || !setupReady}
           onClick={() => void handleConnect()}
         >
-          {connecting ? "Подключение..." : status?.connected ? "Переподключить WhatsApp" : "Подключить WhatsApp"}
+          {connecting ? <span className="integrationsSpinner" aria-hidden="true" /> : null}
+          {primaryLabel}
         </button>
-        {status?.connected && status.needsRegistration && !status.needsReconnect ? (
+        {showConnected && status?.needsRegistration && !status.needsReconnect ? (
           <button
             type="button"
             className="secondaryButton"
             disabled={connecting || registering}
             onClick={() => void handleRegister()}
           >
-            {registering ? "Регистрация..." : "Зарегистрировать в Cloud API"}
+            {registering ? "Регистрация..." : "Зарегистрировать номер"}
           </button>
         ) : null}
-        {status?.connected && status.needsReconnect ? (
+        {showConnected && status?.needsReconnect ? (
           <button
             type="button"
             className="secondaryButton"
@@ -422,16 +484,67 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
             type="button"
             className="secondaryButton"
             onClick={() =>
-              resetConnectState("Подключение отменено. Закройте окно Meta, если оно ещё открыто.")
+              resetConnectState("Подключение WhatsApp отменено или не завершено.")
             }
           >
             Отмена
           </button>
         ) : null}
-        <button type="button" className="secondaryButton" disabled={connecting || registering} onClick={() => void refreshStatus()}>
+        {error ? (
+          <button type="button" className="secondaryButton" onClick={dismissFailure}>
+            Скрыть ошибку
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="secondaryButton"
+          disabled={connecting || registering}
+          onClick={() => void handleRefreshStatus()}
+        >
           Обновить статус
         </button>
       </div>
+
+      <details className="integrationsDetails">
+        <summary>Подробности</summary>
+        <div className="integrationsDetailsBody">
+          <div>
+            <div className="integrationsLabel">WABA ID</div>
+            <div className="integrationsValue">{status?.wabaId || "—"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Phone Number ID</div>
+            <div className="integrationsValue">{status?.phoneNumberId || "—"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Webhook</div>
+            <div className="integrationsValue">{webhookUrl || "Адрес сервера не задан"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Cloud API</div>
+            <div className="integrationsValue">
+              {status?.messagingReady
+                ? "Готов к отправке"
+                : `${status?.platformType || "—"} / ${status?.phoneStatus || "—"}`}
+            </div>
+          </div>
+          {!setupReady ? (
+            <div className="integrationsError">
+              На сервере не заданы: {setupMissing.join(", ") || "WHATSAPP_APP_SECRET"}.
+            </div>
+          ) : null}
+          {!configId || !appId ? (
+            <div className="integrationsError">
+              Не заданы WHATSAPP_APP_ID или WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID.
+            </div>
+          ) : null}
+          {!PUBLIC_WEBHOOK_BASE ? (
+            <div className="integrationsWarning">
+              Для приёма сообщений нужен VITE_PUBLIC_WEBHOOK_BASE_URL.
+            </div>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }

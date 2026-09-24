@@ -1,0 +1,8 @@
+# Публичные страницы: главная и гайды. Закрыты только прокси к API и файлам.
+User-agent: *
+Allow: /
+Allow: /guides/
+Disallow: /api/
+Disallow: /uploads/
+
+Sitemap: https://light-crm-kz.netlify.app/sitemap.xml

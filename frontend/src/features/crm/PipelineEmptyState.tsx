@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatChannelLabel } from "../../shared/i18n/glossary";
 import {
   ADD_CLIENT_UNAVAILABLE_HINT,
   canCreateDealFromPipeline,
@@ -18,23 +19,6 @@ type PipelineEmptyStateProps = {
   otherTabHint?: string | null;
   onCreateDeal: (conversationId: string) => void;
 };
-
-function channelLabel(channel: string): string {
-  switch (channel) {
-    case "whatsapp":
-      return "WhatsApp";
-    case "telegram":
-      return "Telegram";
-    case "instagram":
-      return "Instagram";
-    case "web":
-      return "Сайт";
-    case "email":
-      return "Почта";
-    default:
-      return channel;
-  }
-}
 
 export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element {
   const { conversations, otherTabHint, onCreateDeal } = props;
@@ -95,7 +79,7 @@ export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element 
             >
               {item.name || "Без имени"}
               {item.phone ? ` · ${item.phone}` : ""}
-              {` · ${channelLabel(item.channel)}`}
+              {` · ${formatChannelLabel(item.channel)}`}
             </button>
           ))}
         </div>

@@ -116,6 +116,7 @@
   background: #fff;
   box-shadow: 0 16px 40px rgba(40, 52, 111, 0.08);
   overflow: hidden;
+  scroll-margin-top: 16px;
 }
 
 .loginCardBrandRow {
@@ -179,6 +180,36 @@
   background: #fff;
 }
 
+.loginInputModern.loginInputInvalid,
+.loginInputModern.loginInputInvalid:focus {
+  border-color: #ef4444;
+  background: #fff5f5;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+.landingPageModern a.landingCtaTryDemo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 50px;
+  margin-top: 0;
+  padding: 0 18px;
+  border-radius: 16px;
+  border: 1px solid #c7d2fe;
+  background: #fff;
+  color: #312e81;
+  box-shadow: none;
+  font-size: 15px;
+  font-weight: 750;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.landingPageModern a.landingCtaTryDemo:hover {
+  background: #eef2ff;
+}
+
 .landingButtonModern {
   width: 100%;
   height: 50px;
@@ -197,6 +228,11 @@
   border: 1px solid #dbeafe;
 }
 
+.demoCredentialsHints {
+  display: grid;
+  gap: 4px;
+}
+
 .demoCredentialsModern p {
   margin: 0;
   font-size: 13px;
@@ -207,6 +243,12 @@
 .demoCredentialsModern strong {
   color: #2563eb;
   font-weight: 800;
+}
+
+@media (max-width: 480px) {
+  .landingPageModern {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @media (min-width: 900px) {
@@ -285,17 +327,81 @@
 }
 
 /* ── Channel filter chips ── */
+.channelFiltersBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
 .channelFilters {
   display: flex;
   gap: 8px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
-  padding-bottom: 4px;
-  margin-bottom: 14px;
+  overflow-y: hidden;
+  flex: 1 1 auto;
+  padding-bottom: 2px;
+  margin-bottom: 0;
   scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.channelFiltersBar.canScrollLeft .channelFilters {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+}
+
+.channelFiltersBar.canScrollRight .channelFilters {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+}
+
+.channelFiltersBar.canScrollLeft.canScrollRight .channelFilters {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 14px,
+    #000 calc(100% - 14px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+}
+
+.channelScrollBtn {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #e2e8f7;
+  border-radius: 999px;
+  background: #fff;
+  color: #4338ca;
+  box-shadow: 0 2px 8px rgba(40, 52, 111, 0.16);
+  cursor: pointer;
+}
+
+.channelScrollBtn:disabled {
+  visibility: hidden;
+  box-shadow: none;
+  pointer-events: none;
 }
 
 .channelFilters::-webkit-scrollbar {
   display: none;
+}
+
+.channelFiltersSpacer {
+  flex: 0 0 calc(100% - 40px);
 }
 
 .channelChip {
@@ -1329,9 +1435,13 @@
     display: none;
   }
 
+  .appShell.hasBottomNav .channelFiltersBar {
+    margin-bottom: 10px;
+  }
+
   .appShell.hasBottomNav .channelFilters {
     gap: 6px;
-    margin-bottom: 10px;
+    margin-bottom: 0;
   }
 
   .appShell.hasBottomNav .channelChip {
@@ -1339,6 +1449,10 @@
     padding: 0 12px;
     font-size: 12px;
     box-shadow: none;
+  }
+
+  .appShell.hasBottomNav .channelScrollBtn {
+    height: 30px;
   }
 
   .appShell.hasBottomNav .mobilePageHeader {
@@ -1351,7 +1465,8 @@
 
   .appShell.hasBottomNav .chatList {
     display: grid;
-    gap: 8px;
+    gap: 4px;
+    align-content: start;
     padding: 0 2px 80px 0;
     flex: 1;
     min-height: 0;
@@ -1373,11 +1488,11 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 0;
-    padding: 10px 12px;
+    padding: 7px 10px;
     border: 1px solid #e8ecf6;
     background: #fff;
-    border-radius: 14px;
-    box-shadow: 0 1px 3px rgba(40, 52, 111, 0.04);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(40, 52, 111, 0.04);
   }
 
   .appShell.hasBottomNav .chatItem.dialogCard:hover {
@@ -1452,6 +1567,8 @@
     text-overflow: ellipsis;
     display: block;
     -webkit-line-clamp: unset;
+    width: 100%;
+    max-width: 100%;
   }
 
   .appShell.hasBottomNav .chatItem.dialogCard.assigned {
@@ -1521,6 +1638,24 @@
 
   .appShell.hasBottomNav .pipelinePage .pipelineSectionToggle {
     display: flex;
+  }
+}
+
+@media (max-width: 380px) {
+  .appShell.hasBottomNav .chatList {
+    gap: 3px;
+  }
+
+  .appShell.hasBottomNav .chatItem.dialogCard {
+    padding: 6px 8px;
+  }
+
+  .appShell.hasBottomNav .dialogCardSnippet.chatSnippet {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    line-height: 1.3;
   }
 }
 
