@@ -8,6 +8,13 @@ import {
   type InstagramConnectSetup,
   type InstagramStatus
 } from "./api";
+import {
+  CONNECT_BUTTON_RESET_MS,
+  INSTAGRAM_OAUTH_PENDING_KEY,
+  interpretInstagramOAuthReturn,
+  plainInstagramOAuthError,
+  resolveLinkBadge
+} from "./connectionState";
 
 type Props = {
   authToken: string;
@@ -54,6 +61,54 @@ function buildInstagramAuthUrl(setup: InstagramConnectSetup, state: string): str
   return `https://www.instagram.com/oauth/authorize?${params.toString()}`;
 }
 
+function stripOAuthParams(): void {
+  const url = new URL(window.location.href);
+  for (const key of ["code", "state", "error", "error_description", "error_reason"]) {
+    url.searchParams.delete(key);
+  }
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+type InstagramExchangeResult = { ok: boolean; message: string };
+
+const instagramOAuthGate: {
+  code: string;
+  flight: Promise<InstagramExchangeResult> | null;
+} = { code: "", flight: null };
+
+function ensureInstagramExchange(
+  authToken: string,
+  code: string,
+  redirectUri: string,
+  stateOk: boolean
+): Promise<InstagramExchangeResult> {
+  if (instagramOAuthGate.code === code && instagramOAuthGate.flight) {
+    return instagramOAuthGate.flight;
+  }
+  instagramOAuthGate.code = code;
+  instagramOAuthGate.flight = (async () => {
+    if (!stateOk) {
+      return { ok: false, message: "Сессия входа устарела. Нажмите «Повторить подключение»." };
+    }
+    try {
+      const result = await connectInstagramOAuth(authToken, { code, redirectUri });
+      if (!result.ok) {
+        throw new Error(result.error || "Не удалось подключить Instagram");
+      }
+      return {
+        ok: true,
+        message: result.igUsername
+          ? `Instagram @${result.igUsername} подключён`
+          : "Instagram подключён"
+      };
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : "Не удалось подключить Instagram";
+      return { ok: false, message: plainInstagramOAuthError(raw, raw) };
+    }
+  })();
+  return instagramOAuthGate.flight;
+}
+
 export function InstagramConnect({ authToken }: Props) {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [setup, setSetup] = useState<InstagramConnectSetup | null>(null);
@@ -65,14 +120,20 @@ export function InstagramConnect({ authToken }: Props) {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [attemptFailed, setAttemptFailed] = useState(false);
+  const [dismissedFailure, setDismissedFailure] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [alertPulse, setAlertPulse] = useState(0);
-  const [connectLabel, setConnectLabel] = useState("");
   const blockAlertRef = useRef<HTMLDivElement | null>(null);
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const exchangeStartedRef = useRef(false);
+  const leftPageRef = useRef(false);
 
-  const refreshStatus = useCallback(async (): Promise<void> => {
+  const refreshStatus = useCallback(async (options?: { syncBadge?: boolean }): Promise<void> => {
     setLoading(true);
-    setError("");
+    if (options?.syncBadge) {
+      setError("");
+    }
     try {
       const [nextStatus, nextSetup] = await Promise.all([
         loadInstagramStatus(authToken),
@@ -86,8 +147,15 @@ export function InstagramConnect({ authToken }: Props) {
       if (nextStatus.igUserId) {
         setIgUserId(nextStatus.igUserId);
       }
+      if (options?.syncBadge) {
+        setAttemptFailed(false);
+        setDismissedFailure(false);
+        setSuccess("");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить статус Instagram");
+      setAttemptFailed(true);
+      setDismissedFailure(false);
+      setError(err instanceof Error ? err.message : "Не удалось обновить статус Instagram");
     } finally {
       setLoading(false);
     }
@@ -97,89 +165,164 @@ export function InstagramConnect({ authToken }: Props) {
     void refreshStatus();
   }, [refreshStatus]);
 
-  // Complete Instagram Login redirect (?code=...&state=...)
+  const markCancelled = useCallback((message: string) => {
+    sessionStorage.removeItem(INSTAGRAM_OAUTH_PENDING_KEY);
+    setOauthLoading(false);
+    setAttemptFailed(true);
+    setDismissedFailure(false);
+    setSuccess("");
+    setError(message);
+    stripOAuthParams();
+  }, []);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
-    const oauthError = params.get("error_description") || params.get("error");
-    if (!code && !oauthError) {
-      return;
-    }
+    let alive = true;
 
-    const expectedState = sessionStorage.getItem(OAUTH_STATE_KEY);
-    const redirectUri = sessionStorage.getItem(OAUTH_REDIRECT_KEY) || `${window.location.origin}/`;
-
-    // Clean URL immediately so refresh doesn't re-run exchange.
-    const cleanUrl = `${window.location.origin}${window.location.pathname}`;
-    window.history.replaceState({}, document.title, cleanUrl);
-
-    if (oauthError) {
-      setError(oauthError);
-      sessionStorage.removeItem(OAUTH_STATE_KEY);
-      sessionStorage.removeItem(OAUTH_REDIRECT_KEY);
-      return;
-    }
-
-    if (!code) {
-      return;
-    }
-    if (!expectedState || !state || state !== expectedState) {
-      setError("OAuth state не совпал. Нажмите «Подключить Instagram» ещё раз.");
-      return;
-    }
-
-    void (async () => {
+    function applyExchange(flight: Promise<InstagramExchangeResult>) {
+      if (exchangeStartedRef.current) {
+        return;
+      }
+      exchangeStartedRef.current = true;
       setOauthLoading(true);
       setError("");
       setSuccess("");
-      try {
-        const result = await connectInstagramOAuth(authToken, { code, redirectUri });
-        if (!result.ok) {
-          throw new Error(result.error || "Не удалось подключить Instagram");
+      void flight.then((result) => {
+        if (!alive) {
+          exchangeStartedRef.current = false;
+          return;
         }
-        setSuccess(
-          result.igUsername
-            ? `Instagram @${result.igUsername} подключён`
-            : "Instagram подключён"
-        );
-        await refreshStatus();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Ошибка Instagram Login");
-      } finally {
         sessionStorage.removeItem(OAUTH_STATE_KEY);
         sessionStorage.removeItem(OAUTH_REDIRECT_KEY);
+        sessionStorage.removeItem(INSTAGRAM_OAUTH_PENDING_KEY);
         setOauthLoading(false);
+        if (result.ok) {
+          setAttemptFailed(false);
+          setDismissedFailure(false);
+          setSuccess(result.message);
+          void refreshStatus({ syncBadge: true });
+          return;
+        }
+        markCancelled(result.message);
+      });
+    }
+
+    function consumeReturn() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      if (code) {
+        const state = params.get("state");
+        const expectedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+        const redirectUri = sessionStorage.getItem(OAUTH_REDIRECT_KEY) || `${window.location.origin}/`;
+        sessionStorage.removeItem(INSTAGRAM_OAUTH_PENDING_KEY);
+        stripOAuthParams();
+        applyExchange(
+          ensureInstagramExchange(authToken, code, redirectUri, Boolean(expectedState && state && state === expectedState))
+        );
+        return;
       }
-    })();
-  }, [authToken, refreshStatus]);
+
+      if (instagramOAuthGate.flight) {
+        applyExchange(instagramOAuthGate.flight);
+        return;
+      }
+
+      const outcome = interpretInstagramOAuthReturn({
+        code: null,
+        error: params.get("error"),
+        errorDescription: params.get("error_description"),
+        pending: sessionStorage.getItem(INSTAGRAM_OAUTH_PENDING_KEY) === "1"
+      });
+      if (outcome.kind === "cancelled") {
+        markCancelled(outcome.message);
+      }
+    }
+
+    consumeReturn();
+    window.addEventListener("pageshow", consumeReturn);
+    return () => {
+      alive = false;
+      window.removeEventListener("pageshow", consumeReturn);
+    };
+  }, [authToken, markCancelled, refreshStatus]);
+
+  useEffect(() => {
+    function onPageHide() {
+      leftPageRef.current = true;
+    }
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
+  useEffect(() => {
+    if (!oauthLoading) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (leftPageRef.current) {
+        return;
+      }
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("code") || instagramOAuthGate.flight) {
+        return;
+      }
+      setOauthLoading(false);
+      if (sessionStorage.getItem(INSTAGRAM_OAUTH_PENDING_KEY) === "1") {
+        markCancelled("Не удалось открыть вход Instagram. Нажмите «Повторить подключение».");
+      }
+    }, CONNECT_BUTTON_RESET_MS);
+    return () => window.clearTimeout(timer);
+  }, [markCancelled, oauthLoading]);
 
   async function onConnectOAuth(): Promise<void> {
     if (!setup) {
+      setAttemptFailed(true);
+      setDismissedFailure(false);
       setError("Не удалось загрузить настройки Instagram. Нажмите «Обновить статус» и попробуйте снова.");
+      setAlertPulse((value) => value + 1);
       return;
     }
     const reason = instagramOAuthBlockReason(setup);
     if (reason) {
-      setError(reason);
-      setConnectLabel("Ключи Meta не заданы");
+      setAttemptFailed(true);
+      setDismissedFailure(false);
+      setError("Вход через Instagram сейчас недоступен. Откройте «Подробности».");
       setAlertPulse((value) => value + 1);
+      if (detailsRef.current) {
+        detailsRef.current.open = true;
+      }
       return;
     }
 
     setOauthLoading(true);
     setError("");
     setSuccess("");
+    setAttemptFailed(false);
+    setDismissedFailure(false);
+    leftPageRef.current = false;
     try {
       const redirectUri = setup.redirectUri || `${window.location.origin}/`;
       const state = crypto.randomUUID();
       sessionStorage.setItem(OAUTH_STATE_KEY, state);
       sessionStorage.setItem(OAUTH_REDIRECT_KEY, redirectUri);
+      sessionStorage.setItem(INSTAGRAM_OAUTH_PENDING_KEY, "1");
       window.location.assign(buildInstagramAuthUrl(setup, state));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка Instagram Login");
+      sessionStorage.removeItem(INSTAGRAM_OAUTH_PENDING_KEY);
       setOauthLoading(false);
+      setAttemptFailed(true);
+      setError(err instanceof Error ? plainInstagramOAuthError(err.message, err.message) : "Не удалось открыть вход Instagram.");
     }
+  }
+
+  function dismissFailure() {
+    setError("");
+    setSuccess("");
+    setAttemptFailed(false);
+    setDismissedFailure(true);
+    setOauthLoading(false);
   }
 
   async function onConnectManual(): Promise<void> {
@@ -196,14 +339,18 @@ export function InstagramConnect({ authToken }: Props) {
         throw new Error(result.error || "Не удалось подключить Instagram");
       }
       setPageAccessToken("");
+      setAttemptFailed(false);
+      setDismissedFailure(false);
       setSuccess(
         result.igUsername
           ? `Instagram @${result.igUsername} подключён`
           : "Instagram подключён"
       );
-      await refreshStatus();
+      await refreshStatus({ syncBadge: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка подключения Instagram");
+      setAttemptFailed(true);
+      setDismissedFailure(false);
+      setError(err instanceof Error ? err.message : "Не удалось подключить Instagram");
     } finally {
       setSaving(false);
     }
@@ -219,16 +366,15 @@ export function InstagramConnect({ authToken }: Props) {
       setPageId("");
       setIgUserId("");
       setPageAccessToken("");
-      await refreshStatus();
+      setAttemptFailed(false);
+      setDismissedFailure(false);
+      await refreshStatus({ syncBadge: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка отключения Instagram");
+      setError(err instanceof Error ? err.message : "Не удалось отключить Instagram");
     } finally {
       setSaving(false);
     }
   }
-
-  const blockReason = instagramOAuthBlockReason(setup);
-  const visibleError = error || blockReason;
 
   useEffect(() => {
     if (alertPulse === 0) {
@@ -242,15 +388,25 @@ export function InstagramConnect({ authToken }: Props) {
     void node.offsetWidth;
     node.classList.add("isPulsing");
     node.focus();
-  }, [alertPulse]);
+  }, [alertPulse, error]);
 
-  useEffect(() => {
-    if (!connectLabel) {
-      return;
-    }
-    const timer = window.setTimeout(() => setConnectLabel(""), 2200);
-    return () => window.clearTimeout(timer);
-  }, [connectLabel]);
+  const blockReason = instagramOAuthBlockReason(setup);
+  const badge = resolveLinkBadge({
+    serverConnected: Boolean(status?.connected),
+    attemptFailed,
+    dismissedFailure,
+    connectedLabel: "Подключён"
+  });
+  const badgeText = loading && !status && !attemptFailed && !dismissedFailure ? "Загрузка..." : badge.label;
+  const showConnected = badge.kind === "connected" && Boolean(status?.connected);
+  const retryLabel = attemptFailed || dismissedFailure;
+  const primaryLabel = oauthLoading
+    ? "Подключение..."
+    : retryLabel
+      ? "Повторить подключение"
+      : showConnected
+        ? "Переподключить Instagram"
+        : "Подключить Instagram";
 
   return (
     <div className="instagramConnectCard" id="integration-instagram">
@@ -258,54 +414,56 @@ export function InstagramConnect({ authToken }: Props) {
         <div>
           <h3 className="integrationsPanelTitle">Instagram Direct</h3>
           <p className="integrationsHint">
-            Подключение через <strong>Instagram Login</strong> (приложение Light CRM-IG). Нужны права:{" "}
-            <code>instagram_business_basic</code>,{" "}
-            <code>instagram_business_manage_messages</code>. Webhook:{" "}
-            <code>/api/integrations/instagram/webhook</code>.
+            Подключите профессиональный аккаунт, чтобы сообщения приходили в диалоги.
           </p>
         </div>
-        <span className={`integrationStatusPill ${status?.connected ? "ok" : ""}`}>
-          {loading ? "Загрузка..." : status?.connected ? "Подключён" : "Не подключён"}
+        <span className={`integrationStatusPill ${badge.kind === "connected" ? "ok" : badge.kind === "error" ? "error" : ""}`}>
+          {badgeText}
         </span>
       </div>
 
-      {status?.connected ? (
-        <div className="instagramStatusGrid">
-          <div>
-            <div className="sidebarHint">IG User ID</div>
-            <div className="scriptCardTitle">{status.igUserId || status.pageId || "—"}</div>
-          </div>
-          <div>
-            <div className="sidebarHint">Источник</div>
-            <div className="scriptCardTitle">{status.source || "—"}</div>
-          </div>
-          <div>
-            <div className="sidebarHint">App ID</div>
-            <div className="scriptCardTitle">{setup?.appId || "—"}</div>
-          </div>
-        </div>
-      ) : null}
+      {showConnected ? (
+        <p className="integrationsHint">Сообщения из Instagram Direct приходят в диалоги.</p>
+      ) : (
+        <ol className="integrationsSteps">
+          <li>Нажмите «Подключить Instagram» и войдите в профессиональный аккаунт.</li>
+          <li>Разрешите доступ к сообщениям.</li>
+          <li>Вернитесь сюда — статус сменится на «Подключён».</li>
+        </ol>
+      )}
 
       <div className="instagramConnectActions">
         <button
           type="button"
           className="primaryButton"
-          disabled={oauthLoading || loading}
+          aria-busy={oauthLoading}
+          disabled={oauthLoading || saving || (loading && !attemptFailed && !dismissedFailure)}
           onClick={() => void onConnectOAuth()}
         >
-          {oauthLoading ? "Подключение..." : connectLabel || "Подключить Instagram"}
+          {oauthLoading ? <span className="integrationsSpinner" aria-hidden="true" /> : null}
+          {primaryLabel}
         </button>
-        {status?.connected ? (
+        {showConnected ? (
           <button
             type="button"
             className="secondaryButton"
-            disabled={saving}
+            disabled={saving || oauthLoading}
             onClick={() => void onDisconnect()}
           >
             Отключить
           </button>
         ) : null}
-        <button type="button" className="secondaryButton" disabled={loading} onClick={() => void refreshStatus()}>
+        {error ? (
+          <button type="button" className="secondaryButton" onClick={dismissFailure}>
+            Скрыть ошибку
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="secondaryButton"
+          disabled={loading || oauthLoading}
+          onClick={() => void refreshStatus({ syncBadge: true })}
+        >
           Обновить статус
         </button>
         <button type="button" className="textButton" onClick={() => setShowManual((prev) => !prev)}>
@@ -313,9 +471,9 @@ export function InstagramConnect({ authToken }: Props) {
         </button>
       </div>
 
-      {visibleError ? (
+      {error ? (
         <div ref={blockAlertRef} className="integrationsError" role="alert" tabIndex={-1}>
-          {visibleError}
+          {error}
         </div>
       ) : null}
       {success ? <div className="integrationsSuccess">{success}</div> : null}
@@ -353,12 +511,40 @@ export function InstagramConnect({ authToken }: Props) {
         </div>
       ) : null}
 
-      <div className="integrationsHint">
-        В Meta App добавьте Valid OAuth Redirect URI:{" "}
-        <code>{setup?.redirectUri || `${typeof window !== "undefined" ? window.location.origin : ""}/`}</code>
-        . Verify token:{" "}
-        <code>{status?.verifyToken || setup?.verifyToken || "lightcrm-meta-verify-2026"}</code>.
-      </div>
+      <details className="integrationsDetails" ref={detailsRef}>
+        <summary>Подробности</summary>
+        <div className="integrationsDetailsBody">
+          <div>
+            <div className="integrationsLabel">Права доступа</div>
+            <div className="integrationsValue">{(setup?.scopes || []).join(", ") || "instagram_business_basic, instagram_business_manage_messages"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Webhook</div>
+            <div className="integrationsValue">{status?.webhookPath || setup?.webhookPath || "/api/integrations/instagram/webhook"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Verify token</div>
+            <div className="integrationsValue">{status?.verifyToken || setup?.verifyToken || "—"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Redirect URI</div>
+            <div className="integrationsValue">{setup?.redirectUri || `${typeof window !== "undefined" ? window.location.origin : ""}/`}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">IG User ID</div>
+            <div className="integrationsValue">{status?.igUserId || status?.pageId || "—"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">App ID</div>
+            <div className="integrationsValue">{setup?.appId || "—"}</div>
+          </div>
+          <div>
+            <div className="integrationsLabel">Источник</div>
+            <div className="integrationsValue">{status?.source || "—"}</div>
+          </div>
+          {blockReason ? <div className="integrationsError">{blockReason}</div> : null}
+        </div>
+      </details>
     </div>
   );
 }

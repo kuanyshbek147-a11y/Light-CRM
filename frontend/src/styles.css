@@ -4166,6 +4166,51 @@ body.pwa-standalone {
   color: #166534;
 }
 
+.integrationsBadge.error,
+.integrationStatusPill.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.integrationsSpinner {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.125em;
+  animation: integrationsSpin 0.7s linear infinite;
+}
+
+@keyframes integrationsSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.integrationsDetails {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 0 12px;
+}
+
+.integrationsDetails summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 0;
+  color: #334155;
+}
+
+.integrationsDetailsBody {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
 .integrationsSuccess {
   color: #166534;
   background: #f0fdf4;
