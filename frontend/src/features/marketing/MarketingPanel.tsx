@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { RU_DATETIME_ERROR, formatRuDateTime, userTimeZone, zonedLocalInputToIso } from "../../shared/lib/dateTime";
+import { RuDateTimeField } from "../../shared/ui/RuDateTimeField";
 import {
   activateAdsCampaign,
   createAdsCampaign,
@@ -119,14 +121,7 @@ const audienceStatusLabel: Record<string, string> = {
 const AI_UNAVAILABLE = "ИИ пока не подключён. Напишите текст вручную.";
 
 function fromLocalInputValue(value: string): string | null {
-  if (!value.trim()) {
-    return null;
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toISOString();
+  return zonedLocalInputToIso(value, userTimeZone());
 }
 
 export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props) {
@@ -180,6 +175,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
   const [postChannel, setPostChannel] = useState<MarketingContentPost["channel"]>("telegram");
   const [postStatus, setPostStatus] = useState<MarketingContentPost["status"]>("ready");
   const [postPlannedLocal, setPostPlannedLocal] = useState("");
+  const [postDateInvalid, setPostDateInvalid] = useState(false);
   const [postSegmentId, setPostSegmentId] = useState("");
   const [postImageUrl, setPostImageUrl] = useState("");
   const [postAutoBroadcast, setPostAutoBroadcast] = useState(false);
@@ -411,6 +407,10 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
   async function submitPost(): Promise<void> {
     const title = postTitle.trim();
     const body = postBody.trim();
+    if (postDateInvalid) {
+      onToast?.(RU_DATETIME_ERROR, "error");
+      return;
+    }
     if (!title || !body) {
       onToast?.("Укажите заголовок и текст поста", "error");
       return;
@@ -440,6 +440,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
       setPostBody("");
       setPostImageUrl("");
       setPostPlannedLocal("");
+      setPostDateInvalid(false);
       setPostStatus("ready");
       onToast?.("Пост добавлен в план", "success");
       await refresh();
@@ -955,11 +956,12 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                 </label>
                 <label className="marketingFieldLabel">
                   <span>Когда опубликовать</span>
-                  <input
+                  <RuDateTimeField
                     className="filterInput"
-                    type="datetime-local"
+                    ariaLabel="Когда опубликовать"
                     value={postPlannedLocal}
-                    onChange={(event) => setPostPlannedLocal(event.target.value)}
+                    onChange={setPostPlannedLocal}
+                    onInvalidChange={setPostDateInvalid}
                   />
                 </label>
                 {postChannel === "instagram" ? (
@@ -1086,7 +1088,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                     <div className="taskCardTitle">{post.title}</div>
                     <div className="taskCardMeta">
                       {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
-                      {post.planned_at ? ` · на ${new Date(post.planned_at).toLocaleString("ru-RU")}` : ""}
+                      {post.planned_at ? ` · на ${formatRuDateTime(post.planned_at)}` : ""}
                       {post.auto_publish_social ? " · опубликуется сам" : ""}
                       {post.auto_broadcast ? " · уйдёт клиентам" : ""}
                       {post.campaign_id ? " · есть рассылка" : ""}
@@ -1283,7 +1285,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
             <div className="scriptPanelTitle">Подключение рекламы</div>
             <div className="sidebarHint" style={{ marginBottom: 10 }}>
               {adsSettings?.connected
-                ? `Реклама подключена${adsSettings.connectedAt ? ` · ${new Date(adsSettings.connectedAt).toLocaleString("ru-RU")}` : ""}. Ключ можно заменить ниже.`
+                ? `Реклама подключена${adsSettings.connectedAt ? ` · ${formatRuDateTime(adsSettings.connectedAt)}` : ""}. Ключ можно заменить ниже.`
                 : "Пока не подключено. Нужен ключ рекламного кабинета Facebook и Instagram — это отдельно от переписки в WhatsApp."}
             </div>
             <div className="scriptForm">
@@ -1377,7 +1379,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                   <div className="taskCardMeta">
                     {audienceStatusLabel[audience.status] || audience.status} · {audience.size} человек
                     {audience.last_sync_at
-                      ? ` · обновлено ${new Date(audience.last_sync_at).toLocaleString("ru-RU")}`
+                      ? ` · обновлено ${formatRuDateTime(audience.last_sync_at)}`
                       : ""}
                     {audience.last_error ? ` · ${audience.last_error}` : ""}
                   </div>
@@ -1645,7 +1647,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                     <div className="taskCardMeta">
                       {postStatusLabel[post.status]} · {postChannelLabel[post.channel]}
                       {post.planned_at
-                        ? ` · ${new Date(post.planned_at).toLocaleString("ru-RU")}`
+                        ? ` · ${formatRuDateTime(post.planned_at)}`
                         : ""}
                       {post.auto_publish_social ? " · авто-соцсеть" : ""}
                       {post.auto_broadcast ? " · авто-рассылка" : ""}
@@ -1911,9 +1913,9 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                 <strong>{postStatusLabel[row.status as MarketingContentPost["status"]] || row.status}</strong>
                 <span>
                   {row.published_at
-                    ? new Date(row.published_at).toLocaleString()
+                    ? formatRuDateTime(row.published_at)
                     : row.planned_at
-                      ? new Date(row.planned_at).toLocaleString()
+                      ? formatRuDateTime(row.planned_at)
                       : "—"}
                 </span>
                 <span>{row.publish_error || "—"}</span>

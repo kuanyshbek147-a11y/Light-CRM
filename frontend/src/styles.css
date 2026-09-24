@@ -1541,6 +1541,14 @@ body.pwa-standalone {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
   transition: padding 0.2s ease;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c7cffc transparent;
 }
 
 .appShell.leftMenuCollapsed .leftMenu {
@@ -1635,11 +1643,29 @@ body.pwa-standalone {
   transition: padding 0.2s ease, gap 0.2s ease;
 }
 
+.leftMenu > .leftMenuButton {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 40px;
+  padding: 8px 10px;
+  overflow: hidden;
+}
+
 .leftMenuButtonLabel {
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
   transition: opacity 0.15s ease, max-width 0.2s ease;
   max-width: 180px;
+}
+
+.leftMenu > .leftMenuButton .leftMenuButtonLabel {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  max-width: none;
+  line-height: 1.25;
 }
 
 .appShell.leftMenuCollapsed .leftMenuButton {
@@ -1648,9 +1674,12 @@ body.pwa-standalone {
   gap: 0;
 }
 
+.appShell.leftMenuCollapsed .leftMenu > .leftMenuButton .leftMenuButtonLabel,
 .appShell.leftMenuCollapsed .leftMenuButtonLabel {
   opacity: 0;
   max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -1847,6 +1876,26 @@ body.pwa-standalone {
   border: 1px solid #e5e7eb;
   outline: none;
   background: #fff;
+}
+
+.ruDateField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ruDateField input {
+  width: 100%;
+  min-width: 0;
+}
+
+.ruDateFieldError {
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .searchInput {
@@ -2451,9 +2500,20 @@ body.pwa-standalone {
 }
 
 .pipelinePage {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pipelinePage > .pipelineKpiPanel,
+.pipelinePage > .pipelineBoardGrid {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .analyticsPage {
@@ -2849,21 +2909,37 @@ body.pwa-standalone {
 }
 
 .pipelineBoardGrid {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(240px, 1fr);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   gap: 12px;
-  overflow: auto;
-  padding: 12px 14px 14px;
+  width: 100%;
+  max-width: 100%;
+  height: min(68vh, 640px);
+  min-height: 280px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scroll-snap-type: x proximity;
+  padding: 12px 14px 18px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pipelineBoardColumn {
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   background: #fff;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 220px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 320px;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  scroll-snap-align: start;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
@@ -2900,6 +2976,9 @@ body.pwa-standalone {
   display: grid;
   gap: 8px;
   align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .pipelineBoardCard {
@@ -2941,6 +3020,8 @@ body.pwa-standalone {
 .pipelineBoardCardActions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 2px;
 }
 
@@ -3629,9 +3710,11 @@ body.pwa-standalone {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 14px 14px 8px 14px;
   border-bottom: 1px solid #eef2f7;
+  min-width: 0;
 }
 
 .railHeaderText {
@@ -3828,15 +3911,28 @@ body.pwa-standalone {
   }
 
   .workspaceLayout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
+    min-width: 0;
   }
 
   .leftMenu {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(180px, 1fr);
-    overflow: auto;
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    align-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
     padding: 10px 12px;
+  }
+
+  .leftMenu > .leftMenuButton {
+    flex: 1 1 148px;
+    width: auto;
   }
 
   .appGrid,
@@ -3863,6 +3959,31 @@ body.pwa-standalone {
 
   .rightRail {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 769px) {
+  .leftMenu {
+    flex-flow: row nowrap;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .leftMenu > .leftMenuButton {
+    flex: 0 0 auto;
+    width: auto;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .leftMenu > .leftMenuButton .leftMenuButtonLabel {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 168px;
+    line-height: 1.2;
   }
 }
 
@@ -3939,16 +4060,30 @@ body.pwa-standalone {
 
   .workspaceLayout {
     padding: 10px;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: visible;
+    min-width: 0;
   }
 
   .leftMenu {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(160px, 1fr);
-    overflow: auto;
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    align-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    max-height: none;
+    overflow: visible;
     padding: 10px 12px;
+  }
+
+  .leftMenu > .leftMenuButton {
+    flex: 1 1 140px;
+    width: auto;
   }
 
   .appGrid,
@@ -4116,9 +4251,31 @@ body.pwa-standalone {
     grid-column: auto;
   }
 
+  .pipelinePage {
+    overflow: visible;
+    height: auto;
+    max-width: 100%;
+  }
+
   .pipelineBoardGrid {
-    grid-auto-columns: minmax(220px, 78vw);
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+    max-width: 100%;
     padding: 10px 12px 12px;
+  }
+
+  .pipelineBoardColumn {
+    flex: none;
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
   }
 
   .sidebar,

@@ -1117,6 +1117,19 @@
   background: #f8f9ff;
 }
 
+.clientCardInput:has(.ruDateFieldError) {
+  height: auto;
+  min-height: 48px;
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+.clientCardInput .ruDateField {
+  flex: 1;
+  width: auto;
+}
+
 .clientCardInput input,
 .clientCardInput select {
   flex: 1;
@@ -1597,6 +1610,11 @@
     padding: 0 0 80px;
   }
 
+  .appShell.hasBottomNav .knowledgePage.card {
+    padding-bottom: calc(var(--nav-height) + 28px);
+    overflow: visible;
+  }
+
   .appShell.mobileChatOpen .bottomNav,
   .appShell.mobileChatOpen .fabButton {
     display: none;
@@ -1671,6 +1689,10 @@
     max-height: 100vh;
     border-radius: 24px 0 0 24px;
     margin: 0;
+  }
+
+  .pipelinePage > .mobilePageHeader {
+    display: none;
   }
 
   .pipelineSectionToggle {
