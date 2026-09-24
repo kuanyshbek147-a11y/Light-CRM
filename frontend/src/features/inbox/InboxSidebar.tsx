@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
@@ -48,6 +48,158 @@ function formatSnippet(conversation: Conversation, fallback: string): string {
     return "📎 [Медиа]";
   }
   return body;
+}
+
+const CHANNEL_FILTERS = [
+  ["all", "Все"],
+  ["whatsapp", "WhatsApp"],
+  ["telegram", "Telegram"],
+  ["instagram", "Instagram"],
+  ["web", "Сайт"],
+  ["email", "Email"]
+] as const;
+
+function ChannelScrollChevron(props: { direction: "left" | "right" }): JSX.Element {
+  const path = props.direction === "left" ? "M12.5 4.5 7 10l5.5 5.5" : "M7.5 4.5 13 10l-5.5 5.5";
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChannelFilters(props: {
+  value: InboxChannelFilter;
+  onChange: (value: InboxChannelFilter) => void;
+}): JSX.Element {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const update = (): void => {
+      const lastChip = el.querySelector<HTMLElement>(".channelChip:last-of-type");
+      const lastEnd = lastChip
+        ? lastChip.getBoundingClientRect().right - el.getBoundingClientRect().left + el.scrollLeft
+        : 0;
+      const left = el.scrollLeft > 2;
+      const right = lastEnd - el.clientWidth - el.scrollLeft > 2;
+      setEdges((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+
+    let cancelled = false;
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    window.addEventListener("resize", update);
+    if (document.fonts) {
+      void document.fonts.ready.then(() => {
+        if (!cancelled) {
+          update();
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  function scrollChannels(direction: -1 | 1): void {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+    const chips = Array.from(el.querySelectorAll<HTMLButtonElement>(".channelChip"));
+    const origin = el.getBoundingClientRect().left;
+    const starts = chips.map((chip) => chip.getBoundingClientRect().left - origin + el.scrollLeft);
+    const widths = chips.map((chip) => chip.getBoundingClientRect().width);
+    const viewLeft = el.scrollLeft;
+    const viewRight = viewLeft + el.clientWidth;
+    const edge = 4;
+
+    if (direction > 0) {
+      const index = starts.findIndex((start, chipIndex) => start + widths[chipIndex] > viewRight - edge);
+      const left = index >= 0 ? starts[index] : el.scrollWidth - el.clientWidth;
+      el.scrollTo({ left });
+      return;
+    }
+
+    let index = -1;
+    for (let chipIndex = starts.length - 1; chipIndex >= 0; chipIndex -= 1) {
+      if (starts[chipIndex] < viewLeft + edge) {
+        index = chipIndex;
+        break;
+      }
+    }
+    if (index < 0) {
+      el.scrollTo({ left: 0 });
+      return;
+    }
+    el.scrollTo({
+      left: Math.max(0, starts[index] + widths[index] - el.clientWidth)
+    });
+  }
+
+  return (
+    <div
+      className={`channelFiltersBar${edges.left ? " canScrollLeft" : ""}${edges.right ? " canScrollRight" : ""}`}
+    >
+      <button
+        type="button"
+        className="channelScrollBtn channelScrollBtnPrev"
+        aria-label="Предыдущие каналы"
+        aria-hidden={!edges.left}
+        tabIndex={edges.left ? 0 : -1}
+        disabled={!edges.left}
+        onClick={() => scrollChannels(-1)}
+      >
+        <ChannelScrollChevron direction="left" />
+      </button>
+      <div ref={scrollerRef} className="channelFilters" role="tablist" aria-label="Каналы">
+        {CHANNEL_FILTERS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={props.value === value}
+            className={`channelChip ${props.value === value ? "active" : ""}`}
+            data-testid={`channel-filter-${value}`}
+            onClick={() => props.onChange(value)}
+          >
+            {label}
+          </button>
+        ))}
+        <span className="channelFiltersSpacer" aria-hidden="true" />
+      </div>
+      <button
+        type="button"
+        className="channelScrollBtn channelScrollBtnNext"
+        aria-label="Следующие каналы"
+        aria-hidden={!edges.right}
+        tabIndex={edges.right ? 0 : -1}
+        disabled={!edges.right}
+        onClick={() => scrollChannels(1)}
+      >
+        <ChannelScrollChevron direction="right" />
+      </button>
+    </div>
+  );
 }
 
 type InboxSidebarUi = {
@@ -256,28 +408,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         </div>
       </div>
 
-      <div className="channelFilters" role="tablist" aria-label="Channel filters">
-        {([
-          ["all", "Все"],
-          ["whatsapp", "WhatsApp"],
-          ["telegram", "Telegram"],
-          ["instagram", "Instagram"],
-          ["web", "Сайт"],
-          ["email", "Email"]
-        ] as const).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={channelFilter === value}
-            className={`channelChip ${channelFilter === value ? "active" : ""}`}
-            data-testid={`channel-filter-${value}`}
-            onClick={() => onChannelFilterChange(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <ChannelFilters value={channelFilter} onChange={onChannelFilterChange} />
 
       <div className="sidebarHeader">
         <div>
