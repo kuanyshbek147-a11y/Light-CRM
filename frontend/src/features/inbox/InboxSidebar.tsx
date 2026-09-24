@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
+import { InboxChannelEmpty } from "./InboxChannelEmpty";
+import { conversationsForChannel, type InboxChannelFilter } from "./lib/channelFilter";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
-
-type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web" | "email";
 
 function channelLabel(channel: Conversation["channel"]): string {
   switch (channel) {
@@ -184,6 +184,10 @@ type InboxSidebarProps = {
   onRemoveFilterPreset: (presetId: string) => void;
   onSelectConversation: (conversationId: string) => void;
   onOpenCustomerCard: (conversationId: string) => void;
+  channelFilter: InboxChannelFilter;
+  onChannelFilterChange: (next: InboxChannelFilter) => void;
+  isAdmin?: boolean;
+  onConnectChannel?: () => void;
   loading?: boolean;
   emptyContent?: JSX.Element | null;
 };
@@ -209,18 +213,19 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onRemoveFilterPreset,
     onSelectConversation,
     onOpenCustomerCard,
+    channelFilter,
+    onChannelFilterChange,
+    isAdmin = false,
+    onConnectChannel,
     loading = false,
     emptyContent = null
   } = props;
 
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
-
-  const visibleConversations = useMemo(() => {
-    if (channelFilter === "all") {
-      return conversations;
-    }
-    return conversations.filter((conversation) => conversation.channel === channelFilter);
-  }, [channelFilter, conversations]);
+  const visibleConversations = useMemo(
+    () => conversationsForChannel(conversations, channelFilter),
+    [channelFilter, conversations]
+  );
+  const channelFilterEmpty = !loading && channelFilter !== "all" && visibleConversations.length === 0;
 
   return (
     <aside className="sidebar card">
@@ -266,7 +271,8 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
             role="tab"
             aria-selected={channelFilter === value}
             className={`channelChip ${channelFilter === value ? "active" : ""}`}
-            onClick={() => setChannelFilter(value)}
+            data-testid={`channel-filter-${value}`}
+            onClick={() => onChannelFilterChange(value)}
           >
             {label}
           </button>
@@ -276,7 +282,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
       <div className="sidebarHeader">
         <div>
           <div className="sidebarTitle">{ui.inboxTitle}</div>
-          <div className="sidebarHint">{conversations.length} {ui.chatsSuffix}</div>
+          <div className="sidebarHint">{visibleConversations.length} {ui.chatsSuffix}</div>
         </div>
         <button
           type="button"
@@ -403,7 +409,13 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
           </li>
         ) : null}
         {!loading && !visibleConversations.length ? (
-          <li className="chatListEmptyItem">{emptyContent || <div className="emptyScriptState">Диалогов пока нет</div>}</li>
+          <li className="chatListEmptyItem">
+            {channelFilterEmpty ? (
+              <InboxChannelEmpty isAdmin={isAdmin} onReset={() => onChannelFilterChange("all")} onConnect={onConnectChannel} />
+            ) : (
+              emptyContent || <div className="emptyScriptState">Диалогов пока нет</div>
+            )}
+          </li>
         ) : null}
         {!loading
           ? visibleConversations.map((conversation) => (

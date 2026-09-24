@@ -1,5 +1,6 @@
-import { useEffect } from "react";
-import type { OnboardingStepId, OnboardingSteps } from "./onboardingStorage";
+import { useEffect, useState } from "react";
+import { ADMIN_CHANNEL_REQUEST_TEXT, type OnboardingStepId, type OnboardingSteps } from "./onboardingStorage";
+import { copyText } from "./copyText";
 
 export const FIRST_RUN_MENU_LABEL = "Быстрый старт";
 
@@ -13,7 +14,7 @@ const STEPS: readonly StepCopy[] = [
   {
     id: "channel",
     title: "Подключите канал",
-    body: "Подключите WhatsApp или Telegram. Когда канал подключён, новые сообщения клиентов сами появятся в разделе «Диалоги»."
+    body: "Подключите WhatsApp, Instagram или Telegram. Когда канал подключён, новые сообщения клиентов сами появятся в разделе «Диалоги»."
   },
   {
     id: "lead",
@@ -35,6 +36,7 @@ type Props = {
   demoData: boolean;
   onStepChange: (step: number) => void;
   onOpenChannel: () => void;
+  onChannelRequestCopied: () => void;
   onOpenDialogs: () => void;
   onOpenTasks: () => void;
   onOpenPipeline: () => void;
@@ -48,6 +50,11 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
   const { mode, step, stepsDone, isAdmin, demoData, onMinimize } = props;
   const safeStep = Math.min(Math.max(step, 0), STEPS.length - 1);
   const current = STEPS[safeStep];
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+
+  useEffect(() => {
+    setCopyState("idle");
+  }, [safeStep]);
 
   useEffect(() => {
     if (mode !== "overlay") return;
@@ -57,6 +64,12 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mode, onMinimize]);
+
+  async function copyAdminRequest(): Promise<void> {
+    const copied = await copyText(ADMIN_CHANNEL_REQUEST_TEXT);
+    setCopyState(copied ? "copied" : "failed");
+    if (copied) props.onChannelRequestCopied();
+  }
 
   if (mode === "hidden" || !current) return null;
 
@@ -139,14 +152,40 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
                   <div className="firstRunStepBody">
                     <p>{item.body}</p>
                     {item.id === "channel" && !isAdmin ? (
-                      <p className="firstRunStepHint">
-                        Подключить канал может администратор компании. Вам достаточно открывать диалоги и отвечать клиентам.
-                      </p>
+                      <>
+                        <p className="firstRunStepHint" data-testid="first-run-training-note">
+                          Пока канал не подключён, чаты на экране — учебные данные. Живые сообщения появятся после того, как администратор подключит WhatsApp, Instagram или Telegram.
+                        </p>
+                        <p className="firstRunRequestPreview" data-testid="first-run-admin-request">
+                          {ADMIN_CHANNEL_REQUEST_TEXT}
+                        </p>
+                        <div className="firstRunStepActions">
+                          <button
+                            type="button"
+                            className="primaryButton firstRunCopyButton"
+                            data-testid="first-run-copy-admin-request"
+                            onClick={() => void copyAdminRequest()}
+                          >
+                            Скопировать просьбу администратору
+                          </button>
+                        </div>
+                        {copyState === "copied" ? (
+                          <p className="firstRunCopyStatus" data-testid="first-run-copy-status">
+                            Текст скопирован. Отправьте его администратору.
+                          </p>
+                        ) : null}
+                        {copyState === "failed" ? (
+                          <p className="firstRunCopyStatus failed" data-testid="first-run-copy-status">
+                            Не удалось скопировать. Выделите текст выше и скопируйте вручную.
+                          </p>
+                        ) : null}
+                      </>
                     ) : null}
+                    {item.id !== "channel" || isAdmin ? (
                     <div className="firstRunStepActions">
                       {item.id === "channel" && isAdmin ? (
-                        <button type="button" className="primaryButton" onClick={props.onOpenChannel}>
-                          Открыть подключение
+                        <button type="button" className="primaryButton" data-testid="first-run-open-integrations" onClick={props.onOpenChannel}>
+                          Открыть интеграции
                         </button>
                       ) : null}
                       {item.id === "lead" ? (
@@ -165,6 +204,7 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
                         </>
                       ) : null}
                     </div>
+                    ) : null}
                   </div>
                 ) : null}
               </li>
