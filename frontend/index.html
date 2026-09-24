@@ -5,7 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#5b5ce9" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#5b5ce9" media="(prefers-color-scheme: dark)" />
-    <meta name="description" content="Light CRM — чаты, сделки и маркетинг" />
+    <meta
+      name="description"
+      content="CRM для WhatsApp и Telegram в Казахстане: единый inbox, сделки и быстрые ответы. Демо-вход и пилот 14 дней."
+    />
+    <link rel="canonical" href="https://light-crm-kz.netlify.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:site_name" content="Light CRM" />
+    <meta property="og:title" content="Light CRM — CRM для WhatsApp в Казахстане" />
+    <meta
+      property="og:description"
+      content="CRM для WhatsApp и Telegram в Казахстане: единый inbox, сделки и быстрые ответы. Демо-вход и пилот 14 дней."
+    />
+    <meta property="og:url" content="https://light-crm-kz.netlify.app/" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Light CRM" />
@@ -14,7 +27,199 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>Light CRM</title>
+    <title>Light CRM — CRM для WhatsApp в Казахстане</title>
+    <style>
+      .seoShell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 420px);
+        gap: 24px;
+        padding: 32px;
+        box-sizing: border-box;
+        background:
+          radial-gradient(circle at top left, rgba(79, 70, 229, 0.14), transparent 32%),
+          linear-gradient(180deg, #f8faff 0%, #f3f5fb 100%);
+        color: #151a2d;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      .seoShellHero,
+      .seoShellLogin {
+        box-sizing: border-box;
+      }
+      .seoShellHero {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 16px;
+        padding: 24px 8px;
+      }
+      .seoShellBadge {
+        display: inline-flex;
+        width: fit-content;
+        margin: 0;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, 0.08);
+        color: #4f46e5;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .seoShell h1 {
+        margin: 0;
+        max-width: 720px;
+        font-size: 52px;
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+      }
+      .seoShellLead,
+      .seoShellHint {
+        margin: 0;
+        max-width: 640px;
+        color: #475569;
+        font-size: 18px;
+        line-height: 1.55;
+      }
+      .seoShellHint {
+        color: #64748b;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .seoShellCtas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .seoShellCtas a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 180px;
+        height: 48px;
+        padding: 0 18px;
+        border-radius: 14px;
+        font-weight: 800;
+        text-decoration: none;
+        box-sizing: border-box;
+      }
+      .seoShellCtas a:first-child {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: #fff;
+        box-shadow: 0 14px 30px rgba(79, 70, 229, 0.28);
+      }
+      .seoShellCtas a:last-child {
+        background: #fff;
+        color: #312e81;
+        border: 1px solid #c7d2fe;
+      }
+      .seoShellFeatures {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .seoShellFeatures li {
+        display: grid;
+        gap: 8px;
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid #e5e7eb;
+      }
+      .seoShellFeatures span {
+        color: #64748b;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .seoShellGuide {
+        width: fit-content;
+        color: #4338ca;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .seoShellLogin {
+        align-self: center;
+        padding: 22px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid #e5e7eb;
+        border-radius: 24px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.1);
+      }
+      .seoShellBrand {
+        margin: 0 0 8px;
+        font-size: 14px;
+        font-weight: 800;
+        color: #4f46e5;
+      }
+      .seoShellLogin h2 {
+        margin: 0 0 8px;
+        font-size: 26px;
+        letter-spacing: -0.03em;
+      }
+      .seoShellLogin p {
+        margin: 0 0 14px;
+        color: #64748b;
+        line-height: 1.5;
+      }
+      .seoShellLogin form {
+        display: grid;
+        gap: 12px;
+      }
+      .seoShellLogin label {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #475569;
+      }
+      .seoShellLogin input {
+        height: 44px;
+        padding: 0 14px;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        font-size: 15px;
+      }
+      .seoShellLogin button,
+      .seoShellQuick {
+        height: 48px;
+        border: 0;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: #fff;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .seoShellQuickRow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .seoShellQuick.secondary {
+        background: #fff;
+        color: #312e81;
+        border: 1px solid #c7d2fe;
+      }
+      .seoShellCreds {
+        margin: 12px 0 0;
+        font-size: 14px;
+      }
+      @media (max-width: 900px) {
+        .seoShell {
+          grid-template-columns: 1fr;
+          padding: 20px;
+        }
+        .seoShell h1 {
+          font-size: 36px;
+        }
+        .seoShellFeatures {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
     <script>
       // Wake Render Free ASAP — before React bundle parses.
       try {
@@ -29,15 +234,71 @@
   </head>
   <body>
     <div id="root">
-      <div style="margin: 24px; font-family: system-ui, sans-serif; color: #475569; max-width: 28rem">
-        <p style="margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; color: #0f172a">Загрузка Light CRM…</p>
-        <p style="margin: 0; font-size: 0.9rem; line-height: 1.45">
-          Открываем интерфейс. Если сервер спал — вход может занять до минуты.
-        </p>
-      </div>
+      <main class="seoShell">
+        <section class="seoShellHero">
+          <p class="seoShellBadge">CRM для WhatsApp и Telegram</p>
+          <h1>Управляйте всеми диалогами с клиентами в одном современном окне.</h1>
+          <p class="seoShellLead">
+            Light CRM — CRM для WhatsApp в Казахстане. Отвечайте быстрее, сегментируйте клиентов, обновляйте карточки и
+            контролируйте продажи из единого inbox.
+          </p>
+          <div class="seoShellCtas">
+            <a
+              href="https://wa.me/77003131055?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!%20%D0%A5%D0%BE%D1%87%D1%83%20%D0%B7%D0%B0%D0%BF%D0%B8%D1%81%D0%B0%D1%82%D1%8C%D1%81%D1%8F%20%D0%BD%D0%B0%20%D0%B4%D0%B5%D0%BC%D0%BE%20Light%20CRM%20(%D0%BF%D0%B8%D0%BB%D0%BE%D1%82%2014%20%D0%B4%D0%BD%D0%B5%D0%B9)."
+              >Записаться на демо</a
+            >
+            <a
+              href="https://wa.me/77003131055?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!%20%D0%9D%D0%B0%D0%BF%D0%B8%D1%88%D0%B8%D1%82%D0%B5,%20%D0%BF%D0%BE%D0%B6%D0%B0%D0%BB%D1%83%D0%B9%D1%81%D1%82%D0%B0,%20%D0%B2%20WhatsApp%20%E2%80%94%20%D1%85%D0%BE%D1%87%D1%83%20%D0%B4%D0%B5%D0%BC%D0%BE%20Light%20CRM."
+              >WhatsApp</a
+            >
+          </div>
+          <p class="seoShellHint">Пилот 14 дней под ключ · после пилота 29 900 ₸/мес</p>
+          <ul class="seoShellFeatures">
+            <li>
+              <strong>Единый inbox</strong>
+              <span>Сообщения из WhatsApp и Telegram в одном интерфейсе.</span>
+            </li>
+            <li>
+              <strong>Умные когорты</strong>
+              <span>Фильтруйте по городу, причине, типу и категории.</span>
+            </li>
+            <li>
+              <strong>Быстрые ответы</strong>
+              <span>Открывайте диалог и отвечайте клиентам прямо из CRM.</span>
+            </li>
+          </ul>
+          <a class="seoShellGuide" href="/guides/crm-whatsapp-kazakhstan"
+            >CRM с WhatsApp для продаж и поддержки в Казахстане</a
+          >
+        </section>
+        <aside class="seoShellLogin">
+          <p class="seoShellBrand">Light CRM · Демо-доступ</p>
+          <h2>Открыть рабочее пространство</h2>
+          <p>Введите логин и пароль оператора. Можно указать логин или email.</p>
+          <form>
+            <label>
+              Логин или email
+              <input type="text" name="login" autocomplete="username" placeholder="operator" />
+            </label>
+            <label>
+              Пароль
+              <input type="password" name="password" autocomplete="current-password" placeholder="•••••••" />
+            </label>
+            <button type="button">Войти</button>
+          </form>
+          <div class="seoShellQuickRow">
+            <button class="seoShellQuick" type="button">Войти как оператор</button>
+            <button class="seoShellQuick secondary" type="button">Как админ</button>
+          </div>
+          <p class="seoShellCreds">Оператор: логин operator, пароль demo123</p>
+          <p class="seoShellCreds">Админ: логин admin или admin@demo.local, пароль demo123</p>
+        </aside>
+      </main>
     </div>
     <noscript>
-      <p style="margin: 24px; font-family: system-ui, sans-serif">Для работы Light CRM нужен JavaScript.</p>
+      <p style="margin: 24px; font-family: system-ui, sans-serif">
+        Демо-вход в рабочее пространство выполняется скриптом страницы. Запись на демо в WhatsApp доступна по кнопке выше.
+      </p>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>
     <script>
