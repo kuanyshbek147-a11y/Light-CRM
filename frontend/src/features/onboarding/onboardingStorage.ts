@@ -13,6 +13,38 @@ export type OnboardingState = {
 
 export const ONBOARDING_STEP_IDS: readonly OnboardingStepId[] = ["channel", "lead", "next"];
 
+/** Текст, который оператор отправляет администратору, чтобы подключили каналы. */
+export const ADMIN_CHANNEL_REQUEST_TEXT =
+  "Здравствуйте! Подключите, пожалуйста, в Light CRM каналы WhatsApp, Instagram и Telegram — раздел «Интеграции». Пока канал не подключён, в диалогах только учебные чаты, живые сообщения клиентов не приходят.";
+
+export function onboardingStepsFinished(steps: OnboardingSteps): boolean {
+  return ONBOARDING_STEP_IDS.every((id) => steps[id]);
+}
+
+export function withOnboardingStep(state: OnboardingState, stepId: OnboardingStepId): OnboardingState {
+  if (state.steps[stepId]) return state;
+  return {
+    status: state.status,
+    steps: { ...state.steps, [stepId]: true }
+  };
+}
+
+/**
+ * «Готово» и «Пропустить» закрывают мастер и не отмечают несделанные шаги.
+ * Статус completed ставится только когда все три шага уже отмечены действиями.
+ */
+export function closeOnboarding(state: OnboardingState, intent: "skip" | "done"): OnboardingState {
+  const steps = { ...state.steps };
+  if (state.status === "completed" && onboardingStepsFinished(steps)) {
+    return { status: "completed", steps };
+  }
+  const finished = onboardingStepsFinished(steps);
+  return {
+    status: intent === "done" && finished ? "completed" : "skipped",
+    steps
+  };
+}
+
 const EMPTY_STEPS: OnboardingSteps = {
   channel: false,
   lead: false,

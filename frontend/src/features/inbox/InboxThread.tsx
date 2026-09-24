@@ -92,6 +92,7 @@ type InboxThreadProps = {
   onAppendEmoji: (emoji: string) => void;
   onBack?: () => void;
   backLabel?: string;
+  emptyOverride?: JSX.Element | null;
 };
 
 export function InboxThread(props: InboxThreadProps): JSX.Element {
@@ -154,12 +155,18 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     onSendMessage,
     onAppendEmoji,
     onBack,
-    backLabel
+    backLabel,
+    emptyOverride = null
   } = props;
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const micHoldRef = useRef(false);
   const micHoldStartedAtRef = useRef(0);
   const lastMicTapAtRef = useRef(0);
+
+  if (emptyOverride) {
+    return <section className="thread card">{emptyOverride}</section>;
+  }
 
   const contactInitial = (selectedConversationData?.contact_name || "?").trim().slice(0, 1).toUpperCase();
 
