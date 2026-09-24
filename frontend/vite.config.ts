@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { renderGuideDocument } from "./src/features/guides/guideArticle";
+import { STATIC_GUIDES, renderGuideDocument } from "./src/features/guides/guideArticle";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 
@@ -13,14 +13,23 @@ function guideStaticHtmlPlugin(): Plugin {
     apply: "build",
     writeBundle(options) {
       if (!options.dir) return;
-      const markdown = readFileSync(
-        path.join(frontendRoot, "src/features/guides/crm-whatsapp-kazakhstan.md"),
-        "utf8"
-      );
       const css = readFileSync(path.join(frontendRoot, "src/features/guides/guideArticle.css"), "utf8");
-      const target = path.join(options.dir, "guides/crm-whatsapp-kazakhstan");
-      mkdirSync(target, { recursive: true });
-      writeFileSync(path.join(target, "index.html"), renderGuideDocument(markdown, css), "utf8");
+      for (const guide of STATIC_GUIDES) {
+        const markdown = readFileSync(
+          path.join(frontendRoot, "src/features/guides", guide.sourceFile),
+          "utf8"
+        );
+        const target = path.join(options.dir, guide.path.replace(/^\//, ""));
+        mkdirSync(target, { recursive: true });
+        writeFileSync(
+          path.join(target, "index.html"),
+          renderGuideDocument(markdown, css, {
+            canonicalUrl: guide.canonicalUrl,
+            description: guide.description
+          }),
+          "utf8"
+        );
+      }
     }
   };
 }

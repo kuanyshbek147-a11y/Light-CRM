@@ -4,9 +4,55 @@ export const GUIDE_CANONICAL_URL = "https://light-crm-kz.netlify.app/guides/crm-
 export const GUIDE_SITE_NAME = "Light CRM";
 export const GUIDE_HOME_URL = "https://light-crm-kz.netlify.app/";
 
+export const WHATSAPP_CHAT_HISTORY_GUIDE_PATH = "/guides/whatsapp-chat-history-in-deal";
+export const WHATSAPP_CHAT_HISTORY_GUIDE_TITLE =
+  "История переписки WhatsApp в сделке: как отвечать из CRM";
+export const WHATSAPP_CHAT_HISTORY_GUIDE_DESCRIPTION =
+  "История WhatsApp рядом со сделкой: отвечать из CRM (веб или приложение), видеть чат коллегам. Для продаж и поддержки в Казахстане.";
+export const WHATSAPP_CHAT_HISTORY_GUIDE_CANONICAL_URL =
+  "https://light-crm-kz.netlify.app/guides/whatsapp-chat-history-in-deal";
+
+export type StaticGuide = {
+  path: string;
+  canonicalUrl: string;
+  sourceFile: string;
+  description?: string;
+};
+
+export const STATIC_GUIDES: readonly StaticGuide[] = [
+  {
+    path: GUIDE_PATH,
+    canonicalUrl: GUIDE_CANONICAL_URL,
+    sourceFile: "crm-whatsapp-kazakhstan.md"
+  },
+  {
+    path: WHATSAPP_CHAT_HISTORY_GUIDE_PATH,
+    canonicalUrl: WHATSAPP_CHAT_HISTORY_GUIDE_CANONICAL_URL,
+    sourceFile: "whatsapp-chat-history-in-deal.md",
+    description: WHATSAPP_CHAT_HISTORY_GUIDE_DESCRIPTION
+  }
+];
+
+export type GuideRenderOptions = {
+  canonicalUrl?: string;
+  description?: string;
+};
+
+function normalizePathname(pathname: string): string {
+  return pathname.replace(/\/+$/, "") || "/";
+}
+
 export function isCrmWhatsappGuidePath(pathname: string): boolean {
-  const path = pathname.replace(/\/+$/, "") || "/";
-  return path === GUIDE_PATH;
+  return normalizePathname(pathname) === GUIDE_PATH;
+}
+
+export function guideForPath(pathname: string): StaticGuide | undefined {
+  const path = normalizePathname(pathname);
+  return STATIC_GUIDES.find((guide) => guide.path === path);
+}
+
+export function isPublicGuidePath(pathname: string): boolean {
+  return guideForPath(pathname) !== undefined;
 }
 
 export type InlineNode =
@@ -25,6 +71,7 @@ export type GuideBlock =
 export type GuideDocument = {
   title: string;
   description: string;
+  canonicalUrl: string;
   bodyHtml: string;
   jsonLd: string;
   blocks: GuideBlock[];
@@ -202,11 +249,11 @@ function renderInlines(inlines: InlineNode[]): string {
     .join("");
 }
 
-function renderBlock(block: GuideBlock): string {
+function renderBlock(block: GuideBlock, inCtaSection = false): string {
   if (block.kind === "h1") return `<h1>${renderInlines(block.inlines)}</h1>`;
   if (block.kind === "h2") return `<h2>${renderInlines(block.inlines)}</h2>`;
   if (block.kind === "p") {
-    const className = block.lead ? "guideLead" : block.cta ? "guideCtaLine" : "";
+    const className = block.lead ? "guideLead" : inCtaSection && block.cta ? "guideCtaLine" : "";
     const attr = className ? ` class="${className}"` : "";
     return `<p${attr}>${renderInlines(block.inlines)}</p>`;
   }
@@ -246,10 +293,11 @@ function faqJsonLd(blocks: GuideBlock[]): string {
   }).replace(/</g, "\\u003c");
 }
 
-export function buildGuideDocument(markdown: string): GuideDocument {
+export function buildGuideDocument(markdown: string, options: GuideRenderOptions = {}): GuideDocument {
   const blocks = parseGuideMarkdown(markdown);
   const title = guideTitle(blocks);
-  const description = guideIntro(blocks);
+  const description = options.description?.trim() || guideIntro(blocks);
+  const canonicalUrl = options.canonicalUrl ?? GUIDE_CANONICAL_URL;
   let body = "";
   let ctaOpen = false;
 
@@ -259,7 +307,7 @@ export function buildGuideDocument(markdown: string): GuideDocument {
       body += `<section class="guideCtaSection">`;
       ctaOpen = true;
     }
-    body += renderBlock(block);
+    body += renderBlock(block, ctaOpen);
   }
   if (ctaOpen) body += "</section>";
 
@@ -270,6 +318,7 @@ export function buildGuideDocument(markdown: string): GuideDocument {
   return {
     title,
     description,
+    canonicalUrl,
     bodyHtml,
     jsonLd: faqJsonLd(blocks),
     blocks
@@ -279,13 +328,13 @@ export function buildGuideDocument(markdown: string): GuideDocument {
 export function guideHeadTags(doc: GuideDocument): GuideHeadTag[] {
   return [
     { kind: "meta", attr: "name", key: "description", content: doc.description },
-    { kind: "link", rel: "canonical", href: GUIDE_CANONICAL_URL },
+    { kind: "link", rel: "canonical", href: doc.canonicalUrl },
     { kind: "meta", attr: "property", key: "og:type", content: "article" },
     { kind: "meta", attr: "property", key: "og:locale", content: "ru_RU" },
     { kind: "meta", attr: "property", key: "og:site_name", content: GUIDE_SITE_NAME },
     { kind: "meta", attr: "property", key: "og:title", content: doc.title },
     { kind: "meta", attr: "property", key: "og:description", content: doc.description },
-    { kind: "meta", attr: "property", key: "og:url", content: GUIDE_CANONICAL_URL },
+    { kind: "meta", attr: "property", key: "og:url", content: doc.canonicalUrl },
     { kind: "meta", attr: "name", key: "twitter:card", content: "summary" },
     { kind: "meta", attr: "name", key: "twitter:title", content: doc.title },
     { kind: "meta", attr: "name", key: "twitter:description", content: doc.description },
@@ -303,8 +352,12 @@ function renderHeadTag(tag: GuideHeadTag): string {
   return `<meta ${tag.attr}="${escapeHtml(tag.key)}" content="${escapeHtml(tag.content)}" />`;
 }
 
-export function renderGuideDocument(markdown: string, css: string): string {
-  const doc = buildGuideDocument(markdown);
+export function renderGuideDocument(
+  markdown: string,
+  css: string,
+  options: GuideRenderOptions = {}
+): string {
+  const doc = buildGuideDocument(markdown, options);
   const head = guideHeadTags(doc).map(renderHeadTag).join("\n  ");
   return `<!doctype html>
 <html lang="ru">
