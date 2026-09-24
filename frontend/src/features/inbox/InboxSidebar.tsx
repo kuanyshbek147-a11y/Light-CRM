@@ -379,16 +379,19 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         <div className="mobilePageActions">
           <button
             type="button"
-            className="threadIconBtn"
+            className={`inboxFilterToggle${searchPanelOpen ? " isOpen" : ""}${
+              search.trim() || inboxFiltersActive(filters) ? " hasQuery" : ""
+            }`}
             title={ui.openSearchFilters}
             aria-label={ui.openSearchFilters}
             aria-expanded={searchPanelOpen}
             onClick={onToggleSearchPanel}
           >
-            🔍
+            <span aria-hidden="true">🔍</span>
+            <span>Поиск</span>
           </button>
           <NotificationBellButton
-            className="threadIconBtn"
+            className="threadIconBtn inboxHeaderBell"
             size={19}
             enabled={notificationSoundOn}
             onToggle={onToggleNotificationSound}
@@ -405,13 +408,16 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         </div>
         <button
           type="button"
-          className="sidebarSearchButton"
+          className={`inboxFilterToggle${searchPanelOpen ? " isOpen" : ""}${
+            search.trim() || inboxFiltersActive(filters) ? " hasQuery" : ""
+          }`}
           title={ui.openSearchFilters}
           aria-label={ui.openSearchFilters}
           aria-expanded={searchPanelOpen}
           onClick={onToggleSearchPanel}
         >
-          {"\uD83D\uDD0D"}
+          <span aria-hidden="true">🔍</span>
+          <span>Поиск</span>
         </button>
       </div>
 
@@ -493,7 +499,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
           </div>
 
           <div className="filterPresetRow">
-            <button type="button" className="secondaryButton" onClick={onApplyFilters}>
+            <button type="button" className="primaryButton" onClick={onApplyFilters}>
               Применить фильтры
             </button>
             <button type="button" className="secondaryButton" onClick={onSaveFilterPreset}>

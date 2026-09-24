@@ -12,6 +12,9 @@
   --shadow-soft: 0 10px 30px rgba(40, 52, 111, 0.08);
   --radius-lg: 18px;
   --radius-md: 14px;
+  --control-height: 44px;
+  --control-radius: 12px;
+  --control-gap: 8px;
 }
 
 body {
@@ -90,6 +93,51 @@ button {
   gap: 10px;
   align-items: center;
   margin-top: 4px;
+}
+
+.landingPageModern .landingCtaRow {
+  display: grid;
+  grid-template-columns: minmax(0, 420px);
+  justify-content: start;
+  width: 100%;
+}
+
+.landingPageModern .landingCtaRow .landingCtaPrimary,
+.landingPageModern .landingCtaRow .landingCtaTryDemo {
+  width: 100%;
+}
+
+.landingPageModern .landingCtaRow a.landingCtaTryDemo,
+.landingPageModern .landingCtaRow .landingCtaSecondary {
+  background: #fff;
+  color: #312e81;
+  border: 1px solid #c7d2fe;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.landingPageModern .landingCtaRow a.landingCtaTryDemo:hover,
+.landingPageModern .landingCtaRow .landingCtaSecondary:hover {
+  background: #eef2ff;
+}
+
+.landingQuietLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  width: min(100%, 420px);
+}
+
+.landingQuietLink {
+  color: #4338ca;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.landingQuietLink:hover {
+  color: #312e81;
 }
 
 .landingCtaPrimary,
@@ -369,9 +417,39 @@ button {
 }
 
 .settingsPage {
-  padding: 16px;
+  padding: 16px 16px 28px;
   overflow: auto;
   align-content: start;
+  max-width: 640px;
+}
+
+.settingsRoleNote {
+  margin: 6px 0 0;
+  max-width: 46ch;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.settingsSectionTitle {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.settingsLinkAction {
+  border-color: #c7d2fe;
+  background: #f5f7ff;
+  color: #312e81;
+}
+
+.settingsLinkAction span:last-child {
+  color: #4338ca;
+  font-weight: 800;
 }
 
 .settingsLinkStatic {
@@ -878,7 +956,8 @@ button {
   gap: 8px;
 }
 
-.marketingLeadActions .primaryButton {
+.marketingLeadActions .primaryButton,
+.marketingLeadActions .secondaryButton {
   width: auto;
 }
 
@@ -962,6 +1041,7 @@ button {
   .marketingLead .primaryButton,
   .marketingLeadActions,
   .marketingLeadActions .primaryButton,
+  .marketingLeadActions .secondaryButton,
   .marketingEmpty .primaryButton {
     width: 100%;
   }
@@ -971,11 +1051,24 @@ button {
   }
 }
 
+.demoQuickLead {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e1b4b;
+}
+
 .demoQuickRow {
   display: flex;
-  gap: 8px;
+  gap: var(--control-gap);
   flex-wrap: wrap;
   margin-bottom: 10px;
+}
+
+.demoQuickRow .demoQuickButton {
+  flex: 1 1 160px;
+  height: var(--control-height);
+  box-shadow: none;
 }
 
 .demoCredentialsDetails {
@@ -1376,19 +1469,19 @@ body.pwa-standalone {
   height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid var(--primary);
-  background: var(--primary);
-  color: #fff;
+  border: 1px solid #d7dced;
+  background: transparent;
+  color: #3d4663;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .userChipLogout:hover {
-  background: var(--primary-strong);
-  border-color: var(--primary-strong);
+  background: #f4f6ff;
+  border-color: #c9d0e8;
 }
 
 .userChipLogout:focus-visible {
@@ -1679,7 +1772,55 @@ body.pwa-standalone {
   padding: 0 14px 10px 14px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: var(--control-gap);
+}
+
+.filterPresetRow .primaryButton {
+  box-shadow: 0 6px 16px rgba(91, 92, 233, 0.24);
+}
+
+.inboxFilterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px 0 10px;
+  border-radius: 12px;
+  border: 1px solid #e8ebf7;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.inboxFilterToggle.isOpen,
+.inboxFilterToggle.hasQuery {
+  background: #eef0ff;
+  border-color: #c7cdf8;
+  color: #30328c;
+}
+
+.tasksEmptyCompact {
+  min-height: 0;
+  padding: 8px 16px 0;
+  gap: 6px;
+}
+
+.taskCreateForm .primaryButton {
+  width: fit-content;
+  justify-self: start;
+}
+
+@media (min-width: 769px) {
+  .inboxHeaderBell {
+    display: none;
+  }
+}
+
+.appShell.hasBottomNav .inboxHeaderBell {
+  display: none;
 }
 
 .savedFilterChips {
@@ -2957,11 +3098,12 @@ body.pwa-standalone {
   border: 1px solid #dbe2f0;
   background: #fff;
   color: #334155;
-  border-radius: 12px;
+  border-radius: var(--control-radius);
   padding: 0 14px;
   font-weight: 700;
+  font-size: 14px;
   cursor: pointer;
-  height: 42px;
+  height: var(--control-height);
 }
 
 .emptyScriptState {
@@ -3260,12 +3402,13 @@ body.pwa-standalone {
 .primaryButton {
   border: 0;
   padding: 0 16px;
-  border-radius: 13px;
+  border-radius: var(--control-radius);
   background: linear-gradient(135deg, var(--primary), #7173ff);
   color: white;
   font-weight: 800;
+  font-size: 14px;
   cursor: pointer;
-  height: 44px;
+  height: var(--control-height);
   box-shadow: 0 10px 24px rgba(91, 92, 233, 0.34);
 }
 
@@ -4075,6 +4218,16 @@ body.pwa-standalone {
 
   .secondaryButton {
     width: 100%;
+  }
+
+  .taskCreateForm .primaryButton {
+    width: 100%;
+  }
+
+  .demoQuickRow .demoQuickButton,
+  .filterPresetRow .primaryButton,
+  .filterPresetRow .secondaryButton {
+    width: auto;
   }
 
   .customerDrawer {

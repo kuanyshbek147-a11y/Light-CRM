@@ -2055,7 +2055,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                 <button type="button" className="primaryButton" onClick={() => onOpenIntegrations?.("telegram")}>
                   Подключить Telegram
                 </button>
-                <button type="button" className="primaryButton" onClick={() => onOpenIntegrations?.("instagram")}>
+                <button type="button" className="secondaryButton" onClick={() => onOpenIntegrations?.("instagram")}>
                   Подключить Instagram
                 </button>
               </div>
