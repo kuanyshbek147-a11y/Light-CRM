@@ -83,7 +83,7 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
         </div>
       </div>
 
-      <div className="scriptPanelTitle">Очередь без оператора (срок ответа)</div>
+      <div className="scriptPanelTitle">Очередь без менеджера (срок ответа)</div>
       {queue.length ? (
         queue.map((item) => (
           <div key={item.id} className="taskCard">

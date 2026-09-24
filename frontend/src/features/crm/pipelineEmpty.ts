@@ -1,13 +1,13 @@
-export const ADD_CLIENT_UNAVAILABLE_HINT =
-  "Ручное добавление клиента пока недоступно: отдельного API нет. Клиент появится из входящего сообщения в подключённом канале.";
-
 export function canCreateDealFromPipeline(conversationCount: number): boolean {
   return conversationCount > 0;
 }
 
-export function createDealHint(conversationCount: number): string {
+export function createDealHint(conversationCount: number, isAdmin = true): string {
   if (conversationCount > 0) {
-    return "Откроется форма «Создать сделку» для выбранного диалога.";
+    return "Сделка создаётся из уже открытого диалога.";
   }
-  return "Сделку можно создать только из диалога. Сначала подключите канал и дождитесь сообщения.";
+  if (!isAdmin) {
+    return "Канал подключает администратор. Сделка появится из диалога.";
+  }
+  return "Сделку создают из диалога. Сначала подключите канал.";
 }

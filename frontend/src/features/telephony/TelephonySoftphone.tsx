@@ -313,10 +313,8 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
           setStatus("offline");
           setStatusText(
             !next.enabled
-              ? "Телефония выключена"
-              : !next.extension
-                ? "Нет SIP-учётки"
-                : "Не настроена АТС"
+              ? "Телефон выключен"
+              : "Телефон не настроен — обратитесь к администратору"
           );
           return;
         }
@@ -324,7 +322,7 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
         const uri = UserAgent.makeURI(`sip:${next.extension.sipUsername}@${next.domain}`);
         if (!uri) {
           setStatus("error");
-          setStatusText("Некорректный SIP URI");
+          setStatusText("Телефон настроен неверно — обратитесь к администратору");
           return;
         }
 
@@ -395,8 +393,8 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
           return;
         }
         setStatus("error");
-        setStatusText("Ошибка SIP");
-        setError(err instanceof Error ? err.message : "Не удалось подключить softphone");
+        setStatusText("Ошибка связи с АТС");
+        setError("Не удалось подключить телефон. Обратитесь к администратору.");
       }
     }
 
@@ -502,7 +500,7 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
                   </button>
                 ) : (
                   <button type="button" className="secondaryButton" onClick={toggleMute}>
-                    {muted ? "Вкл. звук" : "Mute"}
+                    {muted ? "Вкл. звук" : "Без звука"}
                   </button>
                 )}
                 <button type="button" className="dangerButton" onClick={() => void hangup()}>
@@ -512,8 +510,7 @@ export function TelephonySoftphone({ authToken, onCallLinked, onToast }: Props) 
             </div>
           )}
           <p className="integrationsHint">
-            SIP сигналинг идёт напрямую на ваш Asterisk (WSS). CRM пишет лог звонка и открывает
-            карточку клиента.
+            Звонок идёт напрямую на вашу АТС. CRM пишет журнал и открывает карточку клиента.
           </p>
         </aside>
       ) : null}

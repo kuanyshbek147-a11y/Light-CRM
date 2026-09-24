@@ -14,7 +14,7 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
           <p className="settingsRoleNote" data-testid="settings-role-note">
             {canManageChannels
               ? "Вы администратор: можете подключать каналы."
-              : "Вы оператор: каналы подключает администратор."}
+              : "Вы менеджер: каналы подключает администратор."}
           </p>
         </div>
       </div>

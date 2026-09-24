@@ -49,3 +49,60 @@ export function formatDialogStatus(status: string): string {
   }
   return status;
 }
+
+/** Подписи первого плана. Технические имена — во вторичном тексте. */
+export const UI_LABELS_RU = {
+  slaFollowUp: "Срок ответа",
+  wssUrl: "Адрес соединения",
+  wssUrlHint: "WSS URL",
+  sipDomain: "Домен АТС",
+  sipDomainHint: "SIP domain",
+  displayName: "Имя на экране телефона",
+  displayNameHint: "Display name",
+  iceTurn: "Серверы для звонка через интернет",
+  iceTurnHint: "ICE / TURN, JSON",
+  sipUsername: "Логин в АТС",
+  sipUsernameHint: "SIP username",
+  sipPassword: "Пароль в АТС",
+  sipPasswordHint: "SIP password",
+  telephonyTitle: "Телефон в браузере",
+  telephonyTitleHint: "Asterisk WebRTC",
+  openaiKey: "Ключ ИИ",
+  openaiKeyHint: "OPENAI_API_KEY",
+  smtp: "Исходящая почта",
+  smtpHint: "SMTP",
+  imap: "Входящая почта",
+  imapHint: "IMAP",
+  webhook: "Адрес уведомлений",
+  webhookHint: "Webhook",
+  wabaId: "Кабинет WhatsApp",
+  wabaIdHint: "WABA ID",
+  phoneNumberId: "Номер в WhatsApp",
+  phoneNumberIdHint: "Phone Number ID",
+  cloudApi: "Облачный WhatsApp",
+  cloudApiHint: "Cloud API",
+  verifyToken: "Код проверки",
+  verifyTokenHint: "Verify token",
+  redirectUri: "Адрес возврата",
+  redirectUriHint: "Redirect URI",
+  igUserId: "Аккаунт Instagram",
+  igUserIdHint: "IG User ID",
+  appId: "Номер приложения",
+  appIdHint: "App ID"
+} as const;
+
+const SLA_FOLLOW_UP_TITLE = "sla follow-up";
+
+export function displayTaskTitle(title: string): string {
+  if (title.trim().toLowerCase() === SLA_FOLLOW_UP_TITLE) {
+    return UI_LABELS_RU.slaFollowUp;
+  }
+  return title;
+}
+
+export function formatIntegrationSource(source: string | null | undefined): string {
+  if (source === "workspace") return "этот кабинет";
+  if (source === "env") return "общая настройка сервера";
+  if (!source) return "—";
+  return source;
+}

@@ -17,3 +17,15 @@ export function channelFilterIsEmpty(
 ): boolean {
   return channelFilter !== "all" && conversationsForChannel(conversations, channelFilter).length === 0;
 }
+
+/**
+ * Центр диалогов показывает только чат из видимого списка.
+ * Пустой список не оставляет предыдущий или чужой чат открытым.
+ */
+export function inboxCenterConversation<T extends { id: string }>(
+  visibleConversations: readonly T[],
+  selectedId: string
+): T | null {
+  if (!visibleConversations.length || !selectedId) return null;
+  return visibleConversations.find((item) => item.id === selectedId) ?? null;
+}

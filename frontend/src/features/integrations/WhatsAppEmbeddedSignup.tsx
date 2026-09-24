@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   completeWhatsAppConnect,
   disconnectWhatsApp,
@@ -283,7 +284,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
       return;
     }
     if (!configId || !setupReady) {
-      setError("Подключение WhatsApp сейчас недоступно. Откройте «Подробности».");
+      setError("Подключение WhatsApp сейчас недоступно. Откройте «Для специалиста».");
       return;
     }
 
@@ -441,7 +442,7 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
 
       {!setupReady || !configId || !appId ? (
         <div className="integrationsWarning">
-          Подключение пока недоступно. Откройте «Подробности», чтобы увидеть, чего не хватает.
+          Подключение пока недоступно. Откройте «Для специалиста», чтобы увидеть, чего не хватает.
         </div>
       ) : null}
 
@@ -506,22 +507,34 @@ export function WhatsAppEmbeddedSignup({ authToken, onConnected }: Props) {
       </div>
 
       <details className="integrationsDetails">
-        <summary>Подробности</summary>
+        <summary>Для специалиста</summary>
         <div className="integrationsDetailsBody">
           <div>
-            <div className="integrationsLabel">WABA ID</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.wabaId}
+              <span className="fieldTechHint">{UI_LABELS_RU.wabaIdHint}</span>
+            </div>
             <div className="integrationsValue">{status?.wabaId || "—"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">Phone Number ID</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.phoneNumberId}
+              <span className="fieldTechHint">{UI_LABELS_RU.phoneNumberIdHint}</span>
+            </div>
             <div className="integrationsValue">{status?.phoneNumberId || "—"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">Webhook</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.webhook}
+              <span className="fieldTechHint">{UI_LABELS_RU.webhookHint}</span>
+            </div>
             <div className="integrationsValue">{webhookUrl || "Адрес сервера не задан"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">Cloud API</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.cloudApi}
+              <span className="fieldTechHint">{UI_LABELS_RU.cloudApiHint}</span>
+            </div>
             <div className="integrationsValue">
               {status?.messagingReady
                 ? "Готов к отправке"

@@ -10,23 +10,29 @@ type StepCopy = {
   body: string;
 };
 
-const STEPS: readonly StepCopy[] = [
-  {
-    id: "channel",
-    title: "Подключите канал",
-    body: "Подключите WhatsApp, Instagram или Telegram. Когда канал подключён, новые сообщения клиентов сами появятся в разделе «Диалоги»."
-  },
-  {
-    id: "lead",
-    title: "Откройте чат и обработайте первое обращение",
-    body: "Выберите диалог и ответьте клиенту. Так первое обращение не останется без внимания."
-  },
-  {
-    id: "next",
-    title: "Назначьте следующий шаг",
-    body: "Поставьте задачу или заведите сделку — чтобы было ясно, что делать с этим клиентом дальше."
-  }
-];
+function guideSteps(isAdmin: boolean, channelDone: boolean): readonly StepCopy[] {
+  return [
+    {
+      id: "channel",
+      title: isAdmin ? "Подключите канал" : "Попросите администратора подключить канал",
+      body: channelDone
+        ? "Канал уже подключён. Живые сообщения приходят в «Диалоги»."
+        : isAdmin
+          ? "WhatsApp, Instagram или Telegram. Галочка появится, когда канал подключён в этом кабинете."
+          : "Отправьте администратору просьбу. Галочка появится, когда канал подключат."
+    },
+    {
+      id: "lead",
+      title: "Ответьте в диалоге",
+      body: "Выберите диалог и отправьте ответ. Галочка появится после отправки."
+    },
+    {
+      id: "next",
+      title: "Назначьте следующий шаг",
+      body: "Сохраните задачу или сделку. Пока ничего не сохранено, шаг ждёт этого действия."
+    }
+  ];
+}
 
 type Props = {
   mode: "hidden" | "overlay" | "dock";
@@ -48,8 +54,9 @@ type Props = {
 
 export function FirstRunGuide(props: Props): JSX.Element | null {
   const { mode, step, stepsDone, isAdmin, demoData, onMinimize } = props;
-  const safeStep = Math.min(Math.max(step, 0), STEPS.length - 1);
-  const current = STEPS[safeStep];
+  const steps = guideSteps(isAdmin, stepsDone.channel);
+  const safeStep = Math.min(Math.max(step, 0), steps.length - 1);
+  const current = steps[safeStep];
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   useEffect(() => {
@@ -74,13 +81,13 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
   if (mode === "hidden" || !current) return null;
 
   if (mode === "dock") {
-    const doneCount = STEPS.filter((item) => stepsDone[item.id]).length;
+    const doneCount = steps.filter((item) => stepsDone[item.id]).length;
     return (
       <div className="firstRunDock card" role="status" data-testid="first-run-dock">
         <div className="firstRunDockText">
           <strong>{FIRST_RUN_MENU_LABEL}</strong>
           <span>
-            {doneCount} из {STEPS.length} · можно вернуться в любой момент
+            {doneCount} из {steps.length} · можно вернуться в любой момент
           </span>
         </div>
         <div className="firstRunDockActions">
@@ -115,9 +122,7 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
             <h2 id="first-run-title" className="firstRunTitle">
               {FIRST_RUN_MENU_LABEL}
             </h2>
-            <p className="firstRunLead">
-              Три шага: откуда приходят сообщения, как взять первый диалог и что сделать дальше.
-            </p>
+            <p className="firstRunLead">Канал, первый ответ и следующий шаг.</p>
           </div>
           <button type="button" className="dialogActionBtn firstRunSkip" data-testid="first-run-skip" onClick={props.onSkip}>
             Пропустить
@@ -130,35 +135,48 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
           </p>
         ) : null}
 
+        <div className="firstRunBodyScroll">
         <ol className="firstRunSteps">
-          {STEPS.map((item, index) => {
+          {steps.map((item, index) => {
             const active = index === safeStep;
             const done = stepsDone[item.id];
             return (
-              <li key={item.id} className={active ? "active" : done ? "done" : ""}>
+              <li key={item.id} className={active ? "active" : done ? "done" : "todo"}>
                 <button
                   type="button"
                   className="firstRunStepButton"
                   aria-current={active ? "step" : undefined}
+                  aria-label={`${item.title}, ${done ? "сделано" : "не сделано"}`}
                   data-testid={`first-run-step-${item.id}`}
+                  data-step-state={done ? "done" : "todo"}
                   onClick={() => props.onStepChange(index)}
                 >
                   <span className="firstRunStepNum" aria-hidden="true">
                     {done ? "✓" : index + 1}
                   </span>
                   <span className="firstRunStepTitle">{item.title}</span>
+                  {!done && !active ? <span className="firstRunStepTodo">не сделано</span> : null}
                 </button>
                 {active ? (
                   <div className="firstRunStepBody">
                     <p>{item.body}</p>
-                    {item.id === "channel" && !isAdmin ? (
+                    {item.id === "channel" && !isAdmin && !stepsDone.channel ? (
                       <>
-                        <p className="firstRunStepHint" data-testid="first-run-training-note">
-                          Пока канал не подключён, чаты на экране — учебные данные. Живые сообщения появятся после того, как администратор подключит WhatsApp, Instagram или Telegram.
-                        </p>
-                        <p className="firstRunRequestPreview" data-testid="first-run-admin-request">
-                          {ADMIN_CHANNEL_REQUEST_TEXT}
-                        </p>
+                        {demoData ? (
+                          <p className="firstRunStepHint" data-testid="first-run-training-note">
+                            Пока канал не подключён, диалоги на экране — учебные данные. Живые сообщения появятся, когда администратор подключит WhatsApp, Instagram или Telegram.
+                          </p>
+                        ) : (
+                          <p className="firstRunStepHint" data-testid="first-run-training-note">
+                            Скопируйте просьбу и отправьте администратору. Галочка появится, когда WhatsApp, Instagram или Telegram будет подключён.
+                          </p>
+                        )}
+                        <details className="firstRunRequestDetails">
+                          <summary>Текст просьбы</summary>
+                          <p className="firstRunRequestPreview" data-testid="first-run-admin-request">
+                            {ADMIN_CHANNEL_REQUEST_TEXT}
+                          </p>
+                        </details>
                         <div className="firstRunStepActions">
                           <button
                             type="button"
@@ -176,7 +194,7 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
                         ) : null}
                         {copyState === "failed" ? (
                           <p className="firstRunCopyStatus failed" data-testid="first-run-copy-status">
-                            Не удалось скопировать. Выделите текст выше и скопируйте вручную.
+                            Не удалось скопировать. Откройте «Текст просьбы» и скопируйте вручную.
                           </p>
                         ) : null}
                       </>
@@ -185,7 +203,7 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
                     <div className="firstRunStepActions">
                       {item.id === "channel" && isAdmin ? (
                         <button type="button" className="primaryButton" data-testid="first-run-open-integrations" onClick={props.onOpenChannel}>
-                          Открыть интеграции
+                          Подключить канал
                         </button>
                       ) : null}
                       {item.id === "lead" ? (
@@ -211,10 +229,11 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
             );
           })}
         </ol>
+        </div>
 
         <div className="firstRunFooter">
           <span className="firstRunProgress">
-            Шаг {safeStep + 1} из {STEPS.length}
+            Шаг {safeStep + 1} из {steps.length}
           </span>
           <div className="firstRunFooterActions">
             {safeStep > 0 ? (
@@ -222,12 +241,12 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
                 Назад
               </button>
             ) : null}
-            {safeStep < STEPS.length - 1 ? (
-              <button type="button" className="primaryButton" onClick={() => props.onStepChange(safeStep + 1)}>
+            {safeStep < steps.length - 1 ? (
+              <button type="button" className="dialogActionBtn" onClick={() => props.onStepChange(safeStep + 1)}>
                 Дальше
               </button>
             ) : (
-              <button type="button" className="primaryButton" data-testid="first-run-complete" onClick={props.onComplete}>
+              <button type="button" className="dialogActionBtn" data-testid="first-run-complete" onClick={props.onComplete}>
                 Готово
               </button>
             )}

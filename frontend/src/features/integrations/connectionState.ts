@@ -93,15 +93,15 @@ export function telegramTokenProblem(token: string): "empty" | "invalid" | null 
 
 export function telegramTokenMessage(problem: "empty" | "invalid"): string {
   if (problem === "empty") {
-    return "Вставьте токен бота от @BotFather";
+    return "Вставьте ключ бота от @BotFather";
   }
-  return "Токен неверный. Скопируйте его целиком у @BotFather — он выглядит как 123456789:AA…";
+  return "Ключ неверный. Скопируйте его целиком у @BotFather — он выглядит как 123456789:AA…";
 }
 
 export function describeTelegramConnectError(raw: string): string {
   const text = raw.trim();
   if (!text || /unauthorized|not found|invalid token|bot token|401|404/i.test(text)) {
-    return "Telegram не принял токен. Проверьте, что скопировали его у @BotFather без пробелов.";
+    return "Telegram не принял ключ. Проверьте, что скопировали его у @BotFather без пробелов.";
   }
   if (/abort|timeout|failed to fetch|network|econnreset|enotfound/i.test(text)) {
     return "Не удалось связаться с Telegram. Проверьте интернет и попробуйте снова.";
@@ -112,5 +112,5 @@ export function describeTelegramConnectError(raw: string): string {
   if (/[А-Яа-яЁё]/.test(text)) {
     return text;
   }
-  return "Не удалось подключить Telegram. Проверьте токен и попробуйте снова.";
+  return "Не удалось подключить Telegram. Проверьте ключ и попробуйте снова.";
 }

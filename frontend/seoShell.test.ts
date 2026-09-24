@@ -21,7 +21,7 @@ test("статическая главная сохраняет демо-вход
   assert.match(indexHtml, /Демо-доступ/);
   assert.match(indexHtml, /Открыть рабочее пространство/);
   assert.match(indexHtml, />Войти</);
-  assert.match(indexHtml, /Войти как оператор/);
+  assert.match(indexHtml, /Войти как менеджер/);
   assert.match(indexHtml, /operator, пароль demo123/);
   assert.match(indexHtml, /https:\/\/wa\.me\/77003131055\?text=/);
   assert.match(indexHtml, />Записаться на демо</);
@@ -42,5 +42,5 @@ test("sitemap.xml содержит главную и публичный гайд
   assert.match(sitemap, new RegExp(`<loc>${SITE}/</loc>`));
   assert.match(sitemap, new RegExp(`<loc>${SITE}/guides/crm-whatsapp-kazakhstan</loc>`));
   assert.equal(sitemap.includes("<!doctype html>"), false);
-  assert.equal((sitemap.match(/<loc>/g) || []).length, 2);
+  assert.equal((sitemap.match(/<loc>/g) || []).length, 3);
 });

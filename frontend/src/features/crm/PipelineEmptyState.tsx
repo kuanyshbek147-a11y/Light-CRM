@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
-import {
-  ADD_CLIENT_UNAVAILABLE_HINT,
-  canCreateDealFromPipeline,
-  createDealHint
-} from "./pipelineEmpty";
+import { canCreateDealFromPipeline, createDealHint } from "./pipelineEmpty";
 
 export type PipelineConversationOption = {
   id: string;
@@ -17,13 +13,16 @@ export type PipelineConversationOption = {
 type PipelineEmptyStateProps = {
   conversations: PipelineConversationOption[];
   otherTabHint?: string | null;
+  isAdmin?: boolean;
+  onConnectChannel?: () => void;
   onCreateDeal: (conversationId: string) => void;
 };
 
 export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element {
-  const { conversations, otherTabHint, onCreateDeal } = props;
+  const { conversations, otherTabHint, isAdmin = false, onConnectChannel, onCreateDeal } = props;
   const [pickerOpen, setPickerOpen] = useState(false);
   const canCreate = canCreateDealFromPipeline(conversations.length);
+  const hint = createDealHint(conversations.length, isAdmin);
   const openConversations = conversations.filter((item) => item.status === "open");
   const pickerItems = openConversations.length ? openConversations : conversations;
 
@@ -42,21 +41,27 @@ export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element 
     <div className="pipelineEmptyState dialogsEmptyCenter" data-testid="pipeline-empty-state">
       <div className="emptyTitle">Пока нет сделок</div>
       {otherTabHint ? <p className="sidebarHint">{otherTabHint}</p> : null}
-      <div className="pipelineEmptyActions dialogsEmptyActions">
-        <button
-          type="button"
-          className="primaryButton"
-          data-testid="pipeline-create-deal"
-          disabled={!canCreate}
-          title={createDealHint(conversations.length)}
-          onClick={startCreateDeal}
-        >
-          Создать сделку
-        </button>
-      </div>
-      {!canCreate ? <p className="emptyHint">{createDealHint(0)}</p> : null}
+      {canCreate ? (
+        <div className="pipelineEmptyActions dialogsEmptyActions">
+          <button
+            type="button"
+            className="primaryButton"
+            data-testid="pipeline-create-deal"
+            title={hint}
+            onClick={startCreateDeal}
+          >
+            Создать сделку
+          </button>
+        </div>
+      ) : isAdmin && onConnectChannel ? (
+        <div className="pipelineEmptyActions dialogsEmptyActions">
+          <button type="button" className="primaryButton" data-testid="pipeline-connect-channel" onClick={onConnectChannel}>
+            Подключить канал
+          </button>
+        </div>
+      ) : null}
       <p className="emptyHint" data-testid="pipeline-add-client-hint">
-        {ADD_CLIENT_UNAVAILABLE_HINT}
+        {hint}
       </p>
       {pickerOpen ? (
         <div className="dealPickerList" data-testid="pipeline-deal-picker">

@@ -50,5 +50,9 @@ test("сделку из воронки можно открыть только п
   assert.equal(canCreateDealFromPipeline(0), false);
   assert.equal(canCreateDealFromPipeline(2), true);
   assert.match(createDealHint(0), /подключите канал/i);
+  assert.equal(/API/i.test(createDealHint(0)), false);
+  assert.match(createDealHint(0, false), /администратор/i);
+  assert.equal(/подключите канал/i.test(createDealHint(0, false)), false);
   assert.match(createDealHint(1), /диалог/i);
+  assert.equal(/API|недоступно/i.test(createDealHint(1)), false);
 });

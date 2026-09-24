@@ -251,7 +251,7 @@ export function AnalyticsCharts({
 
       {loadChart.managers.length ? (
         <div className="analyticsChartCard">
-          <div className="analyticsLabel">Нагрузка операторов по дням (диалоги)</div>
+          <div className="analyticsLabel">Нагрузка менеджеров по дням (диалоги)</div>
           <div className="analyticsChartFrame analyticsChartFrameLarge">
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={loadChart.data}>

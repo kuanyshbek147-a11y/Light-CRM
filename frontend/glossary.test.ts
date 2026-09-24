@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_STAGE_LABELS_RU,
+  UI_LABELS_RU,
+  displayTaskTitle,
   formatBuiltinStageLabel,
   formatChannelLabel,
-  formatDialogStatus
+  formatDialogStatus,
+  formatIntegrationSource
 } from "./src/shared/i18n/glossary.ts";
 import { DEFAULT_LOCALE } from "./src/shared/i18n/locale.ts";
 
@@ -21,6 +24,21 @@ test("стандартные этапы воронки без английско
   assert.equal(formatBuiltinStageLabel("Квалификация"), null);
   const joined = Object.values(DEFAULT_STAGE_LABELS_RU).join(" ");
   assert.equal(/\b(SLA|FRT|inbox|qualified|follow-up)\b/i.test(joined), false);
+});
+
+test("жаргон телефонии, ИИ и срока ответа — русская подпись, термин вторичен", () => {
+  assert.equal(displayTaskTitle("SLA follow-up"), "Срок ответа");
+  assert.equal(displayTaskTitle("Позвонить клиенту"), "Позвонить клиенту");
+  assert.equal(UI_LABELS_RU.wssUrl, "Адрес соединения");
+  assert.equal(UI_LABELS_RU.wssUrlHint, "WSS URL");
+  assert.equal(UI_LABELS_RU.sipDomain, "Домен АТС");
+  assert.equal(UI_LABELS_RU.displayName, "Имя на экране телефона");
+  assert.equal(UI_LABELS_RU.iceTurn, "Серверы для звонка через интернет");
+  assert.equal(UI_LABELS_RU.openaiKey, "Ключ ИИ");
+  assert.equal(UI_LABELS_RU.openaiKeyHint, "OPENAI_API_KEY");
+  assert.equal(/\b(SLA follow-up|WSS URL|Display name|OPENAI_API_KEY)\b/.test(UI_LABELS_RU.wssUrl), false);
+  assert.equal(formatIntegrationSource("workspace"), "этот кабинет");
+  assert.equal(formatIntegrationSource("env"), "общая настройка сервера");
 });
 
 test("каналы и статусы диалога по-русски", () => {
