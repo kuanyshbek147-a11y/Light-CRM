@@ -4,10 +4,100 @@ import jwt from "jsonwebtoken";
 import { query } from "./db";
 import { authMiddleware, type AuthRequest } from "./auth";
 import type { UserRole } from "./auth";
+import { isEmailTakenError, REGISTER_COPY, validateRegisterBody } from "./modules/auth/register";
+import { createWorkspaceWithAdmin } from "./modules/platform/provision";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 export const authRouter = Router();
+
+function signSessionToken(user: { id: string; workspace_id: string | null; role: UserRole }): string {
+  return jwt.sign(
+    {
+      id: user.id,
+      workspaceId: user.workspace_id,
+      role: user.role
+    },
+    JWT_SECRET,
+    { expiresIn: "12h" }
+  );
+}
+
+authRouter.post("/register", async (req, res) => {
+  const parsed = validateRegisterBody(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error, field: parsed.field });
+    return;
+  }
+
+  const { email, password, workspaceName, fullName, login } = parsed.value;
+
+  try {
+    const existing = await query<{ id: string }>(
+      `SELECT id FROM users
+       WHERE LOWER(TRIM(email)) = $1
+          OR (login IS NOT NULL AND LOWER(TRIM(login)) = $1)
+       LIMIT 1`,
+      [email]
+    );
+    if (existing[0]) {
+      res.status(409).json({ error: REGISTER_COPY.emailTaken, field: "email" });
+      return;
+    }
+
+    const created = await createWorkspaceWithAdmin({
+      name: workspaceName,
+      admin: {
+        fullName,
+        email,
+        login,
+        password,
+        role: "admin"
+      }
+    });
+
+    const users = await query<{
+      id: string;
+      workspace_id: string | null;
+      full_name: string;
+      email: string;
+      role: UserRole;
+      login: string | null;
+      color: string | null;
+    }>(
+      `SELECT id, workspace_id, full_name, email, role, login, color
+       FROM users
+       WHERE id = $1 AND is_active = true
+       LIMIT 1`,
+      [created.adminUserId]
+    );
+    const user = users[0];
+    if (!user) {
+      res.status(500).json({ error: REGISTER_COPY.failed });
+      return;
+    }
+
+    const token = signSessionToken(user);
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.full_name,
+        role: user.role,
+        login: user.login,
+        color: user.color
+      }
+    });
+  } catch (error) {
+    if (isEmailTakenError(error)) {
+      res.status(409).json({ error: REGISTER_COPY.emailTaken, field: "email" });
+      return;
+    }
+    console.error("Register failed:", error);
+    res.status(500).json({ error: REGISTER_COPY.failed });
+  }
+});
 
 authRouter.post("/login", async (req, res) => {
   try {
@@ -48,7 +138,15 @@ authRouter.post("/login", async (req, res) => {
            AND LOWER(SPLIT_PART(email, '@', 1)) = $1
          )
          OR ($1 = 'operator' AND LOWER(TRIM(email)) = 'manager@demo.local')
-       )`,
+       )
+     ORDER BY
+       CASE
+         WHEN login IS NOT NULL AND LOWER(TRIM(login)) = $1 THEN 0
+         WHEN LOWER(TRIM(email)) = $1 THEN 1
+         WHEN $1 = 'operator' AND LOWER(TRIM(email)) = 'manager@demo.local' THEN 2
+         ELSE 3
+       END
+     LIMIT 1`,
     [identifier]
   );
 
@@ -66,15 +164,7 @@ authRouter.post("/login", async (req, res) => {
 
   await query(`UPDATE users SET last_login_at = now() WHERE id = $1`, [user.id]);
 
-  const token = jwt.sign(
-    {
-      id: user.id,
-      workspaceId: user.workspace_id,
-      role: user.role
-    },
-    JWT_SECRET,
-    { expiresIn: "12h" }
-  );
+  const token = signSessionToken(user);
 
   res.json({
     token,
