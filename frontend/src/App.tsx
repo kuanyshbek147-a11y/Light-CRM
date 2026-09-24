@@ -127,7 +127,9 @@ import {
 import { requestTelephonyDial, type CallLogResult } from "./features/telephony/api";
 import { loadStaffUnreadCount, shareConversationToStaff } from "./features/staff/api";
 import { DealLinkDialog } from "./features/crm/DealLinkDialog";
+import { PipelineEmptyState } from "./features/crm/PipelineEmptyState";
 import { groupDealsForBoard, ruDealCount } from "./features/crm/pipelineBoard";
+import { SettingsPanel } from "./features/settings/SettingsPanel";
 import {
   createCrmTask,
   globalSearch,
@@ -572,7 +574,7 @@ const UI = {
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   pipelineBoardHint:
     "Каждая карточка — сделка. Счётчик у клиента совпадает с числом карточек на вкладках «Открытые» и «Закрытые».",
-  noCardsInStage: "\u0412 \u044d\u0442\u043e\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a.",
+  noCardsInStage: "Пока пусто.",
   closeCard: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
   takeIntoWork: "\u0412\u0437\u044f\u0442\u044c \u0432 \u0440\u0430\u0431\u043e\u0442\u0443",
@@ -751,6 +753,7 @@ export function App(): JSX.Element {
     | "ops"
     | "integrations"
     | "platform"
+    | "settings"
   >("dialogs");
   const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
   const openIntegrations = (target?: "telegram" | "instagram") => {
@@ -1427,6 +1430,37 @@ export function App(): JSX.Element {
     label: formatStageLabel(stageName, UI)
   }));
   const pipelineBoard = groupDealsForBoard(deals, pipelineColumns, pipelineStatusFilter);
+  const canManageChannels = sessionUser?.role === "admin" || sessionUser?.role === "superadmin";
+  const pipelineEmptyState = (
+    <PipelineEmptyState
+      conversations={conversations.map((item) => ({
+        id: item.id,
+        name: item.contact_name,
+        channel: item.channel,
+        phone: item.phone,
+        status: item.status
+      }))}
+      canOpenIntegrations={canManageChannels}
+      otherTabHint={
+        pipelineBoard.hiddenCount > 0
+          ? pipelineStatusFilter === "open"
+            ? `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} на вкладке «Закрытые».`
+            : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} на вкладке «Открытые».`
+          : null
+      }
+      onCreateDeal={(conversationId) => {
+        const conversation = conversations.find((item) => item.id === conversationId);
+        if (conversation) {
+          void beginCreateDealForConversation(conversation);
+        }
+      }}
+      onOpenIntegrations={() => openIntegrations()}
+      onGoToDialogs={() => {
+        setMobileThreadOpen(false);
+        setCurrentSection("dialogs");
+      }}
+    />
+  );
 
   async function hydrateWorkspace(authToken: string): Promise<void> {
     setConversationsLoading(true);
@@ -1919,6 +1953,33 @@ export function App(): JSX.Element {
       hour: "2-digit",
       minute: "2-digit"
     });
+  }
+
+  async function beginCreateDealForConversation(conversation: Conversation): Promise<void> {
+    const linked = deals.find((deal) => deal.conversation_id === conversation.id) || null;
+    setSelectedConversation(conversation.id);
+    setSelectedConversationData(conversation);
+    if (linked) {
+      beginEditDeal(linked);
+    } else {
+      setSelectedDealId("");
+      setDealAmountDraft("");
+      setDealNextStepDraft("");
+      setDealStageDraft(availableStageNames[0] || "");
+    }
+    setDealFlowError("");
+    setDealFlowOpen(true);
+    if (!token) {
+      setDealFlowDeals([]);
+      return;
+    }
+    const contactId = conversation.contact_id || linked?.contact_id;
+    if (!contactId) {
+      setDealFlowDeals([]);
+      return;
+    }
+    const details = await loadCrmContactDetails(token, contactId);
+    setDealFlowDeals(details?.deals || []);
   }
 
   async function openDealFlowFromChat(): Promise<void> {
@@ -3558,9 +3619,11 @@ export function App(): JSX.Element {
               ? UI.sectionContacts
               : currentSection === "marketing"
                 ? UI.menuMarketing
-                : currentSection === "profile"
-                  ? UI.sectionProfile
-                  : UI.landingBadge;
+                : currentSection === "settings"
+                  ? "Каналы, язык, команда и уведомления"
+                  : currentSection === "profile"
+                    ? UI.sectionProfile
+                    : UI.landingBadge;
 
   const bottomNavActive: MobileNavSection =
     currentSection === "pipeline"
@@ -3751,12 +3814,14 @@ export function App(): JSX.Element {
             />
             <button
               type="button"
-              className="topbarIconButton"
-              title="Settings"
+              className={`topbarIconButton${currentSection === "settings" ? " active" : ""}`}
+              title="Настройки"
+              aria-label="Настройки"
+              aria-pressed={currentSection === "settings"}
+              data-testid="settings-gear"
               onClick={() => {
-                if (sessionUser?.role === "admin") {
-                  openIntegrations();
-                }
+                setMobileThreadOpen(false);
+                setCurrentSection("settings");
               }}
             >
               {"\u2699"}
@@ -4036,6 +4101,11 @@ export function App(): JSX.Element {
             onRemoveFilterPreset={removeFilterPreset}
             onSelectConversation={(id) => void onSelectConversation(id)}
             onOpenCustomerCard={(id) => void onOpenCustomerCardFromList(id)}
+            onClearSearchAndFilters={() => {
+              setSearch("");
+              setFilters(DEFAULT_INBOX_FILTERS);
+              void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+            }}
             loading={conversationsLoading}
             emptyContent={
               token ? (
@@ -5163,6 +5233,15 @@ export function App(): JSX.Element {
                 <div className="mobilePageTitle">{sessionUser?.fullName || "Operator"}</div>
                 <div className="mobilePageSubtitle">{sessionUser?.login || sessionUser?.email}</div>
               </div>
+              <button
+                type="button"
+                className="profileMenuBtn"
+                data-testid="profile-open-settings"
+                onClick={() => setCurrentSection("settings")}
+              >
+                <span>Настройки</span>
+                <span>›</span>
+              </button>
               <button type="button" className="profileMenuBtn" data-testid="first-run-menu-profile" onClick={openOnboardingFromMenu}>
                 <span>{FIRST_RUN_MENU_LABEL}</span>
                 <span>›</span>
@@ -5208,6 +5287,24 @@ export function App(): JSX.Element {
               </button>
             </div>
           </section>
+        ) : currentSection === "settings" ? (
+          token ? (
+            <SettingsPanel
+              canManageChannels={canManageChannels}
+              notificationSoundOn={notificationSoundOn}
+              onToggleNotificationSound={() => {
+                const next = !notificationSoundOn;
+                setNotificationSoundEnabled(next);
+                setNotificationSoundOn(next);
+                unlockNotificationSound();
+              }}
+              onOpenIntegrations={() => openIntegrations()}
+              onOpenTeamChat={() => {
+                setStaffUnreadCount(0);
+                setCurrentSection("staff");
+              }}
+            />
+          ) : null
         ) : currentSection === "pipeline" ? (
           <section className="pipelinePage card">
             <div className="mobilePageHeader">
@@ -5237,6 +5334,7 @@ export function App(): JSX.Element {
               </button>
             </div>
             {pipelineSubview === "kpi" ? (
+              <>
               <FunnelKpiPanel
                 className="pipelineKpiPanel"
                 showHeader={false}
@@ -5258,6 +5356,8 @@ export function App(): JSX.Element {
                 formatStageLabel={(stage) => formatStageLabel(stage, UI)}
                 onDealStageChange={(dealId, stage) => void updateDealStage(dealId, stage)}
               />
+              {deals.length === 0 ? pipelineEmptyState : null}
+              </>
             ) : (
               <>
             <div className="pipelineSectionToggle pipelineStatusToggle">
@@ -5305,6 +5405,9 @@ export function App(): JSX.Element {
                   : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в открытых диалогах.`}
               </div>
             ) : null}
+            {pipelineBoard.visibleCount === 0 ? (
+              pipelineEmptyState
+            ) : (
             <div className="pipelineBoardGrid">
               {pipelineBoard.columns.map((column) => {
                 const columnDeals = column.items;
@@ -5410,6 +5513,7 @@ export function App(): JSX.Element {
                 );
               })}
             </div>
+            )}
             {selectedDealId ? (
               <div className="knowledgeFormCard" style={{ marginTop: 16 }}>
                 <div className="scriptPanelTitle">{UI.saveDeal}</div>

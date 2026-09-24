@@ -4,6 +4,7 @@ import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
+import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
 type ChannelFilter = "all" | "whatsapp" | "telegram" | "instagram" | "web" | "email";
@@ -164,6 +165,76 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
   );
 }
 
+function channelChipLabel(channelFilter: ChannelFilter): string {
+  switch (channelFilter) {
+    case "whatsapp":
+      return "WhatsApp";
+    case "telegram":
+      return "Telegram";
+    case "instagram":
+      return "Instagram";
+    case "web":
+      return "Сайт";
+    case "email":
+      return "Email";
+    default:
+      return "все каналы";
+  }
+}
+
+function InboxListEmpty(props: {
+  kind: ReturnType<typeof resolveInboxEmptyKind>;
+  channelFilter: ChannelFilter;
+  emptyContent: JSX.Element | null;
+  onShowAllChannels: () => void;
+  onClearSearchAndFilters?: () => void;
+  onResetFilters: () => void;
+}): JSX.Element {
+  const { kind, channelFilter, emptyContent, onShowAllChannels, onClearSearchAndFilters, onResetFilters } = props;
+  if (kind === "channel-filter") {
+    return (
+      <div className="inboxOnboard card" data-testid="inbox-channel-empty">
+        <div className="inboxOnboardTitle">В этом канале пусто</div>
+        <p className="inboxOnboardText">
+          Диалогов в «{channelChipLabel(channelFilter)}» нет. Покажите все каналы или дождитесь нового сообщения.
+        </p>
+        <button type="button" className="primaryButton" onClick={onShowAllChannels}>
+          Показать все каналы
+        </button>
+      </div>
+    );
+  }
+  if (kind === "query") {
+    return (
+      <div className="inboxOnboard card" data-testid="inbox-query-empty">
+        <div className="inboxOnboardTitle">Ничего не найдено</div>
+        <p className="inboxOnboardText">По этому запросу или фильтрам диалогов нет. Сбросьте условия и посмотрите весь список.</p>
+        <button
+          type="button"
+          className="primaryButton"
+          onClick={() => {
+            if (onClearSearchAndFilters) {
+              onClearSearchAndFilters();
+              return;
+            }
+            onResetFilters();
+          }}
+        >
+          Сбросить поиск и фильтры
+        </button>
+      </div>
+    );
+  }
+  return (
+    emptyContent || (
+      <div className="inboxOnboard card" data-testid="inbox-empty-fallback">
+        <div className="inboxOnboardTitle">Диалогов пока нет</div>
+        <p className="inboxOnboardText">Подключите канал в интеграциях или дождитесь первого сообщения от клиента.</p>
+      </div>
+    )
+  );
+}
+
 type InboxSidebarProps = {
   ui: InboxSidebarUi;
   conversations: Conversation[];
@@ -184,6 +255,7 @@ type InboxSidebarProps = {
   onRemoveFilterPreset: (presetId: string) => void;
   onSelectConversation: (conversationId: string) => void;
   onOpenCustomerCard: (conversationId: string) => void;
+  onClearSearchAndFilters?: () => void;
   loading?: boolean;
   emptyContent?: JSX.Element | null;
 };
@@ -209,6 +281,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onRemoveFilterPreset,
     onSelectConversation,
     onOpenCustomerCard,
+    onClearSearchAndFilters,
     loading = false,
     emptyContent = null
   } = props;
@@ -403,7 +476,23 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
           </li>
         ) : null}
         {!loading && !visibleConversations.length ? (
-          <li className="chatListEmptyItem">{emptyContent || <div className="emptyScriptState">Диалогов пока нет</div>}</li>
+          <li className="chatListEmptyItem">
+            <InboxListEmpty
+              kind={resolveInboxEmptyKind({
+                loading,
+                conversationCount: conversations.length,
+                visibleCount: visibleConversations.length,
+                channelFilter,
+                search,
+                filtersActive: inboxFiltersActive(filters)
+              })}
+              channelFilter={channelFilter}
+              emptyContent={emptyContent}
+              onShowAllChannels={() => setChannelFilter("all")}
+              onClearSearchAndFilters={onClearSearchAndFilters}
+              onResetFilters={onResetFilters}
+            />
+          </li>
         ) : null}
         {!loading
           ? visibleConversations.map((conversation) => (

@@ -19,7 +19,8 @@ type ChannelState = {
 };
 
 /**
- * Empty-inbox activation checklist for admins (and soft hint for operators).
+ * Пустой inbox: следующий шаг — подключить канал или дождаться сообщений.
+ * Состояние не скрывается в пустую строку «диалогов нет».
  */
 export function InboxConnectChecklist(props: Props): JSX.Element | null {
   const { authToken, visible, isAdmin, onOpenIntegrations } = props;
@@ -28,18 +29,9 @@ export function InboxConnectChecklist(props: Props): JSX.Element | null {
     telegram: null,
     instagram: null
   });
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    try {
-      setDismissed(localStorage.getItem("lightcrm_inbox_onboard_dismissed") === "1");
-    } catch {
-      setDismissed(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!visible || dismissed || !authToken) return;
+    if (!visible || !authToken) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -63,9 +55,9 @@ export function InboxConnectChecklist(props: Props): JSX.Element | null {
     return () => {
       cancelled = true;
     };
-  }, [authToken, visible, dismissed]);
+  }, [authToken, visible]);
 
-  if (!visible || dismissed) return null;
+  if (!visible) return null;
 
   const items = [
     { key: "whatsapp", label: "WhatsApp", ok: channels.whatsapp },
@@ -75,50 +67,48 @@ export function InboxConnectChecklist(props: Props): JSX.Element | null {
 
   const allKnown = items.every((item) => item.ok !== null);
   const allConnected = allKnown && items.every((item) => item.ok);
-  if (allConnected) return null;
+  const title = !allKnown ? "Диалогов пока нет" : allConnected ? "Ждём сообщения" : "Подключите канал";
+  const text = !allKnown
+    ? "Проверяем WhatsApp, Telegram и Instagram. Если канал ещё не подключён, откройте интеграции."
+    : allConnected
+      ? "Каналы подключены. Новые диалоги появятся здесь, как только клиент напишет."
+      : isAdmin
+        ? "Пока нет диалогов. Подключите мессенджер — обращения появятся в этом списке."
+        : "Диалогов пока нет. Попросите администратора подключить WhatsApp, Telegram или Instagram.";
 
   return (
-    <div className="inboxOnboard card">
-      <div className="inboxOnboardTitle">Подключите каналы</div>
-      <p className="inboxOnboardText">
-        {isAdmin
-          ? "Пока нет диалогов. Подключите мессенджеры — новые обращения появятся здесь."
-          : "Диалогов пока нет. Попросите администратора подключить WhatsApp, Telegram или Instagram."}
-      </p>
-      <ul className="inboxOnboardList">
-        {items.map((item) => (
-          <li key={item.key} className={item.ok ? "ok" : ""}>
-            <span className="inboxOnboardCheck" aria-hidden="true">
-              {item.ok ? "✓" : "○"}
-            </span>
-            {item.label}
-            <span className="inboxOnboardStatus">
-              {item.ok === null ? "…" : item.ok ? "подключён" : "не подключён"}
-            </span>
-          </li>
-        ))}
-      </ul>
+    <div className="inboxOnboard card" data-testid="inbox-empty-state">
+      <div className="inboxOnboardTitle">{title}</div>
+      <p className="inboxOnboardText">{text}</p>
+      {!allConnected ? (
+        <ul className="inboxOnboardList">
+          {items.map((item) => (
+            <li key={item.key} className={item.ok ? "ok" : ""}>
+              <span className="inboxOnboardCheck" aria-hidden="true">
+                {item.ok ? "✓" : "○"}
+              </span>
+              {item.label}
+              <span className="inboxOnboardStatus">
+                {item.ok === null ? "…" : item.ok ? "подключён" : "не подключён"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="inboxOnboardActions">
         {isAdmin ? (
-          <button type="button" className="primaryButton" onClick={onOpenIntegrations}>
+          <button type="button" className="primaryButton" data-testid="inbox-open-integrations" onClick={onOpenIntegrations}>
+            {allConnected ? "Проверить интеграции" : "Открыть интеграции"}
+          </button>
+        ) : (
+          <button type="button" className="secondaryButton" disabled title="Доступно администратору">
             Открыть интеграции
           </button>
-        ) : null}
-        <button
-          type="button"
-          className="dialogActionBtn"
-          onClick={() => {
-            try {
-              localStorage.setItem("lightcrm_inbox_onboard_dismissed", "1");
-            } catch {
-              // ignore
-            }
-            setDismissed(true);
-          }}
-        >
-          Скрыть
-        </button>
+        )}
       </div>
+      {!isAdmin && !allConnected ? (
+        <p className="sidebarHint">Следующий шаг: администратор открывает «Интеграции» и подключает канал.</p>
+      ) : null}
     </div>
   );
 }

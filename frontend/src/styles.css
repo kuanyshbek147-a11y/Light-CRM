@@ -362,6 +362,62 @@ button {
   flex-wrap: wrap;
 }
 
+.topbarIconButton.active {
+  background: #eef0ff;
+  border-color: #c7cdf8;
+  color: #30328c;
+}
+
+.settingsPage {
+  padding: 16px;
+  overflow: auto;
+  align-content: start;
+}
+
+.settingsField,
+.settingsCheck {
+  display: grid;
+  gap: 6px;
+}
+
+.settingsCheck {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+}
+
+.pipelineEmptyState {
+  margin: 4px 0 16px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px dashed #d8ddf8;
+  background: linear-gradient(160deg, #eef0ff, #f8fafc);
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.pipelineEmptyActions,
+.dealPickerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.dealPickerList {
+  display: grid;
+  justify-items: stretch;
+}
+
+.pipelineDealPickBtn {
+  width: 100%;
+  text-align: left;
+  height: auto;
+  min-height: 42px;
+  padding: 8px 14px;
+}
+
 .firstRunMenuButton.attention {
   background: #eef0ff;
   border-color: #d8ddf8;
@@ -3034,8 +3090,19 @@ body.pwa-standalone {
 }
 
 .primaryButton:disabled {
-  opacity: 0.65;
+  opacity: 1;
   cursor: not-allowed;
+  background: #e2e8f0;
+  color: #64748b;
+  box-shadow: none;
+}
+
+.secondaryButton:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  background: #f8fafc;
+  color: #94a3b8;
+  border-color: #e2e8f0;
 }
 
 .emptyState {
