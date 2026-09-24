@@ -5335,6 +5335,7 @@ export function App(): JSX.Element {
             </div>
             {pipelineSubview === "kpi" ? (
               <>
+              {deals.length === 0 ? pipelineEmptyState : null}
               <FunnelKpiPanel
                 className="pipelineKpiPanel"
                 showHeader={false}
@@ -5356,7 +5357,6 @@ export function App(): JSX.Element {
                 formatStageLabel={(stage) => formatStageLabel(stage, UI)}
                 onDealStageChange={(dealId, stage) => void updateDealStage(dealId, stage)}
               />
-              {deals.length === 0 ? pipelineEmptyState : null}
               </>
             ) : (
               <>
