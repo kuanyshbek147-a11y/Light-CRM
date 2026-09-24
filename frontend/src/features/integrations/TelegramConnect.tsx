@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
+import { formatIntegrationSource, UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   connectTelegram,
   disconnectTelegram,
@@ -33,7 +35,7 @@ export function TelegramConnect({ authToken }: Props) {
         setShowTokenForm(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить статус Telegram");
+      setError(plainFetchError(err, "Не удалось загрузить статус Telegram"));
     } finally {
       setLoading(false);
     }
@@ -75,8 +77,9 @@ export function TelegramConnect({ authToken }: Props) {
       );
       await refreshStatus();
     } catch (err) {
-      const raw = err instanceof Error ? err.message : "";
-      showConnectError(describeTelegramConnectError(raw));
+      showConnectError(
+        plainFetchError(err, describeTelegramConnectError(err instanceof Error ? err.message : ""))
+      );
     } finally {
       window.clearTimeout(timer);
       setSaving(false);
@@ -94,7 +97,7 @@ export function TelegramConnect({ authToken }: Props) {
       setShowTokenForm(true);
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка отключения Telegram");
+      setError(plainFetchError(err, "Ошибка отключения Telegram"));
     } finally {
       setSaving(false);
     }
@@ -124,17 +127,20 @@ export function TelegramConnect({ authToken }: Props) {
           </div>
           <div>
             <div className="sidebarHint">Источник</div>
-            <div className="scriptCardTitle">{status?.source || "—"}</div>
+            <div className="scriptCardTitle">{formatIntegrationSource(status?.source)}</div>
           </div>
         </div>
       ) : null}
 
       {connected ? (
         <details className="integrationsDetails">
-          <summary>Подробности</summary>
+          <summary>Для специалиста</summary>
           <div className="integrationsDetailsBody">
             <div>
-              <div className="integrationsLabel">Webhook</div>
+              <div className="integrationsLabel">
+                {UI_LABELS_RU.webhook}
+                <span className="fieldTechHint">{UI_LABELS_RU.webhookHint}</span>
+              </div>
               <div className="integrationsValue">{status?.webhookUrl || status?.webhookPath || "—"}</div>
             </div>
           </div>
@@ -193,7 +199,7 @@ export function TelegramConnect({ authToken }: Props) {
         <div className="instagramConnectForm">
           <input
             className="filterInput"
-            placeholder="Токен бота от @BotFather"
+            placeholder="Ключ бота от @BotFather"
             value={botToken}
             onChange={(event) => setBotToken(event.target.value)}
             type="password"
@@ -202,7 +208,7 @@ export function TelegramConnect({ authToken }: Props) {
           />
           {!botToken.trim() ? (
             <p id="telegram-token-hint" className="integrationsHint">
-              Поле пустое — вставьте токен от @BotFather. Без него бот не подключится.
+              Поле пустое. Откройте Telegram, найдите @BotFather, создайте бота и вставьте выданный ключ.
             </p>
           ) : null}
           <div className="instagramConnectActions">
@@ -242,8 +248,8 @@ export function TelegramConnect({ authToken }: Props) {
 
       <div className="integrationsHint">
         {connected
-          ? "Нажмите «Отключить Telegram», чтобы остановить приём сообщений. «Переподключить» — чтобы сменить токен бота."
-          : "1) Создайте бота в @BotFather → 2) Вставьте токен → 3) Нажмите «Подключить Telegram»."}
+          ? "Нажмите «Отключить Telegram», чтобы остановить приём сообщений. «Переподключить» — чтобы сменить ключ бота."
+          : "Откройте Telegram, найдите @BotFather и создайте бота. Скопируйте выданный ключ, вставьте его сюда и нажмите «Подключить Telegram»."}
       </div>
     </div>
   );

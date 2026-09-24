@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
@@ -6,6 +6,8 @@ import { conversationsForChannel, type InboxChannelFilter } from "./lib/channelF
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import { DialogsEmptyState } from "./DialogsEmptyState";
+import { DialogsLoadError } from "./DialogsLoadError";
+import { InboxChannelEmpty } from "./InboxChannelEmpty";
 import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
@@ -37,6 +39,19 @@ function formatSnippet(conversation: Conversation, fallback: string): string {
     return "📎 [Медиа]";
   }
   return body;
+}
+
+function useWideLayout(): boolean {
+  const query = "(min-width: 769px)";
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = (): void => setWide(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return wide;
 }
 
 const CHANNEL_FILTERS = [
@@ -327,6 +342,8 @@ type InboxSidebarProps = {
   onOpenCustomerCard: (conversationId: string) => void;
   onClearSearchAndFilters?: () => void;
   onOpenIntegrations?: () => void;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
   channelFilter: InboxChannelFilter;
   onChannelFilterChange: (next: InboxChannelFilter) => void;
   isAdmin?: boolean;
@@ -356,12 +373,15 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onOpenCustomerCard,
     onClearSearchAndFilters,
     onOpenIntegrations,
+    loadError,
+    onRetryLoad,
     channelFilter,
     onChannelFilterChange,
     isAdmin = false,
     loading = false
   } = props;
 
+  const wideLayout = useWideLayout();
   const visibleConversations = useMemo(
     () => conversationsForChannel(conversations, channelFilter),
     [channelFilter, conversations]
@@ -535,28 +555,54 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         ) : null}
         {!loading && !visibleConversations.length ? (
           <li className="chatListEmptyItem">
-            <DialogsEmptyState
-              filterActive={
-                resolveInboxEmptyKind({
-                  loading,
-                  conversationCount: conversations.length,
-                  visibleCount: visibleConversations.length,
-                  channelFilter,
-                  search,
-                  filtersActive: inboxFiltersActive(filters)
-                }) !== "activate"
-              }
-              isAdmin={isAdmin}
-              onResetFilter={() => {
-                onChannelFilterChange("all");
-                if (onClearSearchAndFilters) {
-                  onClearSearchAndFilters();
-                  return;
+            {loadError && conversations.length === 0 && !wideLayout ? (
+              <DialogsLoadError onRetry={() => onRetryLoad?.()} />
+            ) : loadError && conversations.length === 0 ? null : resolveInboxEmptyKind({
+                loading,
+                conversationCount: conversations.length,
+                visibleCount: visibleConversations.length,
+                channelFilter,
+                search,
+                filtersActive: inboxFiltersActive(filters)
+              }) === "channel-filter" ? (
+              <InboxChannelEmpty
+                showActions={!wideLayout}
+                isAdmin={Boolean(isAdmin)}
+                onReset={() => {
+                  onChannelFilterChange("all");
+                  if (onClearSearchAndFilters) {
+                    onClearSearchAndFilters();
+                    return;
+                  }
+                  onResetFilters();
+                }}
+                onConnect={isAdmin ? () => onOpenIntegrations?.() : undefined}
+              />
+            ) : (
+              <DialogsEmptyState
+                showActions={!wideLayout}
+                filterActive={
+                  resolveInboxEmptyKind({
+                    loading,
+                    conversationCount: conversations.length,
+                    visibleCount: visibleConversations.length,
+                    channelFilter,
+                    search,
+                    filtersActive: inboxFiltersActive(filters)
+                  }) === "query"
                 }
-                onResetFilters();
-              }}
-              onOpenIntegrations={() => onOpenIntegrations?.()}
-            />
+                isAdmin={isAdmin}
+                onResetFilter={() => {
+                  onChannelFilterChange("all");
+                  if (onClearSearchAndFilters) {
+                    onClearSearchAndFilters();
+                    return;
+                  }
+                  onResetFilters();
+                }}
+                onOpenIntegrations={() => onOpenIntegrations?.()}
+              />
+            )}
           </li>
         ) : null}
         {!loading

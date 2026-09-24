@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
 import {
   loadAutoReplySettings,
   saveAutoReplySettings,
@@ -33,7 +34,7 @@ export function AutoReplyConnect({ authToken }: Props) {
       setDefaultText(next.defaultText);
       setSystemPrompt(next.systemPrompt);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить автоответчик");
+      setError(plainFetchError(err, "Не удалось загрузить автоответчик"));
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ export function AutoReplyConnect({ authToken }: Props) {
       setSettings(next);
       setSuccess(next.enabled ? "Автоответчик включён" : "Автоответчик выключен");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось сохранить");
+      setError(plainFetchError(err, "Не удалось сохранить"));
     } finally {
       setSaving(false);
     }
@@ -71,8 +72,7 @@ export function AutoReplyConnect({ authToken }: Props) {
           <h3 className="integrationsPanelTitle">Автоответчик</h3>
           <p className="integrationsHint">
             Автоматически отвечает на входящие в WhatsApp, Instagram, Telegram и чат на сайте.
-            Режим «Скрипты» подбирает ответ из базы быстрых ответов; «ИИ» — если задан{" "}
-            <code>OPENAI_API_KEY</code> на сервере.
+            Режим «Шаблоны ответов» берёт текст из ваших шаблонов. Режим «ИИ» отвечает сам, если он включён на сервере.
           </p>
         </div>
         <span className={`integrationStatusPill ${settings?.enabled ? "ok" : ""}`}>
@@ -98,8 +98,10 @@ export function AutoReplyConnect({ authToken }: Props) {
           value={mode}
           onChange={(event) => setMode(event.target.value === "ai" ? "ai" : "rules")}
         >
-          <option value="rules">Скрипты / правила</option>
-          <option value="ai">ИИ{settings?.aiConfigured ? "" : " (ключ не задан — будет fallback)"}</option>
+          <option value="rules">Шаблоны ответов</option>
+          <option value="ai">
+            ИИ{settings?.aiConfigured ? "" : " (пока недоступен — будет обычный текст)"}
+          </option>
         </select>
       </label>
 
@@ -126,7 +128,7 @@ export function AutoReplyConnect({ authToken }: Props) {
 
       {mode === "ai" ? (
         <label className="loginField">
-          <span className="loginFieldLabel">Системный промпт ИИ</span>
+          <span className="loginFieldLabel">Инструкция для ИИ</span>
           <textarea
             className="loginInput loginInputModern"
             rows={4}

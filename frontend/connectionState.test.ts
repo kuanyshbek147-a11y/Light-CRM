@@ -4,6 +4,7 @@ import {
   describeTelegramConnectError,
   interpretInstagramOAuthReturn,
   plainWhatsAppOAuthError,
+  WHATSAPP_POPUP_BLOCKED,
   resolveLinkBadge,
   telegramTokenMessage,
   telegramTokenProblem
@@ -89,6 +90,8 @@ test("отмена WhatsApp формулируется без жаргона", (
     plainWhatsAppOAuthError("Авторизация Meta отменена или не завершена."),
     "Подключение WhatsApp отменено или не завершено."
   );
+  assert.equal(plainWhatsAppOAuthError("Не удалось открыть окно SDK"), WHATSAPP_POPUP_BLOCKED);
+  assert.equal(/Meta|Cloud API|Direct/.test(WHATSAPP_POPUP_BLOCKED), false);
 });
 
 test("пустой токен Telegram — подсказка, неверный — явная ошибка", () => {
@@ -96,8 +99,8 @@ test("пустой токен Telegram — подсказка, неверный 
   assert.equal(telegramTokenProblem("   "), "empty");
   assert.equal(telegramTokenProblem("not-a-token"), "invalid");
   assert.equal(telegramTokenProblem("123:short"), "invalid");
-  assert.equal(telegramTokenMessage("empty"), "Вставьте токен бота от @BotFather");
-  assert.match(telegramTokenMessage("invalid"), /Токен неверный/);
+  assert.equal(telegramTokenMessage("empty"), "Вставьте ключ бота от @BotFather");
+  assert.match(telegramTokenMessage("invalid"), /Ключ неверный/);
   assert.equal(
     telegramTokenProblem("123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"),
     null
@@ -105,7 +108,7 @@ test("пустой токен Telegram — подсказка, неверный 
 });
 
 test("ответ Telegram Unauthorized не проглатывается", () => {
-  assert.match(describeTelegramConnectError("Unauthorized"), /не принял токен/);
-  assert.match(describeTelegramConnectError(""), /не принял токен/);
+  assert.match(describeTelegramConnectError("Unauthorized"), /не принял ключ/);
+  assert.match(describeTelegramConnectError(""), /не принял ключ/);
   assert.match(describeTelegramConnectError("Failed to fetch"), /Не удалось связаться/);
 });

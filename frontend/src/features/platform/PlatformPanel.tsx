@@ -136,7 +136,7 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
         <div>
           <h2 className="integrationsPanelTitle">Компании платформы</h2>
           <p className="integrationsHint">
-            Создавайте отдельные кабинеты для клиентов. Каждая компания — свой workspace, admin и операторы.
+            Создавайте отдельные кабинеты для клиентов. Каждая компания — свой кабинет, администратор и менеджеры.
             WhatsApp подключает admin компании в разделе «Интеграции».
           </p>
         </div>
@@ -232,10 +232,10 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
             </p>
             {detail.whatsapp.connected ? (
               <details className="integrationsDetails">
-                <summary>Подробности</summary>
+                <summary>Для специалиста</summary>
                 <div className="integrationsDetailsBody">
                   <div>
-                    <div className="integrationsLabel">WABA ID</div>
+                    <div className="integrationsLabel">Кабинет WhatsApp</div>
                     <div className="integrationsValue">{detail.whatsapp.wabaId || "—"}</div>
                   </div>
                 </div>
@@ -249,7 +249,7 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
                   <div>
                     <div className="platformUserName">
                       {user.fullName}{" "}
-                      <span className="platformUserRole">{user.role === "admin" ? "admin" : "оператор"}</span>
+                      <span className="platformUserRole">{user.role === "admin" ? "администратор" : "менеджер"}</span>
                     </div>
                     <div className="platformUserMeta">
                       {user.login ? `логин: ${user.login}` : ""} · {user.email}
@@ -303,7 +303,7 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
                   }))
                 }
               >
-                <option value="manager">Оператор (manager)</option>
+                <option value="manager">Менеджер</option>
                 <option value="admin">Admin компании</option>
               </select>
             </div>

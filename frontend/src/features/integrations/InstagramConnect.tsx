@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatIntegrationSource, UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   connectInstagram,
   connectInstagramOAuth,
@@ -24,10 +25,10 @@ const OAUTH_STATE_KEY = "instagram_oauth_state";
 const OAUTH_REDIRECT_KEY = "instagram_oauth_redirect";
 
 const OAUTH_APP_ID_FALLBACK =
-  "Не задан INSTAGRAM_APP_ID (приложение Light CRM-IG). Добавьте его в окружение сервера и перезапустите backend. Ручной ввод токена остаётся доступен.";
+  "Вход через Instagram пока не настроен. Напишите тому, кто обслуживает сервер, или вставьте ключ доступа в блоке «Для специалиста».";
 
 const OAUTH_APP_SECRET_FALLBACK =
-  "Не задан INSTAGRAM_APP_SECRET (приложение Light CRM-IG). Без секрета вход через Instagram Login не завершится. Добавьте его в окружение сервера и перезапустите backend. Ручной ввод токена остаётся доступен.";
+  "Вход через Instagram не завершится: на сервере не хватает секретного ключа. Напишите тому, кто обслуживает сервер, или вставьте ключ доступа в блоке «Для специалиста».";
 
 /** Why the connect button cannot start OAuth. Null when Instagram Login can open. */
 export function instagramOAuthBlockReason(setup: InstagramConnectSetup | null): string | null {
@@ -35,6 +36,8 @@ export function instagramOAuthBlockReason(setup: InstagramConnectSetup | null): 
     return null;
   }
   if (setup.blockReason) {
+    if (/INSTAGRAM_APP_SECRET/i.test(setup.blockReason)) return OAUTH_APP_SECRET_FALLBACK;
+    if (/INSTAGRAM_APP_ID|backend/i.test(setup.blockReason)) return OAUTH_APP_ID_FALLBACK;
     return setup.blockReason;
   }
   if (setup.credentialsReady === true && setup.appId) {
@@ -288,7 +291,7 @@ export function InstagramConnect({ authToken }: Props) {
     if (reason) {
       setAttemptFailed(true);
       setDismissedFailure(false);
-      setError("Вход через Instagram сейчас недоступен. Откройте «Подробности».");
+      setError("Вход через Instagram сейчас недоступен. Откройте «Для специалиста».");
       setAlertPulse((value) => value + 1);
       if (detailsRef.current) {
         detailsRef.current.open = true;
@@ -423,7 +426,7 @@ export function InstagramConnect({ authToken }: Props) {
       </div>
 
       {showConnected ? (
-        <p className="integrationsHint">Сообщения из Instagram Direct приходят в диалоги.</p>
+        <p className="integrationsHint">Сообщения из Instagram приходят в диалоги.</p>
       ) : (
         <ol className="integrationsSteps">
           <li>Нажмите «Подключить Instagram» и войдите в профессиональный аккаунт.</li>
@@ -466,8 +469,18 @@ export function InstagramConnect({ authToken }: Props) {
         >
           Обновить статус
         </button>
-        <button type="button" className="textButton" onClick={() => setShowManual((prev) => !prev)}>
-          {showManual ? "Скрыть ручной ввод" : "Ручной ввод токена"}
+        <button
+          type="button"
+          className="textButton"
+          onClick={() => {
+            setShowManual((prev) => {
+              const next = !prev;
+              if (next && detailsRef.current) detailsRef.current.open = true;
+              return next;
+            });
+          }}
+        >
+          {showManual ? "Скрыть ручной ввод" : "Ввести ключ вручную"}
         </button>
       </div>
 
@@ -478,71 +491,85 @@ export function InstagramConnect({ authToken }: Props) {
       ) : null}
       {success ? <div className="integrationsSuccess">{success}</div> : null}
 
-      {showManual ? (
-        <div className="instagramConnectForm">
-          <input
-            className="filterInput"
-            placeholder="Instagram User ID"
-            value={igUserId}
-            onChange={(event) => setIgUserId(event.target.value)}
-          />
-          <input
-            className="filterInput"
-            placeholder="Instagram Access Token"
-            value={pageAccessToken}
-            onChange={(event) => setPageAccessToken(event.target.value)}
-            type="password"
-            autoComplete="off"
-          />
-          <input
-            className="filterInput"
-            placeholder="Facebook Page ID (если токен Page)"
-            value={pageId}
-            onChange={(event) => setPageId(event.target.value)}
-          />
-          <button
-            type="button"
-            className="primaryButton"
-            disabled={saving || !pageAccessToken.trim() || (!igUserId.trim() && !pageId.trim())}
-            onClick={() => void onConnectManual()}
-          >
-            {saving ? "Сохранение..." : "Сохранить вручную"}
-          </button>
-        </div>
-      ) : null}
-
       <details className="integrationsDetails" ref={detailsRef}>
-        <summary>Подробности</summary>
+        <summary>Для специалиста</summary>
         <div className="integrationsDetailsBody">
           <div>
             <div className="integrationsLabel">Права доступа</div>
             <div className="integrationsValue">{(setup?.scopes || []).join(", ") || "instagram_business_basic, instagram_business_manage_messages"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">Webhook</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.webhook}
+              <span className="fieldTechHint">{UI_LABELS_RU.webhookHint}</span>
+            </div>
             <div className="integrationsValue">{status?.webhookPath || setup?.webhookPath || "/api/integrations/instagram/webhook"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">Verify token</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.verifyToken}
+              <span className="fieldTechHint">{UI_LABELS_RU.verifyTokenHint}</span>
+            </div>
             <div className="integrationsValue">{status?.verifyToken || setup?.verifyToken || "—"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">Redirect URI</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.redirectUri}
+              <span className="fieldTechHint">{UI_LABELS_RU.redirectUriHint}</span>
+            </div>
             <div className="integrationsValue">{setup?.redirectUri || `${typeof window !== "undefined" ? window.location.origin : ""}/`}</div>
           </div>
           <div>
-            <div className="integrationsLabel">IG User ID</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.igUserId}
+              <span className="fieldTechHint">{UI_LABELS_RU.igUserIdHint}</span>
+            </div>
             <div className="integrationsValue">{status?.igUserId || status?.pageId || "—"}</div>
           </div>
           <div>
-            <div className="integrationsLabel">App ID</div>
+            <div className="integrationsLabel">
+              {UI_LABELS_RU.appId}
+              <span className="fieldTechHint">{UI_LABELS_RU.appIdHint}</span>
+            </div>
             <div className="integrationsValue">{setup?.appId || "—"}</div>
           </div>
           <div>
             <div className="integrationsLabel">Источник</div>
-            <div className="integrationsValue">{status?.source || "—"}</div>
+            <div className="integrationsValue">{formatIntegrationSource(status?.source)}</div>
           </div>
           {blockReason ? <div className="integrationsError">{blockReason}</div> : null}
+          {showManual ? (
+            <div className="instagramConnectForm">
+              <input
+                className="filterInput"
+                placeholder="Номер аккаунта Instagram"
+                value={igUserId}
+                onChange={(event) => setIgUserId(event.target.value)}
+              />
+              <input
+                className="filterInput"
+                placeholder="Ключ доступа"
+                value={pageAccessToken}
+                onChange={(event) => setPageAccessToken(event.target.value)}
+                type="password"
+                autoComplete="off"
+              />
+              <input
+                className="filterInput"
+                placeholder="Номер страницы, если ключ от страницы"
+                value={pageId}
+                onChange={(event) => setPageId(event.target.value)}
+              />
+              <button
+                type="button"
+                className="primaryButton"
+                disabled={saving || !pageAccessToken.trim() || (!igUserId.trim() && !pageId.trim())}
+                onClick={() => void onConnectManual()}
+              >
+                {saving ? "Сохранение..." : "Сохранить вручную"}
+              </button>
+            </div>
+          ) : null}
         </div>
       </details>
     </div>

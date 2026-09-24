@@ -3,12 +3,13 @@ type Props = {
   onReset: () => void;
   onConnect?: () => void;
   layout?: "list" | "pane";
+  showActions?: boolean;
   onBack?: () => void;
   backLabel?: string;
 };
 
 export function InboxChannelEmpty(props: Props): JSX.Element {
-  const { isAdmin, onReset, onConnect, layout = "list", onBack, backLabel } = props;
+  const { isAdmin, onReset, onConnect, layout = "list", showActions = true, onBack, backLabel } = props;
   return (
     <div
       className={`inboxChannelEmpty${layout === "pane" ? " pane" : ""}`}
@@ -21,6 +22,7 @@ export function InboxChannelEmpty(props: Props): JSX.Element {
         </button>
       ) : null}
       <div className="inboxChannelEmptyTitle">Нет диалогов в этом канале</div>
+      {showActions ? (
       <div className="inboxChannelEmptyActions">
         <button
           type="button"
@@ -41,6 +43,7 @@ export function InboxChannelEmpty(props: Props): JSX.Element {
           </button>
         ) : null}
       </div>
+      ) : null}
     </div>
   );
 }

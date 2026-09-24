@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
+import { UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   deleteTelephonyExtension,
   loadTelephonyExtensions,
@@ -47,7 +49,7 @@ export function TelephonyConnect({ authToken }: Props) {
         setUsers([]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить телефонию");
+      setError(plainFetchError(err, "Не удалось загрузить телефонию"));
     } finally {
       setLoading(false);
     }
@@ -69,10 +71,10 @@ export function TelephonyConnect({ authToken }: Props) {
       try {
         iceServers = JSON.parse(iceText) as IceServerConfig[];
         if (!Array.isArray(iceServers)) {
-          throw new Error("ICE servers must be a JSON array");
+          throw new Error("Список серверов должен быть массивом");
         }
       } catch {
-        throw new Error("ICE/TURN JSON некорректен");
+        throw new Error("Текст серверов для звонка некорректен");
       }
       const saved = await saveTelephonySettings(authToken, {
         ...settings,
@@ -81,7 +83,7 @@ export function TelephonyConnect({ authToken }: Props) {
       setSettings(saved);
       setSuccess("Настройки АТС сохранены");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка сохранения");
+      setError(plainFetchError(err, "Ошибка сохранения"));
     } finally {
       setSaving(false);
     }
@@ -100,10 +102,10 @@ export function TelephonyConnect({ authToken }: Props) {
         isActive: true
       });
       setSipPassword("");
-      setSuccess("SIP-учётка сохранена");
+      setSuccess("Учётка телефона сохранена");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка сохранения extension");
+      setError(plainFetchError(err, "Не удалось сохранить учётку телефона"));
     } finally {
       setSaving(false);
     }
@@ -117,7 +119,7 @@ export function TelephonyConnect({ authToken }: Props) {
       setSuccess("Учётка удалена");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось удалить");
+      setError(plainFetchError(err, "Не удалось удалить"));
     } finally {
       setSaving(false);
     }
@@ -126,7 +128,7 @@ export function TelephonyConnect({ authToken }: Props) {
   if (loading && !settings) {
     return (
       <div className="integrationCard">
-        <div className="integrationsTitle">Телефония (Asterisk)</div>
+        <div className="integrationsTitle">{UI_LABELS_RU.telephonyTitle}</div>
         <p className="integrationsHint">Загрузка…</p>
       </div>
     );
@@ -134,13 +136,13 @@ export function TelephonyConnect({ authToken }: Props) {
 
   return (
     <div className="integrationCard">
-      <div className="integrationsTitle">Телефония (Asterisk WebRTC)</div>
+      <div className="integrationsTitle">{UI_LABELS_RU.telephonyTitle}</div>
       <p className="integrationsHint">
-        Телефон в браузере подключается к вашей АТС Asterisk. Звук идёт напрямую между браузером и
-        АТС, CRM хранит учётки и журнал звонков.
+        Телефон в браузере подключается к вашей АТС. Звук идёт напрямую между браузером и АТС, CRM
+        хранит учётки и журнал звонков.
       </p>
 
-      <div className="integrationsFormGrid">
+      <div className="telephonyEnableRow">
         <label className="integrationsField">
           <span>Включено</span>
           <input
@@ -151,73 +153,87 @@ export function TelephonyConnect({ authToken }: Props) {
             }
           />
         </label>
-        <label className="integrationsField">
-          <span>WSS URL</span>
-          <input
-            className="filterInput"
-            placeholder="wss://pbx.example.com:8089/ws"
-            value={settings?.wssUrl || ""}
-            onChange={(event) =>
-              setSettings((prev) => (prev ? { ...prev, wssUrl: event.target.value } : prev))
-            }
-          />
-        </label>
-        <label className="integrationsField">
-          <span>SIP domain</span>
-          <input
-            className="filterInput"
-            placeholder="pbx.example.com"
-            value={settings?.domain || ""}
-            onChange={(event) =>
-              setSettings((prev) => (prev ? { ...prev, domain: event.target.value } : prev))
-            }
-          />
-        </label>
-        <label className="integrationsField">
-          <span>Префикс исходящих (опционально)</span>
-          <input
-            className="filterInput"
-            placeholder="например 9 или 7"
-            value={settings?.outboundPrefix || ""}
-            onChange={(event) =>
-              setSettings((prev) =>
-                prev ? { ...prev, outboundPrefix: event.target.value } : prev
-              )
-            }
-          />
-        </label>
-        <label className="integrationsField">
-          <span>ICE / TURN (JSON)</span>
-          <textarea
-            className="scriptTextarea"
-            rows={5}
-            value={iceText}
-            onChange={(event) => setIceText(event.target.value)}
-          />
-        </label>
-      </div>
-
-      <div className="integrationsActions">
         <button type="button" className="primaryButton" disabled={saving} onClick={() => void onSaveSettings()}>
           Сохранить АТС
         </button>
       </div>
 
-      <div className="telephonyGuide">
-        <div className="sidebarTitle">Чеклист Asterisk</div>
-        <ul>
-          <li>PJSIP endpoint с <code>webrtc=yes</code>, DTLS-SRTP, ICE</li>
-          <li>WSS listener (часто порт 8089) с валидным TLS-сертификатом</li>
-          <li>Отдельный SIP extension на каждого оператора CRM</li>
-          <li>STUN/TURN для NAT; разрешить WSS с домена CRM</li>
-          <li>Dialplan для исходящих на E.164 / местные номера</li>
-        </ul>
-      </div>
+      <details className="integrationsDetails">
+        <summary>Для специалиста</summary>
+        <div className="integrationsDetailsBody">
+          <div className="integrationsFormGrid">
+            <label className="integrationsField">
+              <span>
+                {UI_LABELS_RU.wssUrl}
+                <span className="fieldTechHint">{UI_LABELS_RU.wssUrlHint}</span>
+              </span>
+              <input
+                className="filterInput"
+                placeholder="wss://pbx.example.com:8089/ws"
+                value={settings?.wssUrl || ""}
+                onChange={(event) =>
+                  setSettings((prev) => (prev ? { ...prev, wssUrl: event.target.value } : prev))
+                }
+              />
+            </label>
+            <label className="integrationsField">
+              <span>
+                {UI_LABELS_RU.sipDomain}
+                <span className="fieldTechHint">{UI_LABELS_RU.sipDomainHint}</span>
+              </span>
+              <input
+                className="filterInput"
+                placeholder="pbx.example.com"
+                value={settings?.domain || ""}
+                onChange={(event) =>
+                  setSettings((prev) => (prev ? { ...prev, domain: event.target.value } : prev))
+                }
+              />
+            </label>
+            <label className="integrationsField">
+              <span>Префикс исходящих (необязательно)</span>
+              <input
+                className="filterInput"
+                placeholder="например 9 или 7"
+                value={settings?.outboundPrefix || ""}
+                onChange={(event) =>
+                  setSettings((prev) =>
+                    prev ? { ...prev, outboundPrefix: event.target.value } : prev
+                  )
+                }
+              />
+            </label>
+            <label className="integrationsField">
+              <span>
+                {UI_LABELS_RU.iceTurn}
+                <span className="fieldTechHint">{UI_LABELS_RU.iceTurnHint}</span>
+              </span>
+              <textarea
+                className="scriptTextarea"
+                rows={5}
+                value={iceText}
+                onChange={(event) => setIceText(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="telephonyGuide">
+            <div className="integrationsTitle">
+              Что настроить на АТС
+              <span className="fieldTechHint">{UI_LABELS_RU.telephonyTitleHint}</span>
+            </div>
+            <ul>
+              <li>Номер для звонка из браузера с шифрованием голоса</li>
+              <li>Защищённый адрес соединения и действующий сертификат</li>
+              <li>Отдельная учётка телефона на каждого менеджера</li>
+              <li>Серверы обхода сети и разрешение соединения с домена CRM</li>
+              <li>Правила набора исходящих номеров</li>
+            </ul>
+          </div>
 
-      <div className="sidebarTitle">SIP-учётки операторов</div>
-      <div className="integrationsFormGrid">
+          <div className="integrationsTitle">Учётки телефона менеджеров</div>
+          <div className="integrationsFormGrid">
         <label className="integrationsField">
-          <span>Оператор</span>
+          <span>Менеджер</span>
           <select className="filterInput" value={userId} onChange={(event) => setUserId(event.target.value)}>
             <option value="">Выберите</option>
             {users.map((user) => (
@@ -228,7 +244,9 @@ export function TelephonyConnect({ authToken }: Props) {
           </select>
         </label>
         <label className="integrationsField">
-          <span>SIP username</span>
+          <span>
+            {UI_LABELS_RU.sipUsername}
+          </span>
           <input
             className="filterInput"
             value={sipUsername}
@@ -237,22 +255,26 @@ export function TelephonyConnect({ authToken }: Props) {
           />
         </label>
         <label className="integrationsField">
-          <span>SIP password</span>
+          <span>
+            {UI_LABELS_RU.sipPassword}
+          </span>
           <input
             className="filterInput"
             type="password"
             value={sipPassword}
             onChange={(event) => setSipPassword(event.target.value)}
-            placeholder="пароль extension"
+            placeholder="пароль учётки"
           />
         </label>
         <label className="integrationsField">
-          <span>Display name</span>
+          <span>
+            {UI_LABELS_RU.displayName}
+          </span>
           <input
             className="filterInput"
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
-            placeholder="Имя в SIP"
+            placeholder="Как представить менеджера"
           />
         </label>
       </div>
@@ -288,9 +310,11 @@ export function TelephonyConnect({ authToken }: Props) {
           </div>
         ))}
         {!extensions.length ? (
-          <div className="integrationsHint">Пока нет привязанных SIP-учёток.</div>
+          <div className="integrationsHint">Пока нет привязанных учёток телефона.</div>
         ) : null}
-      </div>
+          </div>
+        </div>
+      </details>
 
       {error ? <div className="drawerInlineError">{error}</div> : null}
       {success ? <div className="integrationsSuccess">{success}</div> : null}

@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { query } from "../../db";
-import { applyRealEstateKzPreset } from "../presets/real-estate-kz";
+import { applySmbUniversalPreset } from "../presets/apply-smb-universal";
 
 export type WorkspaceUserInput = {
   fullName: string;
@@ -32,8 +32,8 @@ async function assertUniqueUser(email: string, login: string): Promise<void> {
 }
 
 async function seedWorkspaceDefaults(workspaceId: string): Promise<void> {
-  // Ниша по умолчанию: Недвижимость KZ (этапы, скрипты, required fields, лендинг).
-  await applyRealEstateKzPreset({
+  // Только новая компания. Уже созданные кабинеты этим вызовом не обновляются.
+  await applySmbUniversalPreset({
     workspaceId,
     userId: null,
     createLanding: true

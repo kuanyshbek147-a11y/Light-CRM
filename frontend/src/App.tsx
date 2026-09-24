@@ -21,28 +21,38 @@ import {
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { DialogsEmptyState } from "./features/inbox/DialogsEmptyState";
-import { inboxFiltersActive } from "./features/inbox/inboxEmpty";
-import { channelFilterIsEmpty, type InboxChannelFilter } from "./features/inbox/lib/channelFilter";
+import { DialogsLoadError } from "./features/inbox/DialogsLoadError";
+import { InboxChannelEmpty } from "./features/inbox/InboxChannelEmpty";
+import { inboxFiltersActive, integrationsFocusForChannel, resolveInboxEmptyKind } from "./features/inbox/inboxEmpty";
+import {
+  conversationsForChannel,
+  inboxCenterConversation,
+  type InboxChannelFilter
+} from "./features/inbox/lib/channelFilter";
 import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
 import {
   closeOnboarding,
   emptyOnboardingState,
   firstIncompleteStep,
+  markOnboardingSeen,
   onboardingUserKey,
   readOnboarding,
   saveOnboarding,
+  shouldAutoOpenFirstRun,
   usesDemoSampleData,
   withOnboardingStep,
+  workspaceMessagingChannelConnected,
   type OnboardingState,
-  type OnboardingStatus,
   type OnboardingStepId
 } from "./features/onboarding/onboardingStorage";
 import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
-import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
+import { displayTaskTitle, formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
+import { plainFetchError } from "./shared/api/http";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
+import { ListSkeleton } from "./shared/ui/ListSkeleton";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 
 const LandingWebChat = lazy(() =>
@@ -136,6 +146,13 @@ import { requestTelephonyDial, type CallLogResult } from "./features/telephony/a
 import { loadStaffUnreadCount, shareConversationToStaff } from "./features/staff/api";
 import { DealLinkDialog } from "./features/crm/DealLinkDialog";
 import { PipelineEmptyState } from "./features/crm/PipelineEmptyState";
+import { showFollowUpReminders, showTasksEmptyState } from "./features/crm/tasksEmpty";
+import type { IntegrationsFocus } from "./features/integrations/IntegrationsPanel";
+import {
+  loadInstagramStatus,
+  loadTelegramStatus,
+  loadWhatsAppConnectStatus
+} from "./features/integrations/api";
 import { groupDealsForBoard, ruDealCount } from "./features/crm/pipelineBoard";
 import { SettingsPanel } from "./features/settings/SettingsPanel";
 import {
@@ -411,16 +428,16 @@ const UI = {
   openTasksTab: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   doneTasksTab: "\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043d\u044b\u0435",
   noTasks: "\u0417\u0430\u0434\u0430\u0447 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442",
-  followUpSettings: "Напоминание",
-  followUpEnabled: "Включить напоминание",
+  followUpSettings: "Срок ответа",
+  followUpEnabled: "Включить срок ответа",
   followUpOnStage: "\u041f\u0440\u0438 \u0441\u043c\u0435\u043d\u0435 \u044d\u0442\u0430\u043f\u0430 \u0441\u0434\u0435\u043b\u043a\u0438",
   followUpStageHours: "\u0427\u0435\u0440\u0435\u0437 \u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0447\u0430\u0441\u043e\u0432 \u043d\u0430\u043f\u043e\u043c\u043d\u0438\u0442\u044c (\u044d\u0442\u0430\u043f)",
   followUpOnSilence: "\u0415\u0441\u043b\u0438 \u0434\u043e\u043b\u0433\u043e \u043d\u0435\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u0432 \u0434\u0438\u0430\u043b\u043e\u0433\u0435",
   followUpSilenceHours: "\u0422\u0438\u0448\u0438\u043d\u0430, \u0447\u0430\u0441\u043e\u0432",
   followUpSkipClosed: "\u041d\u0435 \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u043d\u0430 \u0432\u044b\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445/\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u043d\u044b\u0445 \u044d\u0442\u0430\u043f\u0430\u0445",
-  saveFollowUp: "Сохранить напоминание",
+  saveFollowUp: "Сохранить срок ответа",
   followUpSettingsHint:
-    "Система сама создаст напоминание: после смены этапа или если в чате долго тишина.",
+    "Система сама создаст срок ответа: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
   mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
@@ -428,13 +445,14 @@ const UI = {
   saveDeal: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0434\u0435\u043b\u043a\u0443",
   salesConversion: "\u041a\u043e\u043d\u0432\u0435\u0440\u0441\u0438\u044f \u043f\u0440\u043e\u0434\u0430\u0436",
   winRate: "Доля побед",
-  noContacts: "Клиентов пока нет. Они появятся из диалогов WhatsApp, Telegram и других каналов.",
+  noContactsTitle: "Пока нет клиентов",
+  noContactsHint: "Они появятся из диалогов WhatsApp, Telegram и других каналов.",
   selectContactHint: "Выберите клиента слева, чтобы открыть карточку, сделки и историю.",
   noSearchResults: "Ничего не найдено. Измените запрос или сбросьте фильтры.",
   fabSearchFilters: "Поиск и фильтры",
   fabNewTask: "Новая задача",
   fabSearchClients: "Поиск клиентов",
-  slaFollowUpTitle: "Напоминание",
+  slaFollowUpTitle: "Срок ответа",
   wonAmount: "\u0412\u044b\u0440\u0443\u0447\u043a\u0430",
   pipelineAmountLabel: "\u0412 \u0432\u043e\u0440\u043e\u043d\u043a\u0435",
   sendToMessenger: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0432 \u043c\u0435\u0441\u0441\u0435\u043d\u0434\u0436\u0435\u0440",
@@ -442,13 +460,13 @@ const UI = {
   menuKnowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
   menuMarketing: "\u041c\u0430\u0440\u043a\u0435\u0442\u0438\u043d\u0433",
   menuOps: "\u041e\u043f\u0435\u0440\u0430\u0446\u0438\u0438",
-  backToChats: "\u041a \u0447\u0430\u0442\u0430\u043c",
+  backToChats: "К диалогам",
   menuIntegrations: "\u0418\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438",
   menuPlatform: "\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u0438",
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   searchClients: "\u041f\u043e\u0438\u0441\u043a \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
-  chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
+  chatsSuffix: "диалогов",
   searchByNameOrPhone: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0438\u043c\u0435\u043d\u0438 \u0438\u043b\u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
   city: "\u0413\u043e\u0440\u043e\u0434",
   reason: "\u041f\u0440\u0438\u0447\u0438\u043d\u0430",
@@ -460,16 +478,15 @@ const UI = {
   editShort: "\u0418\u0437\u043c.",
   openStatusSuffix: "\u043e\u0442\u043a\u0440\u044b\u0442",
   closedStatusSuffix: "\u0437\u0430\u043a\u0440\u044b\u0442",
-  replyScripts: "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b",
-  quickScriptHint: "\u0411\u044b\u0441\u0442\u0440\u0430\u044f \u0432\u0441\u0442\u0430\u0432\u043a\u0430 \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0438\u0437 \u0432\u0430\u0448\u0435\u0439 \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0438.",
+  replyScripts: "Шаблоны ответов",
+  quickScriptHint: "Вставка и отправка из ваших шаблонов ответов.",
   chooseInstruction: "\u0418\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438",
   openLibrary: "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0443",
-  showScripts: "\u0421\u043a\u0440\u0438\u043f\u0442\u044b",
+  showScripts: "Шаблоны",
   general: "\u041e\u0431\u0449\u0435\u0435",
-  insertScript: "\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0441\u043a\u0440\u0438\u043f\u0442",
-  sendScript: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043a\u0440\u0438\u043f\u0442",
-  noMatchingScripts:
-    "\u041f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0438\u0445 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432 \u043d\u0435\u0442. \u0421\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u044b\u0439 \u0438\u043b\u0438 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0435 \u043f\u043e\u0438\u0441\u043a\u043e\u0432\u044b\u0439 \u0437\u0430\u043f\u0440\u043e\u0441.",
+  insertScript: "Вставить шаблон",
+  sendScript: "Отправить шаблон",
+  noMatchingScripts: "Подходящих шаблонов ответов нет. Создайте новый или измените поиск.",
   knowledgeBase: "\u0411\u0430\u0437\u0430 \u0437\u043d\u0430\u043d\u0438\u0439",
   knowledgeBaseHint: "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u0438 \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0443 \u043f\u043e\u043d\u044f\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443.",
   searchKnowledgeBase: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0431\u0430\u0437\u0435 \u0437\u043d\u0430\u043d\u0438\u0439",
@@ -535,7 +552,7 @@ const UI = {
     "WhatsApp \u043d\u0435 \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0451\u043d. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u044e \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445.",
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
   send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
-  selectChatHint: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0432 \u0441\u043f\u0438\u0441\u043a\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432, \u0447\u0442\u043e\u0431\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443.",
+  selectChatHint: "Выберите диалог в списке, чтобы начать переписку.",
   pipelineAndKpi: "Воронка и показатели",
   salesOverview: "\u041e\u0431\u0437\u043e\u0440 \u043f\u0440\u043e\u0434\u0430\u0436",
   min: "\u043c\u0438\u043d",
@@ -588,7 +605,7 @@ const UI = {
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
   takeIntoWork: "\u0412\u0437\u044f\u0442\u044c \u0432 \u0440\u0430\u0431\u043e\u0442\u0443",
   alreadyInWork: "\u0423\u0436\u0435 \u0432 \u0440\u0430\u0431\u043e\u0442\u0435",
-  assignedTo: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440",
+  assignedTo: "Менеджер",
   openCards: "\u041e\u0442\u043a\u0440\u044b\u0442\u044b\u0435",
   closedCards: "\u0417\u0430\u043a\u0440\u044b\u0442\u044b\u0435",
   analyticsTitle: "\u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430 \u043e\u0442\u0434\u0435\u043b\u0430",
@@ -646,23 +663,23 @@ const UI = {
   phone: "\u0422\u0435\u043b\u0435\u0444\u043e\u043d",
   inquiryReason: "\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f",
   save: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c",
-  scriptLibrary: "\u0411\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430 \u0441\u043a\u0440\u0438\u043f\u0442\u043e\u0432",
+  scriptLibrary: "Шаблоны ответов",
   scriptLibraryHint:
     "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0439\u0442\u0435, \u0438\u0449\u0438\u0442\u0435, \u0440\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0438 \u0443\u043f\u043e\u0440\u044f\u0434\u043e\u0447\u0438\u0432\u0430\u0439\u0442\u0435 \u0432\u0441\u0435 \u0448\u0430\u0431\u043b\u043e\u043d\u044b \u043e\u0442\u0432\u0435\u0442\u043e\u0432.",
-  newScript: "\u041d\u043e\u0432\u044b\u0439 \u0441\u043a\u0440\u0438\u043f\u0442",
+  newScript: "Новый шаблон",
   searchScripts: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044e, \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u0438\u043b\u0438 \u0442\u0435\u043a\u0441\u0442\u0443",
   variablesLabel: "\u041f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0435",
   edit: "\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c",
   delete: "\u0423\u0434\u0430\u043b\u0438\u0442\u044c",
-  editScript: "\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435 \u0441\u043a\u0440\u0438\u043f\u0442\u0430",
-  createScript: "\u0421\u043e\u0437\u0434\u0430\u043d\u0438\u0435 \u0441\u043a\u0440\u0438\u043f\u0442\u0430",
+  editScript: "Редактирование шаблона",
+  createScript: "Создание шаблона",
   scriptEditorHint:
     "\u0421\u043e\u0437\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u043f\u0435\u0440\u0435\u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b \u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439\u0442\u0435 \u043f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0435 \u0438\u0437 \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u043a\u043b\u0438\u0435\u043d\u0442\u0430.",
-  scriptTitle: "\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0441\u043a\u0440\u0438\u043f\u0442\u0430",
-  scriptText: "\u0422\u0435\u043a\u0441\u0442 \u0441\u043a\u0440\u0438\u043f\u0442\u0430",
+  scriptTitle: "Название шаблона",
+  scriptText: "Текст шаблона",
   clear: "\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c",
-  updateScript: "\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0441\u043a\u0440\u0438\u043f\u0442",
-  saveScript: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u043a\u0440\u0438\u043f\u0442"
+  updateScript: "Обновить шаблон",
+  saveScript: "Сохранить шаблон"
 } as const;
 
 function isSuperAdminUser(user: SessionUser | null | undefined): boolean {
@@ -730,6 +747,10 @@ export function App(): JSX.Element {
   );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [conversationsLoadError, setConversationsLoadError] = useState<string | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [dealsLoading, setDealsLoading] = useState(true);
   const [selectedConversation, setSelectedConversation] = useState<string>("");
   const [selectedConversationData, setSelectedConversationData] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -770,8 +791,8 @@ export function App(): JSX.Element {
     | "platform"
     | "settings"
   >("dialogs");
-  const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
-  const openIntegrations = (target?: "telegram" | "instagram") => {
+  const [integrationsFocus, setIntegrationsFocus] = useState<IntegrationsFocus | null>(null);
+  const openIntegrations = (target?: IntegrationsFocus) => {
     setIntegrationsFocus(target ?? null);
     setCurrentSection("integrations");
   };
@@ -881,6 +902,8 @@ export function App(): JSX.Element {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [onboardingState, setOnboardingState] = useState<OnboardingState>(() => emptyOnboardingState());
   const onboardingBootstrappedFor = useRef("");
+  const onboardingStateRef = useRef(onboardingState);
+  onboardingStateRef.current = onboardingState;
   const toastTimerRef = useRef<number | null>(null);
   const [softphoneReady, setSoftphoneReady] = useState(false);
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
@@ -952,7 +975,7 @@ export function App(): JSX.Element {
     };
 
     const refreshInbox = (): void => {
-      void loadConversations(token, search, filters, setConversations);
+      void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
     };
 
     const socket = io(SOCKET_BASE_URL, {
@@ -982,7 +1005,7 @@ export function App(): JSX.Element {
       if (payload?.direction !== "outgoing") {
         playIncomingMessageSound();
       }
-      void loadConversations(token, search, filters, setConversations);
+      void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
       if (!payload?.conversationId || payload.conversationId !== selectedConversation || !payload.messageId) {
         return;
       }
@@ -1021,7 +1044,7 @@ export function App(): JSX.Element {
         toastTimerRef.current = window.setTimeout(() => {
           setToastVisible(false);
         }, 3500);
-        void loadConversations(token, search, filters, setConversations);
+        void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
       }
     });
 
@@ -1061,7 +1084,7 @@ export function App(): JSX.Element {
       conversation_id?: string | null;
       status?: string;
     }) => {
-      void loadConversations(token, search, filters, setConversations);
+      void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
       if (!payload?.conversation_id) {
         return;
       }
@@ -1097,7 +1120,7 @@ export function App(): JSX.Element {
           setMediaUploadError(UI.whatsappDeliveryFailed);
         }
       }
-      void loadConversations(token, search, filters, setConversations);
+      void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
     });
 
     return () => {
@@ -1130,7 +1153,7 @@ export function App(): JSX.Element {
     }
 
     const refreshInbox = (): void => {
-      void loadConversations(token, search, filters, setConversations);
+      void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
     };
 
     const intervalId = window.setInterval(refreshInbox, 5000);
@@ -1160,7 +1183,7 @@ export function App(): JSX.Element {
       if (document.visibilityState !== "visible") {
         return;
       }
-      void loadConversations(token, search, filters, setConversations);
+      void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
       if (selectedConversation) {
         void loadMessages(token, selectedConversation, setMessages);
       }
@@ -1322,44 +1345,89 @@ export function App(): JSX.Element {
     }
     onboardingBootstrappedFor.current = onboardingKey;
     const saved = readOnboarding(onboardingKey);
+    onboardingStateRef.current = saved;
     setOnboardingState(saved);
     setOnboardingStep(firstIncompleteStep(saved.steps));
-    setOnboardingMode(saved.status === "pending" ? "overlay" : "hidden");
+    setOnboardingMode(shouldAutoOpenFirstRun(saved, sessionUser?.role) ? "overlay" : "hidden");
   }, [token, sessionRestoring, onboardingKey, sessionUser]);
 
   useEffect(() => {
-    if (!conversations.length) {
-      if (selectedConversation) {
-        setSelectedConversation("");
-        setSelectedConversationData(null);
-        setMessages([]);
-        setContactCard(null);
-        setMobileThreadOpen(false);
-      }
+    if (!token || sessionRestoring || isSuperAdminUser(sessionUser)) return;
+    let cancelled = false;
+    const syncChannelStep = (): void => {
+      void (async () => {
+        const [whatsappConnected, instagram, telegram] = await Promise.all([
+          loadWhatsAppConnectStatus(token)
+            .then((status) => status.connected)
+            .catch(() => false),
+          loadInstagramStatus(token)
+            .then((status) => ({ connected: status.connected, source: status.source }))
+            .catch(() => ({ connected: false, source: null as string | null })),
+          loadTelegramStatus(token)
+            .then((status) => ({ connected: status.connected, source: status.source }))
+            .catch(() => ({ connected: false, source: null as string | null }))
+        ]);
+        if (cancelled) return;
+        if (
+          !workspaceMessagingChannelConnected({
+            whatsappConnected,
+            instagramConnected: instagram.connected,
+            instagramSource: instagram.source,
+            telegramConnected: telegram.connected,
+            telegramSource: telegram.source
+          })
+        ) {
+          return;
+        }
+        const current = onboardingStateRef.current;
+        if (current.steps.channel) return;
+        const next = withOnboardingStep(current, "channel");
+        onboardingStateRef.current = next;
+        setOnboardingState(next);
+        const key = onboardingUserKey(sessionUser);
+        if (key) saveOnboarding(key, next);
+      })();
+    };
+    syncChannelStep();
+    const onFocus = (): void => syncChannelStep();
+    const onVisibility = (): void => {
+      if (document.visibilityState === "visible") syncChannelStep();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [token, sessionRestoring, sessionUser, onboardingMode]);
+
+  useEffect(() => {
+    const visible = conversationsForChannel(conversations, inboxChannelFilter);
+    if (!visible.length) {
+      setSelectedConversation((current) => (current ? "" : current));
+      setSelectedConversationData((current) => (current ? null : current));
+      setMessages((current) => (current.length ? [] : current));
+      setContactCard((current) => (current ? null : current));
+      setMobileThreadOpen(false);
+      setCustomerCardOpen(false);
       return;
     }
 
-    const existingConversation = conversations.find((conversation) => conversation.id === selectedConversation);
+    const existingConversation = visible.find((conversation) => conversation.id === selectedConversation);
     if (existingConversation) {
       setSelectedConversationData(existingConversation);
       return;
     }
 
-    if (conversations[0]) {
-      const firstConversation = conversations[0];
-      setSelectedConversation(firstConversation.id);
-      setSelectedConversationData(firstConversation);
-      if (token) {
-        void loadMessages(token, firstConversation.id, setMessages);
-        void loadContactCard(token, firstConversation.id, setContactCard);
-      }
+    const firstConversation = visible[0];
+    setSelectedConversation(firstConversation.id);
+    setSelectedConversationData(firstConversation);
+    if (token) {
+      void loadMessages(token, firstConversation.id, setMessages);
+      void loadContactCard(token, firstConversation.id, setContactCard);
     }
-  }, [conversations, selectedConversation, token]);
-
-  useEffect(() => {
-    if (conversationsLoading || !channelFilterIsEmpty(conversations, inboxChannelFilter)) return;
-    setCustomerCardOpen(false);
-  }, [conversations, conversationsLoading, inboxChannelFilter]);
+  }, [conversations, selectedConversation, token, inboxChannelFilter]);
 
   useEffect(() => {
     if (!scripts.length) {
@@ -1463,6 +1531,18 @@ export function App(): JSX.Element {
   }));
   const pipelineBoard = groupDealsForBoard(deals, pipelineColumns, pipelineStatusFilter);
   const canManageChannels = sessionUser?.role === "admin" || sessionUser?.role === "superadmin";
+  const visibleInboxConversations = conversationsForChannel(conversations, inboxChannelFilter);
+  const inboxListEmpty = !conversationsLoading && visibleInboxConversations.length === 0;
+  const inboxEmptyKind = resolveInboxEmptyKind({
+    loading: conversationsLoading,
+    conversationCount: conversations.length,
+    visibleCount: visibleInboxConversations.length,
+    channelFilter: inboxChannelFilter,
+    search,
+    filtersActive: inboxFiltersActive(filters)
+  });
+  const inboxLoadFailed = Boolean(conversationsLoadError) && conversations.length === 0 && inboxListEmpty;
+  const threadConversation = inboxCenterConversation(visibleInboxConversations, selectedConversation);
   const pipelineEmptyState = (
     <PipelineEmptyState
       conversations={conversations.map((item) => ({
@@ -1479,6 +1559,8 @@ export function App(): JSX.Element {
             : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} на вкладке «Открытые».`
           : null
       }
+      isAdmin={canManageChannels}
+      onConnectChannel={() => openIntegrations("whatsapp")}
       onCreateDeal={(conversationId) => {
         const conversation = conversations.find((item) => item.id === conversationId);
         if (conversation) {
@@ -1491,7 +1573,7 @@ export function App(): JSX.Element {
   async function hydrateWorkspace(authToken: string): Promise<void> {
     setConversationsLoading(true);
     try {
-      const nextConversations = await loadConversations(authToken, "", filters, setConversations);
+      const nextConversations = await loadConversations(authToken, "", filters, setConversations, setConversationsLoadError);
       await loadQuickActionsMeta(authToken, setQuickManagers, setDealStages);
       const requiredResponse = await fetch(`${API}/deals/contact-required-fields`, {
         headers: { Authorization: `Bearer ${authToken}` }
@@ -1506,7 +1588,17 @@ export function App(): JSX.Element {
       }
       await refreshScripts({ token: authToken, setScripts });
       await refreshKnowledge({ token: authToken, setKnowledgeArticles });
-      await loadDeals(authToken, setDeals);
+      try {
+        await Promise.all([
+          loadDeals(authToken, setDeals).finally(() => setDealsLoading(false)),
+          refreshCrmTasks(taskStatusFilter, authToken),
+          refreshCrmContacts(contactsSearch, authToken)
+        ]);
+      } catch {
+        setDealsLoading(false);
+        setTasksLoading(false);
+        setContactsLoading(false);
+      }
       await loadMetrics(authToken, setMetrics, metricsQuery);
       await loadMetricSnapshots(authToken, setMetricSnapshots);
 
@@ -1515,6 +1607,11 @@ export function App(): JSX.Element {
         setSelectedConversationData(nextConversations[0]);
         await loadMessages(authToken, nextConversations[0].id, setMessages);
         await loadContactCard(authToken, nextConversations[0].id, setContactCard);
+      } else {
+        setSelectedConversation("");
+        setSelectedConversationData(null);
+        setMessages([]);
+        setContactCard(null);
       }
     } finally {
       setConversationsLoading(false);
@@ -1531,6 +1628,11 @@ export function App(): JSX.Element {
       setCurrentSection("platform");
       return;
     }
+    setConversations([]);
+    setSelectedConversation("");
+    setSelectedConversationData(null);
+    setMessages([]);
+    setContactCard(null);
     setConversationsLoading(true);
     try {
       await hydrateWorkspace(nextToken);
@@ -1592,7 +1694,7 @@ export function App(): JSX.Element {
             await new Promise((resolve) => window.setTimeout(resolve, 2500 * attempt));
             continue;
           }
-          setLoginError("Сервер API временно недоступен. Подождите 30–60 сек и нажмите «Войти» ещё раз.");
+          setLoginError("Сервер временно недоступен. Подождите минуту и попробуйте ещё раз.");
           return;
         }
 
@@ -1612,7 +1714,7 @@ export function App(): JSX.Element {
           await new Promise((resolve) => window.setTimeout(resolve, 2500 * attempt));
           continue;
         }
-        setLoginError("Сервер API временно недоступен. Подождите 30–60 сек и нажмите «Войти» ещё раз.");
+        setLoginError("Сервер временно недоступен. Подождите минуту и попробуйте ещё раз.");
       }
     }
   }
@@ -1640,7 +1742,7 @@ export function App(): JSX.Element {
       source: preset.filters.source || ""
     };
     setFilters(nextFilters);
-    await loadConversations(token, search, nextFilters, setConversations);
+    await loadConversations(token, search, nextFilters, setConversations, setConversationsLoadError);
   }
 
   function removeFilterPreset(presetId: string): void {
@@ -1651,7 +1753,9 @@ export function App(): JSX.Element {
     onboardingBootstrappedFor.current = "";
     setOnboardingMode("hidden");
     setOnboardingStep(0);
-    setOnboardingState(emptyOnboardingState());
+    const clearedOnboarding = emptyOnboardingState();
+    onboardingStateRef.current = clearedOnboarding;
+    setOnboardingState(clearedOnboarding);
     clearStoredSession();
     setToken("");
     setSessionUser(null);
@@ -1719,7 +1823,7 @@ export function App(): JSX.Element {
       return;
     }
     await apiUpdateConversationPriority(token, conversationId, priority);
-    await refreshConversationList({ token, search, filters, setConversations });
+    await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
   }
 
   async function assignConversationManager(conversationId: string, managerId: string): Promise<void> {
@@ -1727,12 +1831,12 @@ export function App(): JSX.Element {
       return;
     }
     await apiAssignConversationManager(token, conversationId, managerId);
-    await refreshConversationList({ token, search, filters, setConversations });
+    await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
   }
 
   async function takeConversationIntoWork(conversationId: string): Promise<void> {
     if (!token || !sessionUser?.id) {
-      showToast("Не удалось определить оператора", "error");
+      showToast("Не удалось определить менеджера", "error");
       return;
     }
     try {
@@ -1740,7 +1844,7 @@ export function App(): JSX.Element {
       if (selectedConversationData?.status === "closed") {
         await apiSetConversationStatus(token, conversationId, "open");
       }
-      await refreshConversationList({ token, search, filters, setConversations });
+      await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
       showToast("Диалог взят в работу", "success");
       setCustomerCardOpen(false);
     } catch {
@@ -1754,7 +1858,7 @@ export function App(): JSX.Element {
     }
     try {
       await apiSetConversationStatus(token, conversationId, "closed");
-      await refreshConversationList({ token, search, filters, setConversations });
+      await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
       showToast("Диалог закрыт", "success");
       setCustomerCardOpen(false);
     } catch {
@@ -1768,7 +1872,7 @@ export function App(): JSX.Element {
     }
     try {
       await apiSetConversationStatus(token, conversationId, "open");
-      await refreshConversationList({ token, search, filters, setConversations });
+      await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
       showToast("Диалог переоткрыт", "success");
     } catch {
       showToast("Не удалось переоткрыть диалог", "error");
@@ -1780,7 +1884,7 @@ export function App(): JSX.Element {
       return;
     }
     await apiMoveConversationStage(token, conversationId, stage);
-    await refreshConversationList({ token, search, filters, setConversations });
+    await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
     await loadDeals(token, setDeals);
   }
 
@@ -1791,7 +1895,7 @@ export function App(): JSX.Element {
     }
     await createConversationTask(token, conversationId, title);
     setQuickTaskByConversation((prev) => ({ ...prev, [conversationId]: "" }));
-    await refreshConversationList({ token, search, filters, setConversations });
+    await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
     if (currentSection === "tasks") {
       await refreshCrmTasks();
     }
@@ -1815,11 +1919,23 @@ export function App(): JSX.Element {
     }
   }
 
-  async function refreshCrmTasks(): Promise<void> {
-    if (!token) {
+  async function refreshCrmTasks(
+    status: "open" | "done" = taskStatusFilter,
+    authToken: string | null = token,
+    skeleton = false
+  ): Promise<void> {
+    if (!authToken) {
+      setTasksLoading(false);
       return;
     }
-    setCrmTasks(await loadCrmTasks(token, taskStatusFilter));
+    if (skeleton || crmTasks.length === 0) setTasksLoading(true);
+    try {
+      setCrmTasks(await loadCrmTasks(authToken, status));
+    } catch {
+      if (crmTasks.length === 0) setCrmTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
   }
 
   async function refreshFollowUpSettings(): Promise<void> {
@@ -1836,20 +1952,32 @@ export function App(): JSX.Element {
     if (!token) {
       return;
     }
-    const saved = await saveFollowUpSettingsApi(token, followUpSettings);
-    if (!saved) {
-      showToast("Не удалось сохранить напоминание", "error");
-      return;
+    try {
+      const saved = await saveFollowUpSettingsApi(token, followUpSettings);
+      if (!saved) {
+        showToast("Не удалось сохранить срок ответа", "error");
+        return;
+      }
+      setFollowUpSettings(saved);
+      showToast("Срок ответа сохранён", "success");
+    } catch (error) {
+      showToast(plainFetchError(error, "Не удалось сохранить срок ответа"), "error");
     }
-    setFollowUpSettings(saved);
-    showToast("Напоминание сохранено", "success");
   }
 
-  async function refreshCrmContacts(q = contactsSearch): Promise<void> {
-    if (!token) {
+  async function refreshCrmContacts(q = contactsSearch, authToken: string | null = token): Promise<void> {
+    if (!authToken) {
+      setContactsLoading(false);
       return;
     }
-    setCrmContacts(await loadCrmContacts(token, q));
+    if (crmContacts.length === 0) setContactsLoading(true);
+    try {
+      setCrmContacts(await loadCrmContacts(authToken, q));
+    } catch {
+      if (crmContacts.length === 0) setCrmContacts([]);
+    } finally {
+      setContactsLoading(false);
+    }
   }
 
   async function openContactDetails(contactId: string): Promise<void> {
@@ -1867,15 +1995,22 @@ export function App(): JSX.Element {
       return;
     }
     const title = `Связаться: ${selectedConversationData.contact_name || "клиент"}`;
-    const created = await createCrmTask(token, {
-      title,
-      conversationId: selectedConversation
-    });
+    let created: Awaited<ReturnType<typeof createCrmTask>> = null;
+    try {
+      created = await createCrmTask(token, {
+        title,
+        conversationId: selectedConversation
+      });
+    } catch (error) {
+      showToast(plainFetchError(error, "Не удалось создать задачу"), "error");
+      return;
+    }
     if (!created) {
       showToast("Не удалось создать задачу", "error");
       return;
     }
     showToast("Задача создана", "success");
+    markOnboardingStep("next");
     if (currentSection === "tasks") {
       await refreshCrmTasks();
     }
@@ -1886,7 +2021,13 @@ export function App(): JSX.Element {
       return;
     }
     const dueAt = newTaskDueLocal.trim() ? new Date(newTaskDueLocal).toISOString() : null;
-    const created = await createCrmTask(token, { title: newTaskTitle.trim(), dueAt });
+    let created: Awaited<ReturnType<typeof createCrmTask>> = null;
+    try {
+      created = await createCrmTask(token, { title: newTaskTitle.trim(), dueAt });
+    } catch (error) {
+      showToast(plainFetchError(error, "Не удалось создать задачу"), "error");
+      return;
+    }
     if (!created) {
       showToast("Не удалось создать задачу", "error");
       return;
@@ -1894,6 +2035,7 @@ export function App(): JSX.Element {
     setNewTaskTitle("");
     setNewTaskDueLocal("");
     await refreshCrmTasks();
+    markOnboardingStep("next");
     showToast("Задача создана", "success");
   }
 
@@ -1961,7 +2103,7 @@ export function App(): JSX.Element {
     }
     await Promise.all([
       loadDeals(token, setDeals),
-      loadConversations(token, search, filters, setConversations),
+      loadConversations(token, search, filters, setConversations, setConversationsLoadError),
       refreshCrmContacts()
     ]);
   }
@@ -1981,6 +2123,7 @@ export function App(): JSX.Element {
       return;
     }
     await refreshDealSurfaces();
+    markOnboardingStep("next");
     showToast("Сделка сохранена", "success");
   }
 
@@ -2069,6 +2212,7 @@ export function App(): JSX.Element {
         return;
       }
       await refreshDealSurfaces();
+      markOnboardingStep("next");
       showToast("Сделка создана и привязана к чату", "success");
       setDealFlowOpen(false);
     } finally {
@@ -2093,6 +2237,7 @@ export function App(): JSX.Element {
         return;
       }
       await refreshDealSurfaces();
+      markOnboardingStep("next");
       showToast("Сделка сохранена", "success");
       setDealFlowOpen(false);
     } finally {
@@ -2113,6 +2258,7 @@ export function App(): JSX.Element {
         return;
       }
       await refreshDealSurfaces();
+      markOnboardingStep("next");
       showToast("Сделка привязана к чату", "success");
       setDealFlowOpen(false);
     } finally {
@@ -2151,14 +2297,14 @@ export function App(): JSX.Element {
     await loadMessages(token, deal.conversation_id, setMessages);
     await loadContactCard(token, deal.conversation_id, setContactCard);
     if (existing) {
-      const fresh = await loadConversations(token, search, filters, setConversations);
+      const fresh = await loadConversations(token, search, filters, setConversations, setConversationsLoadError);
       const match = fresh.find((item) => item.id === deal.conversation_id);
       if (match) {
         setSelectedConversationData(match);
       }
       return;
     }
-    const fresh = await loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+    const fresh = await loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations, setConversationsLoadError);
     const match = fresh.find((item) => item.id === deal.conversation_id);
     if (match) {
       setSelectedConversationData(match);
@@ -2187,7 +2333,7 @@ export function App(): JSX.Element {
       return;
     }
     await apiMarkSlaFollowUpDone(token, conversationId);
-    await refreshConversationList({ token, search, filters, setConversations });
+    await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
   }
 
   async function acknowledgeSlaEscalation(conversationId: string): Promise<void> {
@@ -2196,7 +2342,7 @@ export function App(): JSX.Element {
     }
     try {
       await apiAcknowledgeSlaEscalation(token, conversationId);
-      await refreshConversationList({ token, search, filters, setConversations });
+      await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
       showToast("Диалог взят в работу", "success");
     } catch {
       showToast("Не удалось взять диалог в работу", "error");
@@ -2209,7 +2355,7 @@ export function App(): JSX.Element {
     }
     try {
       await apiDeferSlaEscalation(token, conversationId, minutes);
-      await refreshConversationList({ token, search, filters, setConversations });
+      await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
       showToast(`Срок ответа отложен на ${minutes} мин`, "success");
     } catch {
       showToast("Не удалось отложить срок ответа", "error");
@@ -2287,7 +2433,8 @@ export function App(): JSX.Element {
       setMessageBody("");
       setEmojiPickerOpen(false);
       appendOutgoingMessage(setMessages, created);
-      refreshConversationListBackground({ token, search, filters, setConversations });
+      markOnboardingStep("lead");
+      refreshConversationListBackground({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
     } catch {
       setMediaUploadError(UI.messageSendFailed);
     } finally {
@@ -2365,7 +2512,8 @@ export function App(): JSX.Element {
       setMessageBody("");
       setEmojiPickerOpen(false);
       appendOutgoingMessage(setMessages, result);
-      refreshConversationListBackground({ token, search, filters, setConversations });
+      markOnboardingStep("lead");
+      refreshConversationListBackground({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
       if (result.whatsappDeliveryFailed) {
         if (result.deliveryError === "unsupported_audio_format") {
           setMediaUploadError(UI.whatsappAudioFormatUnsupported);
@@ -2635,6 +2783,7 @@ export function App(): JSX.Element {
       metricsQuery,
       setMessages,
       setConversations,
+      onConversationsError: setConversationsLoadError,
       setMetrics,
       loadMetrics
     });
@@ -2861,6 +3010,7 @@ export function App(): JSX.Element {
       metricsQuery,
       setMessages,
       setConversations,
+      onConversationsError: setConversationsLoadError,
       setMetrics,
       loadMetrics
     });
@@ -3014,7 +3164,8 @@ export function App(): JSX.Element {
     }
 
     await loadDeals(token, setDeals);
-    await loadConversations(token, search, filters, setConversations);
+    await loadConversations(token, search, filters, setConversations, setConversationsLoadError);
+    markOnboardingStep("next");
     return true;
   }
 
@@ -3037,7 +3188,8 @@ export function App(): JSX.Element {
     }
 
     await loadDeals(token, setDeals);
-    await loadConversations(token, search, filters, setConversations);
+    await loadConversations(token, search, filters, setConversations, setConversationsLoadError);
+    markOnboardingStep("next");
     return true;
   }
 
@@ -3046,7 +3198,7 @@ export function App(): JSX.Element {
       return;
     }
     await apiSetConversationStatus(token, conversationId, status);
-    await refreshConversationList({ token, search, filters, setConversations });
+    await refreshConversationList({ token, search, filters, setConversations, onConversationsError: setConversationsLoadError });
     await loadDeals(token, setDeals);
   }
 
@@ -3361,7 +3513,7 @@ export function App(): JSX.Element {
       }
     }
 
-    await loadConversations(token, search, filters, setConversations);
+    await loadConversations(token, search, filters, setConversations, setConversationsLoadError);
     await loadContactCard(token, selectedConversation, setContactCard);
     setCustomerCardOpen(false);
   }
@@ -3380,6 +3532,7 @@ export function App(): JSX.Element {
   }, [selectedConversation, deals, dealStages]);
 
   function writeOnboarding(next: OnboardingState): void {
+    onboardingStateRef.current = next;
     const key = onboardingUserKey(sessionUser);
     setOnboardingState(next);
     if (key) saveOnboarding(key, next);
@@ -3387,7 +3540,8 @@ export function App(): JSX.Element {
 
   function openOnboardingFromMenu(): void {
     const key = onboardingUserKey(sessionUser);
-    const saved = key ? readOnboarding(key) : onboardingState;
+    const saved = key ? readOnboarding(key) : onboardingStateRef.current;
+    onboardingStateRef.current = saved;
     setOnboardingState(saved);
     setOnboardingStep(firstIncompleteStep(saved.steps));
     setOnboardingMode("overlay");
@@ -3404,43 +3558,42 @@ export function App(): JSX.Element {
   }
 
   function minimizeOnboarding(): void {
-    setOnboardingMode(onboardingState.status === "pending" ? "dock" : "hidden");
+    writeOnboarding(markOnboardingSeen(onboardingStateRef.current));
+    setOnboardingMode(onboardingStateRef.current.status === "pending" ? "dock" : "hidden");
   }
 
-  function markOnboardingStep(stepId: OnboardingStepId): OnboardingStatus {
-    const next = withOnboardingStep(onboardingState, stepId);
+  function markOnboardingStep(stepId: OnboardingStepId): void {
+    const next = withOnboardingStep(onboardingStateRef.current, stepId);
+    if (next === onboardingStateRef.current) return;
     writeOnboarding(next);
-    return next.status;
   }
 
   function leaveOnboardingForWork(): void {
     setMobileThreadOpen(false);
-    setOnboardingMode(onboardingState.status === "pending" ? "dock" : "hidden");
+    const current = markOnboardingSeen(onboardingStateRef.current);
+    writeOnboarding(current);
+    setOnboardingMode(current.status === "pending" ? "dock" : "hidden");
   }
 
   function openOnboardingChannel(): void {
-    if (sessionUser?.role !== "admin") return;
-    const status = markOnboardingStep("channel");
-    setCurrentSection("integrations");
+    if (sessionUser?.role !== "admin" && sessionUser?.role !== "superadmin") return;
+    openIntegrations("whatsapp");
     setMobileThreadOpen(false);
     setOnboardingStep(1);
-    setOnboardingMode(status === "pending" ? "dock" : "hidden");
+    leaveOnboardingForWork();
   }
 
   function noteOnboardingChannelRequestCopied(): void {
-    markOnboardingStep("channel");
-    showToast("Просьба скопирована — отправьте её администратору.", "success");
+    showToast("Текст скопирован. Отправьте его администратору.", "success");
   }
 
   function openOnboardingDialogs(): void {
-    markOnboardingStep("lead");
     setCurrentSection("dialogs");
     setOnboardingStep(2);
     leaveOnboardingForWork();
   }
 
   function openOnboardingTasks(): void {
-    markOnboardingStep("next");
     setCurrentSection("tasks");
     void refreshCrmTasks();
     void refreshFollowUpSettings();
@@ -3448,7 +3601,6 @@ export function App(): JSX.Element {
   }
 
   function openOnboardingPipeline(): void {
-    markOnboardingStep("next");
     openPipelineSection("board");
     leaveOnboardingForWork();
   }
@@ -3649,7 +3801,7 @@ export function App(): JSX.Element {
                   className="secondaryButton demoQuickButton"
                   onClick={() => void login({ login: "operator", password: "demo123" })}
                 >
-                  Войти как оператор
+                  Войти как менеджер
                 </button>
                 <button
                   type="button"
@@ -3662,7 +3814,7 @@ export function App(): JSX.Element {
               <details className="demoCredentialsDetails">
                 <summary>Другие демо-аккаунты</summary>
                 <p>
-                  <strong>Оператор:</strong> operator / demo123
+                  <strong>Менеджер:</strong> operator / demo123
                 </p>
                 <p>
                   <strong>Админ:</strong> admin / demo123
@@ -3874,7 +4026,7 @@ export function App(): JSX.Element {
                         void refreshCrmTasks();
                       }}
                     >
-                      {item.title}
+                      {displayTaskTitle(item.title)}
                       {item.contact_name ? ` · ${item.contact_name}` : ""}
                     </button>
                   ))}
@@ -4141,7 +4293,7 @@ export function App(): JSX.Element {
         <div
           className={[
             "appGrid",
-            !conversationsLoading && conversations.length === 0 ? "dialogsAtZero" : "",
+            inboxListEmpty && conversations.length === 0 ? "dialogsAtZero" : "",
             isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : "",
             !funnelKpiPanelOpen ? "appGridNoRightRail" : "",
             !funnelKpiPanelOpen && !isMobileLayout ? "appGridKpiCollapsed" : ""
@@ -4180,14 +4332,14 @@ export function App(): JSX.Element {
             }}
             onSearchChange={(next) => {
               setSearch(next);
-              void loadConversations(token, next, filters, setConversations);
+              void loadConversations(token, next, filters, setConversations, setConversationsLoadError);
             }}
             onFiltersChange={(next) => setFilters(next)}
-            onApplyFilters={() => void loadConversations(token, search, filters, setConversations)}
+            onApplyFilters={() => void loadConversations(token, search, filters, setConversations, setConversationsLoadError)}
             onSaveFilterPreset={saveCurrentFilterPreset}
             onResetFilters={() => {
               setFilters(DEFAULT_INBOX_FILTERS);
-              void loadConversations(token, search, DEFAULT_INBOX_FILTERS, setConversations);
+              void loadConversations(token, search, DEFAULT_INBOX_FILTERS, setConversations, setConversationsLoadError);
             }}
             onApplyFilterPreset={(preset) => void applyFilterPreset(preset)}
             onRemoveFilterPreset={removeFilterPreset}
@@ -4196,43 +4348,67 @@ export function App(): JSX.Element {
             onClearSearchAndFilters={() => {
               setSearch("");
               setFilters(DEFAULT_INBOX_FILTERS);
-              void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+              void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations, setConversationsLoadError);
             }}
-            onOpenIntegrations={() => openIntegrations()}
+            onOpenIntegrations={() => openIntegrations(integrationsFocusForChannel(inboxChannelFilter))}
+            loadError={conversationsLoadError}
+            onRetryLoad={() => {
+              if (!token) return;
+              void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
+            }}
             isAdmin={canManageChannels}
             loading={conversationsLoading}
           />
 
-          {!conversationsLoading && conversations.length === 0 ? (
+          {inboxLoadFailed ? (
+            <section className="thread card">
+              <DialogsLoadError
+                onRetry={() => {
+                  if (!token) return;
+                  void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
+                }}
+                onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+                backLabel={UI.backToChats}
+              />
+            </section>
+          ) : inboxListEmpty && inboxEmptyKind === "channel-filter" ? (
+            <section className="thread card">
+              <InboxChannelEmpty
+                layout="pane"
+                isAdmin={canManageChannels}
+                onReset={() => {
+                  setInboxChannelFilter("all");
+                  setSearch("");
+                  setFilters(DEFAULT_INBOX_FILTERS);
+                  void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations, setConversationsLoadError);
+                }}
+                onConnect={
+                  canManageChannels
+                    ? () => openIntegrations(integrationsFocusForChannel(inboxChannelFilter))
+                    : undefined
+                }
+                onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+                backLabel={UI.backToChats}
+              />
+            </section>
+          ) : inboxListEmpty ? (
             <section className="thread card">
               <DialogsEmptyState
-                filterActive={Boolean(search.trim()) || inboxFiltersActive(filters) || inboxChannelFilter !== "all"}
+                filterActive={inboxEmptyKind === "query"}
                 isAdmin={canManageChannels}
                 onResetFilter={() => {
                   setInboxChannelFilter("all");
                   setSearch("");
                   setFilters(DEFAULT_INBOX_FILTERS);
-                  void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+                  void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations, setConversationsLoadError);
                 }}
-                onOpenIntegrations={() => openIntegrations()}
+                onOpenIntegrations={() => openIntegrations("whatsapp")}
                 onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
                 backLabel={UI.backToChats}
               />
             </section>
           ) : (
           <InboxThread
-            emptyOverride={
-              !conversationsLoading && channelFilterIsEmpty(conversations, inboxChannelFilter) ? (
-                <DialogsEmptyState
-                  filterActive
-                  isAdmin={canManageChannels}
-                  onResetFilter={() => setInboxChannelFilter("all")}
-                  onOpenIntegrations={() => openIntegrations()}
-                  onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
-                  backLabel={UI.backToChats}
-                />
-              ) : null
-            }
             ui={{
               replyBox: UI.replyBox,
               customerCard: UI.customerCard,
@@ -4261,7 +4437,7 @@ export function App(): JSX.Element {
               searchScripts: UI.searchScripts,
               noMessages: UI.noMessages
             }}
-            selectedConversationData={selectedConversationData}
+            selectedConversationData={threadConversation}
             messages={messages}
             isDragOverMessages={isDragOverMessages}
             messagesContainerRef={messagesContainerRef}
@@ -5011,10 +5187,7 @@ export function App(): JSX.Element {
                 className={`leftMenuButton ${taskStatusFilter === "open" ? "active" : ""}`}
                 onClick={() => {
                   setTaskStatusFilter("open");
-                  void (async () => {
-                    if (!token) return;
-                    setCrmTasks(await loadCrmTasks(token, "open"));
-                  })();
+                  void refreshCrmTasks("open", token, true);
                 }}
               >
                 {UI.openTasksTab}
@@ -5024,21 +5197,27 @@ export function App(): JSX.Element {
                 className={`leftMenuButton ${taskStatusFilter === "done" ? "active" : ""}`}
                 onClick={() => {
                   setTaskStatusFilter("done");
-                  void (async () => {
-                    if (!token) return;
-                    setCrmTasks(await loadCrmTasks(token, "done"));
-                  })();
+                  void refreshCrmTasks("done", token, true);
                 }}
               >
                 {UI.doneTasksTab}
               </button>
             </div>
-            {crmTasks.length === 0 ? (
+            {tasksLoading ? (
+              <ListSkeleton rows={4} />
+            ) : showTasksEmptyState(taskStatusFilter, crmTasks.length, openConversationsWithFollowUp.length) ? (
               <div className="dialogsEmptyCenter tasksEmptyCompact" data-testid="tasks-empty-state">
-                <div className="emptyTitle">Пока нет задач</div>
-                <p className="emptyHint">Напишите, что нужно сделать, и сохраните задачу.</p>
+                <div className="emptyTitle">
+                  {taskStatusFilter === "done" ? "Выполненных задач пока нет" : "Пока нет задач"}
+                </div>
+                <p className="emptyHint">
+                  {taskStatusFilter === "done"
+                    ? "Здесь появятся задачи, которые вы отметите готовыми."
+                    : "Напишите, что нужно сделать, и сохраните задачу."}
+                </p>
               </div>
             ) : null}
+            {taskStatusFilter === "open" ? (
             <div className="scriptForm taskCreateForm" style={{ marginBottom: 16 }}>
               <input
                 ref={newTaskInputRef}
@@ -5062,10 +5241,11 @@ export function App(): JSX.Element {
                 {crmTasks.length === 0 ? "Создать задачу" : UI.save}
               </button>
             </div>
+            ) : null}
             {crmTasks.length ? (
               crmTasks.map((task) => (
                 <div key={task.id} className="taskCard">
-                  <div className="taskCardTitle">{task.title}</div>
+                  <div className="taskCardTitle">{displayTaskTitle(task.title)}</div>
                   <div className="taskCardMeta">
                     {task.contact_name || "—"}
                     {task.due_at ? ` · ${new Date(task.due_at).toLocaleString("ru-RU")}` : ""}
@@ -5091,7 +5271,7 @@ export function App(): JSX.Element {
                 </div>
               ))
             ) : null}
-            {openConversationsWithFollowUp.length ? (
+            {showFollowUpReminders(taskStatusFilter, openConversationsWithFollowUp.length) ? (
               <div style={{ marginTop: 24 }}>
                 <div className="scriptPanelTitle">{UI.slaFollowUpTitle}</div>
                 {openConversationsWithFollowUp.map((conversation) => (
@@ -5113,6 +5293,7 @@ export function App(): JSX.Element {
               </div>
             ) : null}
 
+            {taskStatusFilter === "open" ? (
             <div className="knowledgeFormCard" style={{ marginTop: 24 }}>
               <details className="followUpDetails">
                 <summary className="followUpDetailsSummary">{UI.followUpSettings}</summary>
@@ -5203,6 +5384,7 @@ export function App(): JSX.Element {
                 </div>
               </details>
             </div>
+            ) : null}
           </section>
         ) : currentSection === "staff" ? (
           token ? (
@@ -5261,7 +5443,14 @@ export function App(): JSX.Element {
                       </span>
                     </button>
                   ))}
-                  {crmContacts.length ? null : <div className="emptyScriptState">{UI.noContacts}</div>}
+                  {contactsLoading ? (
+                    <ListSkeleton rows={4} />
+                  ) : crmContacts.length ? null : (
+                    <div className="dialogsEmptyCenter tasksEmptyCompact" data-testid="contacts-empty-state">
+                      <div className="emptyTitle">{UI.noContactsTitle}</div>
+                      <p className="emptyHint">{UI.noContactsHint}</p>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="knowledgeFormCard">
@@ -5340,9 +5529,9 @@ export function App(): JSX.Element {
                       {UI.mergeContact}
                     </button>
                   </>
-                ) : (
+                ) : crmContacts.length > 0 ? (
                   <div className="emptyScriptState">{UI.selectContactHint}</div>
-                )}
+                ) : null}
               </div>
             </div>
           </section>
@@ -5447,7 +5636,7 @@ export function App(): JSX.Element {
             </div>
             {pipelineSubview === "kpi" ? (
               <>
-              {deals.length === 0 ? pipelineEmptyState : null}
+              {dealsLoading ? <ListSkeleton rows={4} /> : deals.length === 0 ? pipelineEmptyState : null}
               <FunnelKpiPanel
                 className="pipelineKpiPanel"
                 showHeader={false}
@@ -5517,7 +5706,9 @@ export function App(): JSX.Element {
                   : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в открытых диалогах.`}
               </div>
             ) : null}
-            {pipelineBoard.visibleCount === 0 ? (
+            {dealsLoading ? (
+              <ListSkeleton rows={4} />
+            ) : pipelineBoard.visibleCount === 0 ? (
               pipelineEmptyState
             ) : (
             <div className="pipelineBoardGrid">
@@ -6368,7 +6559,7 @@ export function App(): JSX.Element {
             setSelectedConversation(result.conversation_id);
             setCurrentSection("dialogs");
             setMobileThreadOpen(true);
-            void loadConversations(token, search, filters, setConversations);
+            void loadConversations(token, search, filters, setConversations, setConversationsLoadError);
             void loadMessages(token, result.conversation_id, setMessages);
             void loadContactCard(token, result.conversation_id, setContactCard);
           }}

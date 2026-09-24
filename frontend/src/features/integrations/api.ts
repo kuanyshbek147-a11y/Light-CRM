@@ -90,7 +90,8 @@ export async function registerWhatsAppCloudApi(
     error?: string;
   };
   if (!response.ok) {
-    throw new Error(data.error || "Не удалось зарегистрировать номер в Cloud API");
+    const raw = (data.error || "").trim();
+    throw new Error(/cloud api/i.test(raw) || !raw ? "Не удалось зарегистрировать номер WhatsApp" : raw);
   }
   return data;
 }

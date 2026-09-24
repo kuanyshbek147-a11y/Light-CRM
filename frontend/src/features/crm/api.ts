@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../../shared/config/api";
+import { isNetworkFetchError, SAVE_NETWORK_ERROR } from "../../shared/api/http";
 
 const API = API_BASE_URL;
 
@@ -106,18 +107,23 @@ export async function createCrmTask(
   token: string,
   payload: { title: string; dueAt?: string | null; conversationId?: string | null }
 ): Promise<CrmTask | null> {
-  const response = await fetch(`${API}/tasks`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) {
-    return null;
+  try {
+    const response = await fetch(`${API}/tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as CrmTask;
+  } catch (error) {
+    if (isNetworkFetchError(error)) throw new Error(SAVE_NETWORK_ERROR);
+    throw error;
   }
-  return (await response.json()) as CrmTask;
 }
 
 export async function updateCrmTask(
@@ -272,16 +278,21 @@ export async function saveFollowUpSettingsApi(
   token: string,
   payload: FollowUpSettings
 ): Promise<FollowUpSettings | null> {
-  const response = await fetch(`${API}/follow-up/settings`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  });
-  if (!response.ok) {
-    return null;
+  try {
+    const response = await fetch(`${API}/follow-up/settings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      return null;
+    }
+    return (await response.json()) as FollowUpSettings;
+  } catch (error) {
+    if (isNetworkFetchError(error)) throw new Error(SAVE_NETWORK_ERROR);
+    throw error;
   }
-  return (await response.json()) as FollowUpSettings;
 }

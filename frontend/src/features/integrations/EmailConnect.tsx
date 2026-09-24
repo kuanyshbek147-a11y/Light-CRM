@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { plainFetchError } from "../../shared/api/http";
+import { UI_LABELS_RU } from "../../shared/i18n/glossary";
 import {
   connectEmail,
   disconnectEmail,
@@ -73,7 +75,7 @@ export function EmailConnect({ authToken }: Props) {
         applyPreset(preset);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить статус почты");
+      setError(plainFetchError(err, "Не удалось загрузить статус почты"));
     } finally {
       setLoading(false);
     }
@@ -101,7 +103,7 @@ export function EmailConnect({ authToken }: Props) {
       return;
     }
     if (provider === "custom" && (!smtpHost.trim() || !imapHost.trim())) {
-      setError("Для своего сервера укажите SMTP и IMAP хосты");
+      setError("Для своего сервера откройте «Для специалиста» и укажите адреса входящей и исходящей почты");
       setShowForm(true);
       return;
     }
@@ -130,7 +132,7 @@ export function EmailConnect({ authToken }: Props) {
       setSuccess(result.email ? `Почта ${result.email} подключена` : "Почта подключена");
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка подключения почты");
+      setError(plainFetchError(err, "Ошибка подключения почты"));
     } finally {
       setSaving(false);
     }
@@ -147,14 +149,14 @@ export function EmailConnect({ authToken }: Props) {
       setShowForm(true);
       await refreshStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ошибка отключения почты");
+      setError(plainFetchError(err, "Ошибка отключения почты"));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="instagramConnectCard">
+    <div className="instagramConnectCard" id="integration-email">
       <div className="integrationsPanelHeader">
         <div>
           <h3 className="integrationsPanelTitle">Почта</h3>
@@ -177,19 +179,33 @@ export function EmailConnect({ authToken }: Props) {
             <div className="sidebarHint">Провайдер</div>
             <div className="scriptCardTitle">{status?.provider || "—"}</div>
           </div>
-          <div>
-            <div className="sidebarHint">SMTP</div>
-            <div className="scriptCardTitle">
-              {status?.smtpHost ? `${status.smtpHost}:${status.smtpPort}` : "—"}
-            </div>
-          </div>
-          <div>
-            <div className="sidebarHint">IMAP</div>
-            <div className="scriptCardTitle">
-              {status?.imapHost ? `${status.imapHost}:${status.imapPort}` : "—"}
-            </div>
-          </div>
         </div>
+      ) : null}
+
+      {connected ? (
+        <details className="integrationsDetails">
+          <summary>Для специалиста</summary>
+          <div className="integrationsDetailsBody">
+            <div>
+              <div className="integrationsLabel">
+                {UI_LABELS_RU.smtp}
+                <span className="fieldTechHint">{UI_LABELS_RU.smtpHint}</span>
+              </div>
+              <div className="integrationsValue">
+                {status?.smtpHost ? `${status.smtpHost}:${status.smtpPort}` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="integrationsLabel">
+                {UI_LABELS_RU.imap}
+                <span className="fieldTechHint">{UI_LABELS_RU.imapHint}</span>
+              </div>
+              <div className="integrationsValue">
+                {status?.imapHost ? `${status.imapHost}:${status.imapPort}` : "—"}
+              </div>
+            </div>
+          </div>
+        </details>
       ) : null}
 
       <div className="instagramConnectActions">
@@ -312,48 +328,51 @@ export function EmailConnect({ authToken }: Props) {
           {selectedPreset?.hint ? <div className="integrationsHint">{selectedPreset.hint}</div> : null}
 
           {provider === "custom" ? (
-            <>
-              <input
-                className="filterInput"
-                placeholder="SMTP хост"
-                value={smtpHost}
-                onChange={(event) => setSmtpHost(event.target.value)}
-              />
-              <input
-                className="filterInput"
-                placeholder="SMTP порт"
-                value={smtpPort}
-                onChange={(event) => setSmtpPort(event.target.value)}
-              />
-              <label className="integrationsHint">
+            <details className="integrationsDetails">
+              <summary>Для специалиста</summary>
+              <div className="integrationsDetailsBody">
                 <input
-                  type="checkbox"
-                  checked={smtpSecure}
-                  onChange={(event) => setSmtpSecure(event.target.checked)}
-                />{" "}
-                SMTP SSL/TLS
-              </label>
-              <input
-                className="filterInput"
-                placeholder="IMAP хост"
-                value={imapHost}
-                onChange={(event) => setImapHost(event.target.value)}
-              />
-              <input
-                className="filterInput"
-                placeholder="IMAP порт"
-                value={imapPort}
-                onChange={(event) => setImapPort(event.target.value)}
-              />
-              <label className="integrationsHint">
+                  className="filterInput"
+                  placeholder="Адрес исходящей почты"
+                  value={smtpHost}
+                  onChange={(event) => setSmtpHost(event.target.value)}
+                />
                 <input
-                  type="checkbox"
-                  checked={imapSecure}
-                  onChange={(event) => setImapSecure(event.target.checked)}
-                />{" "}
-                IMAP SSL/TLS
-              </label>
-            </>
+                  className="filterInput"
+                  placeholder="Порт исходящей почты"
+                  value={smtpPort}
+                  onChange={(event) => setSmtpPort(event.target.value)}
+                />
+                <label className="integrationsHint">
+                  <input
+                    type="checkbox"
+                    checked={smtpSecure}
+                    onChange={(event) => setSmtpSecure(event.target.checked)}
+                  />{" "}
+                  Шифрование исходящей почты
+                </label>
+                <input
+                  className="filterInput"
+                  placeholder="Адрес входящей почты"
+                  value={imapHost}
+                  onChange={(event) => setImapHost(event.target.value)}
+                />
+                <input
+                  className="filterInput"
+                  placeholder="Порт входящей почты"
+                  value={imapPort}
+                  onChange={(event) => setImapPort(event.target.value)}
+                />
+                <label className="integrationsHint">
+                  <input
+                    type="checkbox"
+                    checked={imapSecure}
+                    onChange={(event) => setImapSecure(event.target.checked)}
+                  />{" "}
+                  Шифрование входящей почты
+                </label>
+              </div>
+            </details>
           ) : null}
 
           <div className="instagramConnectActions">

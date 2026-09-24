@@ -33,10 +33,10 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
     try {
       const result = await createOpsBackup(authToken);
       if (!result) {
-        onToast?.("Бэкап не создан (нужны права admin)", "error");
+        onToast?.("Копию не удалось создать", "error");
         return;
       }
-      onToast?.(`Бэкап: ${result.fileName} (${Math.round(result.bytes / 1024)} KB)`, "success");
+      onToast?.(`Копия сохранена: ${result.fileName} (${Math.round(result.bytes / 1024)} КБ)`, "success");
     } finally {
       setBusy(false);
     }
@@ -46,7 +46,10 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
     setBusy(true);
     try {
       const ok = await saveOpsAlertChat(authToken, alertChat.trim());
-      onToast?.(ok ? "Алерт-чат сохранён" : "Не удалось сохранить", ok ? "success" : "error");
+      onToast?.(
+        ok ? "Чат для уведомлений сохранён" : "Не удалось сохранить чат для уведомлений",
+        ok ? "success" : "error"
+      );
     } finally {
       setBusy(false);
     }
@@ -57,12 +60,12 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
       <div className="railHeader">
         <div>
           <div className="sidebarTitle">Операции</div>
-          <div className="sidebarHint">Очередь без ответственного, бэкапы БД, алерты.</div>
+          <div className="sidebarHint">Очередь без ответственного и копии данных.</div>
         </div>
       </div>
 
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">Копия базы и уведомления</div>
+        <div className="scriptPanelTitle">Копия данных и уведомления</div>
         <div className="scriptForm">
           <button type="button" className="primaryButton" disabled={busy} onClick={() => void runBackup()}>
             Сделать копию сейчас
@@ -78,12 +81,18 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
           </button>
         </div>
         <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Сюда же приходят уведомления о новых заявках со страницы (нужен бот Telegram компании).
-          Платный Postgres включают вручную в панели хостинга. Копии лежат в /backups на сервере.
+          Уведомления о новых заявках со страницы приходят в этот чат.
         </div>
+        <details className="integrationsDetails">
+          <summary>Для специалиста</summary>
+          <div className="sidebarHint">
+            Нужен бот Telegram компании. Отдельную базу включают вручную в панели, где размещён сервис.
+            Файлы копий лежат в папке backups на сервере.
+          </div>
+        </details>
       </div>
 
-      <div className="scriptPanelTitle">Очередь без оператора (срок ответа)</div>
+      <div className="scriptPanelTitle">Очередь без менеджера (срок ответа)</div>
       {queue.length ? (
         queue.map((item) => (
           <div key={item.id} className="taskCard">

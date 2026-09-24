@@ -3,12 +3,19 @@ type DialogsEmptyStateProps = {
   isAdmin: boolean;
   onResetFilter: () => void;
   onOpenIntegrations: () => void;
+  showActions?: boolean;
   onBack?: () => void;
   backLabel?: string;
 };
 
 export function DialogsEmptyState(props: DialogsEmptyStateProps): JSX.Element {
-  const { filterActive, isAdmin, onResetFilter, onOpenIntegrations, onBack, backLabel } = props;
+  const { filterActive, isAdmin, onResetFilter, onOpenIntegrations, showActions = true, onBack, backLabel } = props;
+  const title = filterActive ? "Ничего не найдено" : "Пока нет диалогов";
+  const hint = filterActive
+    ? "Сбросьте фильтр, чтобы увидеть диалоги."
+    : isAdmin
+      ? "Подключите WhatsApp, Instagram или Telegram — сообщения клиентов появятся здесь."
+      : "Канал подключает администратор. Когда клиент напишет, диалог появится здесь.";
 
   return (
     <div className="dialogsEmptyCenter" data-testid="dialogs-empty-state">
@@ -17,24 +24,24 @@ export function DialogsEmptyState(props: DialogsEmptyStateProps): JSX.Element {
           ‹
         </button>
       ) : null}
-      <div className="emptyTitle">Пока нет диалогов</div>
-      {filterActive || isAdmin ? (
+      <div className="emptyTitle">{title}</div>
+      <p className="emptyHint">{hint}</p>
+      {showActions && filterActive ? (
         <div className="pipelineEmptyActions dialogsEmptyActions">
-          {filterActive ? (
-            <button type="button" className="primaryButton" data-testid="dialogs-reset-filter" onClick={onResetFilter}>
-              Сбросить фильтр
-            </button>
-          ) : null}
-          {isAdmin ? (
-            <button
-              type="button"
-              className={filterActive ? "secondaryButton" : "primaryButton"}
-              data-testid="dialogs-open-integrations"
-              onClick={onOpenIntegrations}
-            >
-              К интеграциям
-            </button>
-          ) : null}
+          <button type="button" className="primaryButton" data-testid="dialogs-reset-filter" onClick={onResetFilter}>
+            Сбросить фильтр
+          </button>
+        </div>
+      ) : showActions && isAdmin ? (
+        <div className="pipelineEmptyActions dialogsEmptyActions">
+          <button
+            type="button"
+            className="primaryButton"
+            data-testid="dialogs-open-integrations"
+            onClick={onOpenIntegrations}
+          >
+            Подключить канал
+          </button>
         </div>
       ) : null}
     </div>
