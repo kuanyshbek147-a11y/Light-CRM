@@ -349,6 +349,7 @@ const UI = {
   bookDemoWhatsApp: "WhatsApp",
   bookDemoTelegram: "Telegram",
   bookDemoHint: "\u041f\u0438\u043b\u043e\u0442 14 \u0434\u043d\u0435\u0439 \u043f\u043e\u0434 \u043a\u043b\u044e\u0447 \u00b7 \u043f\u043e\u0441\u043b\u0435 \u043f\u0438\u043b\u043e\u0442\u0430 29 900 \u20b8/\u043c\u0435\u0441",
+  tryDemo: "Попробовать демо",
   unifiedInbox: "\u0415\u0434\u0438\u043d\u044b\u0439 inbox",
   unifiedInboxHint: "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0438\u0437 WhatsApp \u0438 Telegram \u0432 \u043e\u0434\u043d\u043e\u043c \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0435.",
   smartCohorts: "\u0423\u043c\u043d\u044b\u0435 \u043a\u043e\u0433\u043e\u0440\u0442\u044b",
@@ -358,8 +359,8 @@ const UI = {
   brandTitle: "Light CRM",
   demoAccess: "\u0414\u0435\u043c\u043e-\u0434\u043e\u0441\u0442\u0443\u043f",
   openWorkspace: "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e",
-  loginText:
-    "\u0412\u043e\u0439\u0434\u0438\u0442\u0435 \u043b\u043e\u0433\u0438\u043d \u0438 \u043f\u0430\u0440\u043e\u043b\u044c \u043e\u043f\u0435\u0440\u0430\u0442\u043e\u0440\u0430. \u041c\u043e\u0436\u043d\u043e \u0443\u043a\u0430\u0437\u0430\u0442\u044c \u043b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 email.",
+  loginText: "Введите логин и пароль. Можно указать логин или email.",
+  loginRequired: "Заполните логин и пароль",
   loginLabel: "\u041b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 email",
   loginPlaceholder: "operator",
   passwordPlaceholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
@@ -712,6 +713,7 @@ export function App(): JSX.Element {
   const [loginInput, setLoginInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [loginFieldsInvalid, setLoginFieldsInvalid] = useState({ login: false, password: false });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<string>("");
@@ -1472,10 +1474,16 @@ export function App(): JSX.Element {
         : passwordInput || passwordInputRef.current?.value || "";
     if (override?.login !== undefined) setLoginInput(override.login);
     if (override?.password !== undefined) setPasswordInput(override.password);
-    if (!loginValue || !passwordValue) {
-      setLoginError(UI.loginFailed);
+    const loginMissing = !loginValue;
+    const passwordMissing = !passwordValue.trim();
+    if (loginMissing || passwordMissing) {
+      setLoginFieldsInvalid({ login: loginMissing, password: passwordMissing });
+      setLoginError(UI.loginRequired);
+      if (loginMissing) loginInputRef.current?.focus();
+      else passwordInputRef.current?.focus();
       return;
     }
+    setLoginFieldsInvalid({ login: false, password: false });
 
     const maxAttempts = 4;
     void warmupBackend();
@@ -3385,6 +3393,20 @@ export function App(): JSX.Element {
             >
               {UI.bookDemo}
             </a>
+            <a
+              className="landingButton landingCtaTryDemo"
+              href="#workspace-login"
+              onClick={(event) => {
+                const target = document.getElementById("workspace-login");
+                if (!target) return;
+                event.preventDefault();
+                target.scrollIntoView({ behavior: "smooth", block: "start" });
+                window.history.pushState(null, "", "#workspace-login");
+                window.setTimeout(() => loginInputRef.current?.focus(), 450);
+              }}
+            >
+              {UI.tryDemo}
+            </a>
             {demoTelegramUrl ? (
               <a
                 className="landingButton landingCtaSecondary"
@@ -3451,7 +3473,7 @@ export function App(): JSX.Element {
           </a>
         </section>
 
-        <aside className="loginCard loginCardModern">
+        <aside id="workspace-login" className="loginCard loginCardModern">
           <div className="loginCardBrandRow">
             <img className="loginBrandMark" src="/logo-mark.png" alt="" width={48} height={48} />
             <div className="loginBrandText">
@@ -3468,24 +3490,34 @@ export function App(): JSX.Element {
                 <span className="loginFieldLabel">{UI.loginLabel}</span>
                 <input
                   ref={loginInputRef}
-                  className="loginInput loginInputModern"
+                  className={`loginInput loginInputModern${loginFieldsInvalid.login ? " loginInputInvalid" : ""}`}
                   type="text"
                   autoComplete="username"
                   value={loginInput}
                   placeholder={UI.loginPlaceholder}
-                  onChange={(event) => setLoginInput(event.target.value)}
+                  aria-invalid={loginFieldsInvalid.login}
+                  onChange={(event) => {
+                    setLoginInput(event.target.value);
+                    setLoginError("");
+                    setLoginFieldsInvalid({ login: false, password: false });
+                  }}
                 />
               </label>
               <label className="loginField">
                 <span className="loginFieldLabel">{UI.password}</span>
                 <input
                   ref={passwordInputRef}
-                  className="loginInput loginInputModern"
+                  className={`loginInput loginInputModern${loginFieldsInvalid.password ? " loginInputInvalid" : ""}`}
                   type="password"
                   autoComplete="current-password"
                   value={passwordInput}
                   placeholder={UI.passwordPlaceholder}
-                  onChange={(event) => setPasswordInput(event.target.value)}
+                  aria-invalid={loginFieldsInvalid.password}
+                  onChange={(event) => {
+                    setPasswordInput(event.target.value);
+                    setLoginError("");
+                    setLoginFieldsInvalid({ login: false, password: false });
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       void login();
@@ -3493,13 +3525,21 @@ export function App(): JSX.Element {
                   }}
                 />
               </label>
-              {loginError ? <p className="loginError">{loginError}</p> : null}
+              {loginError ? (
+                <p className="loginError" role="alert">
+                  {loginError}
+                </p>
+              ) : null}
               <button className="landingButton landingButtonModern" type="button" onClick={() => void login()}>
                 {UI.signIn}
               </button>
             </div>
 
             <div className="demoCredentials demoCredentialsModern">
+              <div className="demoCredentialsHints">
+                <p>{UI.demoOperatorHint}</p>
+                <p>{UI.demoAdminHint}</p>
+              </div>
               <div className="demoQuickRow">
                 <button
                   type="button"
