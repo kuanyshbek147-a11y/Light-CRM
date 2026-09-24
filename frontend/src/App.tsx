@@ -4929,6 +4929,22 @@ export function App(): JSX.Element {
                 {UI.doneTasksTab}
               </button>
             </div>
+            {crmTasks.length === 0 ? (
+              <div className="dialogsEmptyCenter" data-testid="tasks-empty-state">
+                <div className="emptyTitle">Пока нет задач</div>
+                <button
+                  type="button"
+                  className="primaryButton"
+                  data-testid="tasks-create"
+                  onClick={() => {
+                    newTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    newTaskInputRef.current?.focus();
+                  }}
+                >
+                  Создать задачу
+                </button>
+              </div>
+            ) : null}
             <div className="scriptForm" style={{ marginBottom: 16 }}>
               <input
                 ref={newTaskInputRef}
@@ -4975,22 +4991,7 @@ export function App(): JSX.Element {
                   </div>
                 </div>
               ))
-            ) : (
-              <div className="dialogsEmptyCenter" data-testid="tasks-empty-state">
-                <div className="emptyTitle">Пока нет задач</div>
-                <button
-                  type="button"
-                  className="primaryButton"
-                  data-testid="tasks-create"
-                  onClick={() => {
-                    newTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    newTaskInputRef.current?.focus();
-                  }}
-                >
-                  Создать задачу
-                </button>
-              </div>
-            )}
+            ) : null}
             {openConversationsWithFollowUp.length ? (
               <div style={{ marginTop: 24 }}>
                 <div className="scriptPanelTitle">{UI.slaFollowUpTitle}</div>
