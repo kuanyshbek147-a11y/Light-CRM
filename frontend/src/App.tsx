@@ -3469,6 +3469,10 @@ export function App(): JSX.Element {
 
   if (!token) {
     const demoTelegramUrl = buildDemoTelegramUrl();
+    const demoWhatsAppUrl = buildDemoWhatsAppUrl();
+    const demoWhatsAppFallbackUrl = buildDemoWhatsAppUrl(
+      "Здравствуйте! Напишите, пожалуйста, в WhatsApp — хочу демо Light CRM."
+    );
     return (
       <main className="landingPage landingPageModern">
         <section className="landingHero">
@@ -3485,15 +3489,16 @@ export function App(): JSX.Element {
               >
                 Создать аккаунт
               </button>
-            ) : null}
-            <a
-              className="landingButton landingButtonModern landingCtaPrimary"
-              href={buildDemoWhatsAppUrl()}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {UI.bookDemo}
-            </a>
+            ) : (
+              <a
+                className="landingButton landingButtonModern landingCtaPrimary"
+                href={demoWhatsAppUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {UI.bookDemo}
+              </a>
+            )}
             <a
               className="landingButton landingCtaTryDemo"
               href="#workspace-login"
@@ -3508,24 +3513,19 @@ export function App(): JSX.Element {
             >
               {UI.tryDemo}
             </a>
+          </div>
+          <div className="landingQuietLinks">
+            {selfServeRegistrationEnabled ? (
+              <a className="landingQuietLink" href={demoWhatsAppUrl} target="_blank" rel="noreferrer">
+                {UI.bookDemo}
+              </a>
+            ) : null}
             {demoTelegramUrl ? (
-              <a
-                className="landingButton landingCtaSecondary"
-                href={demoTelegramUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a className="landingQuietLink" href={demoTelegramUrl} target="_blank" rel="noreferrer">
                 {UI.bookDemoTelegram}
               </a>
             ) : (
-              <a
-                className="landingButton landingCtaSecondary"
-                href={buildDemoWhatsAppUrl(
-                  "Здравствуйте! Напишите, пожалуйста, в WhatsApp — хочу демо Light CRM."
-                )}
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a className="landingQuietLink" href={demoWhatsAppFallbackUrl} target="_blank" rel="noreferrer">
                 {UI.bookDemoWhatsApp}
               </a>
             )}
@@ -3642,24 +3642,21 @@ export function App(): JSX.Element {
             </div>
 
             <div className="demoCredentials demoCredentialsModern">
-              <div className="demoCredentialsHints">
-                <p>{UI.demoOperatorHint}</p>
-                <p>{UI.demoAdminHint}</p>
-              </div>
+              <p className="demoQuickLead">Демо-вход без ввода пароля</p>
               <div className="demoQuickRow">
                 <button
                   type="button"
-                  className="dialogActionBtn primary"
+                  className="secondaryButton demoQuickButton"
                   onClick={() => void login({ login: "operator", password: "demo123" })}
                 >
                   Войти как оператор
                 </button>
                 <button
                   type="button"
-                  className="dialogActionBtn"
+                  className="secondaryButton demoQuickButton"
                   onClick={() => void login({ login: "admin", password: "demo123" })}
                 >
-                  Как админ
+                  Войти как админ
                 </button>
               </div>
               <details className="demoCredentialsDetails">
@@ -5037,22 +5034,12 @@ export function App(): JSX.Element {
               </button>
             </div>
             {crmTasks.length === 0 ? (
-              <div className="dialogsEmptyCenter" data-testid="tasks-empty-state">
+              <div className="dialogsEmptyCenter tasksEmptyCompact" data-testid="tasks-empty-state">
                 <div className="emptyTitle">Пока нет задач</div>
-                <button
-                  type="button"
-                  className="primaryButton"
-                  data-testid="tasks-create"
-                  onClick={() => {
-                    newTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    newTaskInputRef.current?.focus();
-                  }}
-                >
-                  Создать задачу
-                </button>
+                <p className="emptyHint">Напишите, что нужно сделать, и сохраните задачу.</p>
               </div>
             ) : null}
-            <div className="scriptForm" style={{ marginBottom: 16 }}>
+            <div className="scriptForm taskCreateForm" style={{ marginBottom: 16 }}>
               <input
                 ref={newTaskInputRef}
                 className="filterInput"
@@ -5066,8 +5053,13 @@ export function App(): JSX.Element {
                 value={newTaskDueLocal}
                 onChange={(event) => setNewTaskDueLocal(event.target.value)}
               />
-              <button type="button" className="primaryButton" onClick={() => void submitNewCrmTask()}>
-                {UI.save}
+              <button
+                type="button"
+                className="primaryButton"
+                data-testid={crmTasks.length === 0 ? "tasks-create" : undefined}
+                onClick={() => void submitNewCrmTask()}
+              >
+                {crmTasks.length === 0 ? "Создать задачу" : UI.save}
               </button>
             </div>
             {crmTasks.length ? (

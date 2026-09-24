@@ -53,18 +53,9 @@ export function PipelineEmptyState(props: PipelineEmptyStateProps): JSX.Element 
         >
           Создать сделку
         </button>
-        <button
-          type="button"
-          className="secondaryButton"
-          data-testid="pipeline-add-client"
-          disabled
-          title={ADD_CLIENT_UNAVAILABLE_HINT}
-        >
-          Добавить клиента
-        </button>
       </div>
-      {!canCreate ? <p className="sidebarHint">{createDealHint(0)}</p> : null}
-      <p className="sidebarHint" data-testid="pipeline-add-client-hint">
+      {!canCreate ? <p className="emptyHint">{createDealHint(0)}</p> : null}
+      <p className="emptyHint" data-testid="pipeline-add-client-hint">
         {ADD_CLIENT_UNAVAILABLE_HINT}
       </p>
       {pickerOpen ? (
