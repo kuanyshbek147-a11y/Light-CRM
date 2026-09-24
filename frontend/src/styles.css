@@ -914,6 +914,80 @@ button {
   color: #b91c1c;
 }
 
+.landingAccountLink {
+  width: fit-content;
+  margin-top: -6px;
+  font-size: 14px;
+  text-align: left;
+}
+
+#workspace-login {
+  scroll-margin: 24px;
+}
+
+.registerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.registerDialog {
+  width: min(440px, 100%);
+  max-height: min(92dvh, 760px);
+  overflow: auto;
+  align-self: center;
+}
+
+.registerDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.registerDialogHeader .loginTitle {
+  font-size: 24px;
+}
+
+.loginFieldHint {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.loginFieldError {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.loginFieldInvalid .loginInput {
+  border-color: #fca5a5;
+}
+
+.registerBanner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.registerDemoLink {
+  justify-self: start;
+  font-size: 14px;
+}
+
 .iosHomeHint {
   margin-top: 14px;
   padding: 12px 14px;
@@ -3954,6 +4028,14 @@ body.pwa-standalone {
 @media (max-width: 480px) {
   .landingPage {
     padding: 12px;
+  }
+
+  .landingCtaPrimary,
+  .landingCtaSecondary {
+    min-width: 0;
+    flex: 1 1 calc(50% - 10px);
+    padding: 0 12px;
+    font-size: 14px;
   }
 
   .landingBadge {
