@@ -484,7 +484,7 @@ button {
 
   .sidebar .inboxChannelEmptyActions,
   .sidebar .dialogsEmptyActions {
-    display: none;
+    display: none !important;
   }
 }
 

@@ -3,12 +3,13 @@ type DialogsEmptyStateProps = {
   isAdmin: boolean;
   onResetFilter: () => void;
   onOpenIntegrations: () => void;
+  showActions?: boolean;
   onBack?: () => void;
   backLabel?: string;
 };
 
 export function DialogsEmptyState(props: DialogsEmptyStateProps): JSX.Element {
-  const { filterActive, isAdmin, onResetFilter, onOpenIntegrations, onBack, backLabel } = props;
+  const { filterActive, isAdmin, onResetFilter, onOpenIntegrations, showActions = true, onBack, backLabel } = props;
   const title = filterActive ? "Ничего не найдено" : "Пока нет диалогов";
   const hint = filterActive
     ? "Сбросьте фильтр, чтобы увидеть диалоги."
@@ -25,13 +26,13 @@ export function DialogsEmptyState(props: DialogsEmptyStateProps): JSX.Element {
       ) : null}
       <div className="emptyTitle">{title}</div>
       <p className="emptyHint">{hint}</p>
-      {filterActive ? (
+      {showActions && filterActive ? (
         <div className="pipelineEmptyActions dialogsEmptyActions">
           <button type="button" className="primaryButton" data-testid="dialogs-reset-filter" onClick={onResetFilter}>
             Сбросить фильтр
           </button>
         </div>
-      ) : isAdmin ? (
+      ) : showActions && isAdmin ? (
         <div className="pipelineEmptyActions dialogsEmptyActions">
           <button
             type="button"

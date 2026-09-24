@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
@@ -39,6 +39,19 @@ function formatSnippet(conversation: Conversation, fallback: string): string {
     return "📎 [Медиа]";
   }
   return body;
+}
+
+function useWideLayout(): boolean {
+  const query = "(min-width: 769px)";
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = (): void => setWide(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return wide;
 }
 
 const CHANNEL_FILTERS = [
@@ -368,6 +381,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     loading = false
   } = props;
 
+  const wideLayout = useWideLayout();
   const visibleConversations = useMemo(
     () => conversationsForChannel(conversations, channelFilter),
     [channelFilter, conversations]
@@ -541,9 +555,9 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         ) : null}
         {!loading && !visibleConversations.length ? (
           <li className="chatListEmptyItem">
-            {loadError && conversations.length === 0 ? (
+            {loadError && conversations.length === 0 && !wideLayout ? (
               <DialogsLoadError onRetry={() => onRetryLoad?.()} />
-            ) : resolveInboxEmptyKind({
+            ) : loadError && conversations.length === 0 ? null : resolveInboxEmptyKind({
                 loading,
                 conversationCount: conversations.length,
                 visibleCount: visibleConversations.length,
@@ -552,6 +566,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
                 filtersActive: inboxFiltersActive(filters)
               }) === "channel-filter" ? (
               <InboxChannelEmpty
+                showActions={!wideLayout}
                 isAdmin={Boolean(isAdmin)}
                 onReset={() => {
                   onChannelFilterChange("all");
@@ -565,6 +580,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
               />
             ) : (
               <DialogsEmptyState
+                showActions={!wideLayout}
                 filterActive={
                   resolveInboxEmptyKind({
                     loading,
