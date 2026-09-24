@@ -2,10 +2,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 import { NotificationBellButton } from "../../shared/ui/NotificationBellButton";
 import { ListSkeleton } from "../../shared/ui/ListSkeleton";
-import { InboxChannelEmpty } from "./InboxChannelEmpty";
 import { conversationsForChannel, type InboxChannelFilter } from "./lib/channelFilter";
 import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
+import { DialogsEmptyState } from "./DialogsEmptyState";
+import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
@@ -324,12 +325,12 @@ type InboxSidebarProps = {
   onRemoveFilterPreset: (presetId: string) => void;
   onSelectConversation: (conversationId: string) => void;
   onOpenCustomerCard: (conversationId: string) => void;
+  onClearSearchAndFilters?: () => void;
+  onOpenIntegrations?: () => void;
   channelFilter: InboxChannelFilter;
   onChannelFilterChange: (next: InboxChannelFilter) => void;
   isAdmin?: boolean;
-  onConnectChannel?: () => void;
   loading?: boolean;
-  emptyContent?: JSX.Element | null;
 };
 
 export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
@@ -353,19 +354,18 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
     onRemoveFilterPreset,
     onSelectConversation,
     onOpenCustomerCard,
+    onClearSearchAndFilters,
+    onOpenIntegrations,
     channelFilter,
     onChannelFilterChange,
     isAdmin = false,
-    onConnectChannel,
-    loading = false,
-    emptyContent = null
+    loading = false
   } = props;
 
   const visibleConversations = useMemo(
     () => conversationsForChannel(conversations, channelFilter),
     [channelFilter, conversations]
   );
-  const channelFilterEmpty = !loading && channelFilter !== "all" && visibleConversations.length === 0;
 
   return (
     <aside className="sidebar card">
@@ -529,11 +529,28 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         ) : null}
         {!loading && !visibleConversations.length ? (
           <li className="chatListEmptyItem">
-            {channelFilterEmpty ? (
-              <InboxChannelEmpty isAdmin={isAdmin} onReset={() => onChannelFilterChange("all")} onConnect={onConnectChannel} />
-            ) : (
-              emptyContent || <div className="emptyScriptState">Диалогов пока нет</div>
-            )}
+            <DialogsEmptyState
+              filterActive={
+                resolveInboxEmptyKind({
+                  loading,
+                  conversationCount: conversations.length,
+                  visibleCount: visibleConversations.length,
+                  channelFilter,
+                  search,
+                  filtersActive: inboxFiltersActive(filters)
+                }) !== "activate"
+              }
+              isAdmin={isAdmin}
+              onResetFilter={() => {
+                onChannelFilterChange("all");
+                if (onClearSearchAndFilters) {
+                  onClearSearchAndFilters();
+                  return;
+                }
+                onResetFilters();
+              }}
+              onOpenIntegrations={() => onOpenIntegrations?.()}
+            />
           </li>
         ) : null}
         {!loading

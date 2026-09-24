@@ -20,9 +20,9 @@ import {
   type SessionUser
 } from "./shared/auth/session";
 import { InboxSidebar } from "./features/inbox/InboxSidebar";
-import { InboxChannelEmpty } from "./features/inbox/InboxChannelEmpty";
+import { DialogsEmptyState } from "./features/inbox/DialogsEmptyState";
+import { inboxFiltersActive } from "./features/inbox/inboxEmpty";
 import { channelFilterIsEmpty, type InboxChannelFilter } from "./features/inbox/lib/channelFilter";
-import { InboxConnectChecklist } from "./features/inbox/InboxConnectChecklist";
 import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
 import {
   closeOnboarding,
@@ -135,7 +135,9 @@ import {
 import { requestTelephonyDial, type CallLogResult } from "./features/telephony/api";
 import { loadStaffUnreadCount, shareConversationToStaff } from "./features/staff/api";
 import { DealLinkDialog } from "./features/crm/DealLinkDialog";
+import { PipelineEmptyState } from "./features/crm/PipelineEmptyState";
 import { groupDealsForBoard, ruDealCount } from "./features/crm/pipelineBoard";
+import { SettingsPanel } from "./features/settings/SettingsPanel";
 import {
   createCrmTask,
   globalSearch,
@@ -581,7 +583,7 @@ const UI = {
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   pipelineBoardHint:
     "Каждая карточка — сделка. Счётчик у клиента совпадает с числом карточек на вкладках «Открытые» и «Закрытые».",
-  noCardsInStage: "\u0412 \u044d\u0442\u043e\u043c \u0448\u0430\u0433\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a.",
+  noCardsInStage: "Пока пусто.",
   closeCard: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
   takeIntoWork: "\u0412\u0437\u044f\u0442\u044c \u0432 \u0440\u0430\u0431\u043e\u0442\u0443",
@@ -766,6 +768,7 @@ export function App(): JSX.Element {
     | "ops"
     | "integrations"
     | "platform"
+    | "settings"
   >("dialogs");
   const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
   const openIntegrations = (target?: "telegram" | "instagram") => {
@@ -1326,6 +1329,13 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!conversations.length) {
+      if (selectedConversation) {
+        setSelectedConversation("");
+        setSelectedConversationData(null);
+        setMessages([]);
+        setContactCard(null);
+        setMobileThreadOpen(false);
+      }
       return;
     }
 
@@ -1452,6 +1462,31 @@ export function App(): JSX.Element {
     label: formatStageLabel(stageName, UI)
   }));
   const pipelineBoard = groupDealsForBoard(deals, pipelineColumns, pipelineStatusFilter);
+  const canManageChannels = sessionUser?.role === "admin" || sessionUser?.role === "superadmin";
+  const pipelineEmptyState = (
+    <PipelineEmptyState
+      conversations={conversations.map((item) => ({
+        id: item.id,
+        name: item.contact_name,
+        channel: item.channel,
+        phone: item.phone,
+        status: item.status
+      }))}
+      otherTabHint={
+        pipelineBoard.hiddenCount > 0
+          ? pipelineStatusFilter === "open"
+            ? `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} на вкладке «Закрытые».`
+            : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} на вкладке «Открытые».`
+          : null
+      }
+      onCreateDeal={(conversationId) => {
+        const conversation = conversations.find((item) => item.id === conversationId);
+        if (conversation) {
+          void beginCreateDealForConversation(conversation);
+        }
+      }}
+    />
+  );
 
   async function hydrateWorkspace(authToken: string): Promise<void> {
     setConversationsLoading(true);
@@ -1963,6 +1998,33 @@ export function App(): JSX.Element {
       hour: "2-digit",
       minute: "2-digit"
     });
+  }
+
+  async function beginCreateDealForConversation(conversation: Conversation): Promise<void> {
+    const linked = deals.find((deal) => deal.conversation_id === conversation.id) || null;
+    setSelectedConversation(conversation.id);
+    setSelectedConversationData(conversation);
+    if (linked) {
+      beginEditDeal(linked);
+    } else {
+      setSelectedDealId("");
+      setDealAmountDraft("");
+      setDealNextStepDraft("");
+      setDealStageDraft(availableStageNames[0] || "");
+    }
+    setDealFlowError("");
+    setDealFlowOpen(true);
+    if (!token) {
+      setDealFlowDeals([]);
+      return;
+    }
+    const contactId = conversation.contact_id || linked?.contact_id;
+    if (!contactId) {
+      setDealFlowDeals([]);
+      return;
+    }
+    const details = await loadCrmContactDetails(token, contactId);
+    setDealFlowDeals(details?.deals || []);
   }
 
   async function openDealFlowFromChat(): Promise<void> {
@@ -3649,9 +3711,11 @@ export function App(): JSX.Element {
               ? UI.sectionContacts
               : currentSection === "marketing"
                 ? UI.menuMarketing
-                : currentSection === "profile"
-                  ? UI.sectionProfile
-                  : UI.landingBadge;
+                : currentSection === "settings"
+                  ? "Каналы, язык и команда"
+                  : currentSection === "profile"
+                    ? UI.sectionProfile
+                    : UI.landingBadge;
 
   const bottomNavActive: MobileNavSection =
     currentSection === "pipeline"
@@ -3842,12 +3906,14 @@ export function App(): JSX.Element {
             />
             <button
               type="button"
-              className="topbarIconButton"
+              className={`topbarIconButton${currentSection === "settings" ? " active" : ""}`}
               title="Настройки"
+              aria-label="Настройки"
+              aria-pressed={currentSection === "settings"}
+              data-testid="settings-gear"
               onClick={() => {
-                if (sessionUser?.role === "admin") {
-                  openIntegrations();
-                }
+                setMobileThreadOpen(false);
+                setCurrentSection("settings");
               }}
             >
               {"\u2699"}
@@ -4078,6 +4144,7 @@ export function App(): JSX.Element {
         <div
           className={[
             "appGrid",
+            !conversationsLoading && conversations.length === 0 ? "dialogsAtZero" : "",
             isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : "",
             !funnelKpiPanelOpen ? "appGridNoRightRail" : "",
             !funnelKpiPanelOpen && !isMobileLayout ? "appGridKpiCollapsed" : ""
@@ -4088,8 +4155,6 @@ export function App(): JSX.Element {
           <InboxSidebar
             channelFilter={inboxChannelFilter}
             onChannelFilterChange={setInboxChannelFilter}
-            isAdmin={sessionUser?.role === "admin"}
-            onConnectChannel={sessionUser?.role === "admin" ? () => openIntegrations() : undefined}
             ui={{
               inboxTitle: UI.inboxTitle,
               chatsSuffix: UI.chatsSuffix,
@@ -4131,27 +4196,41 @@ export function App(): JSX.Element {
             onRemoveFilterPreset={removeFilterPreset}
             onSelectConversation={(id) => void onSelectConversation(id)}
             onOpenCustomerCard={(id) => void onOpenCustomerCardFromList(id)}
+            onClearSearchAndFilters={() => {
+              setSearch("");
+              setFilters(DEFAULT_INBOX_FILTERS);
+              void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+            }}
+            onOpenIntegrations={() => openIntegrations()}
+            isAdmin={canManageChannels}
             loading={conversationsLoading}
-            emptyContent={
-              token ? (
-                <InboxConnectChecklist
-                  authToken={token}
-                  visible={!conversationsLoading && conversations.length === 0}
-                  isAdmin={sessionUser?.role === "admin" || sessionUser?.role === "superadmin"}
-                  onOpenIntegrations={() => openIntegrations()}
-                />
-              ) : null
-            }
           />
 
+          {!conversationsLoading && conversations.length === 0 ? (
+            <section className="thread card">
+              <DialogsEmptyState
+                filterActive={Boolean(search.trim()) || inboxFiltersActive(filters) || inboxChannelFilter !== "all"}
+                isAdmin={canManageChannels}
+                onResetFilter={() => {
+                  setInboxChannelFilter("all");
+                  setSearch("");
+                  setFilters(DEFAULT_INBOX_FILTERS);
+                  void loadConversations(token, "", DEFAULT_INBOX_FILTERS, setConversations);
+                }}
+                onOpenIntegrations={() => openIntegrations()}
+                onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
+                backLabel={UI.backToChats}
+              />
+            </section>
+          ) : (
           <InboxThread
             emptyOverride={
               !conversationsLoading && channelFilterIsEmpty(conversations, inboxChannelFilter) ? (
-                <InboxChannelEmpty
-                  layout="pane"
-                  isAdmin={sessionUser?.role === "admin"}
-                  onReset={() => setInboxChannelFilter("all")}
-                  onConnect={sessionUser?.role === "admin" ? () => openIntegrations() : undefined}
+                <DialogsEmptyState
+                  filterActive
+                  isAdmin={canManageChannels}
+                  onResetFilter={() => setInboxChannelFilter("all")}
+                  onOpenIntegrations={() => openIntegrations()}
                   onBack={isMobileLayout && mobileThreadOpen ? () => setMobileThreadOpen(false) : undefined}
                   backLabel={UI.backToChats}
                 />
@@ -4312,6 +4391,7 @@ export function App(): JSX.Element {
               setEmojiPickerOpen(false);
             }}
           />
+          )}
 
           {funnelKpiPanelOpen ? (
           <aside className="rightRail card">
@@ -4956,6 +5036,22 @@ export function App(): JSX.Element {
                 {UI.doneTasksTab}
               </button>
             </div>
+            {crmTasks.length === 0 ? (
+              <div className="dialogsEmptyCenter" data-testid="tasks-empty-state">
+                <div className="emptyTitle">Пока нет задач</div>
+                <button
+                  type="button"
+                  className="primaryButton"
+                  data-testid="tasks-create"
+                  onClick={() => {
+                    newTaskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    newTaskInputRef.current?.focus();
+                  }}
+                >
+                  Создать задачу
+                </button>
+              </div>
+            ) : null}
             <div className="scriptForm" style={{ marginBottom: 16 }}>
               <input
                 ref={newTaskInputRef}
@@ -5002,9 +5098,7 @@ export function App(): JSX.Element {
                   </div>
                 </div>
               ))
-            ) : (
-              <div className="emptyScriptState">{UI.noTasks}</div>
-            )}
+            ) : null}
             {openConversationsWithFollowUp.length ? (
               <div style={{ marginTop: 24 }}>
                 <div className="scriptPanelTitle">{UI.slaFollowUpTitle}</div>
@@ -5270,6 +5364,15 @@ export function App(): JSX.Element {
                 <div className="mobilePageTitle">{sessionUser?.fullName || "Operator"}</div>
                 <div className="mobilePageSubtitle">{sessionUser?.login || sessionUser?.email}</div>
               </div>
+              <button
+                type="button"
+                className="profileMenuBtn"
+                data-testid="profile-open-settings"
+                onClick={() => setCurrentSection("settings")}
+              >
+                <span>Настройки</span>
+                <span>›</span>
+              </button>
               <button type="button" className="profileMenuBtn" data-testid="first-run-menu-profile" onClick={openOnboardingFromMenu}>
                 <span>{FIRST_RUN_MENU_LABEL}</span>
                 <span>›</span>
@@ -5315,6 +5418,13 @@ export function App(): JSX.Element {
               </button>
             </div>
           </section>
+        ) : currentSection === "settings" ? (
+          token ? (
+            <SettingsPanel
+              canManageChannels={canManageChannels}
+              onOpenIntegrations={() => openIntegrations()}
+            />
+          ) : null
         ) : currentSection === "pipeline" ? (
           <section className="pipelinePage card">
             <div className="mobilePageHeader">
@@ -5344,6 +5454,8 @@ export function App(): JSX.Element {
               </button>
             </div>
             {pipelineSubview === "kpi" ? (
+              <>
+              {deals.length === 0 ? pipelineEmptyState : null}
               <FunnelKpiPanel
                 className="pipelineKpiPanel"
                 showHeader={false}
@@ -5365,6 +5477,7 @@ export function App(): JSX.Element {
                 formatStageLabel={(stage) => formatStageLabel(stage, UI)}
                 onDealStageChange={(dealId, stage) => void updateDealStage(dealId, stage)}
               />
+              </>
             ) : (
               <>
             <div className="pipelineSectionToggle pipelineStatusToggle">
@@ -5412,6 +5525,9 @@ export function App(): JSX.Element {
                   : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в открытых диалогах.`}
               </div>
             ) : null}
+            {pipelineBoard.visibleCount === 0 ? (
+              pipelineEmptyState
+            ) : (
             <div className="pipelineBoardGrid">
               {pipelineBoard.columns.map((column) => {
                 const columnDeals = column.items;
@@ -5517,6 +5633,7 @@ export function App(): JSX.Element {
                 );
               })}
             </div>
+            )}
             {selectedDealId ? (
               <div className="knowledgeFormCard" style={{ marginTop: 16 }}>
                 <div className="scriptPanelTitle">{UI.saveDeal}</div>
