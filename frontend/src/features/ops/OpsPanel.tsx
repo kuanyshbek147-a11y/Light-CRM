@@ -57,7 +57,7 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
       <div className="railHeader">
         <div>
           <div className="sidebarTitle">Операции</div>
-          <div className="sidebarHint">Очередь без ответственного, бэкапы БД, алерты.</div>
+          <div className="sidebarHint">Резервные копии, уведомления и диалоги без оператора.</div>
         </div>
       </div>
 
@@ -78,8 +78,8 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
           </button>
         </div>
         <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Сюда же приходят уведомления о новых заявках со страницы (нужен бот Telegram компании).
-          Платный Postgres включают вручную в панели хостинга. Копии лежат в /backups на сервере.
+          В этот чат Telegram будут приходить уведомления о сбоях и новых заявках с сайта (нужен
+          Telegram-бот компании). Копия базы сохраняется на сервере.
         </div>
       </div>
 

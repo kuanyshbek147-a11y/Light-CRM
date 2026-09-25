@@ -41,7 +41,8 @@ import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
-import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
+import { canOpenSection, parseSectionHash, sectionHash, type AppSection } from "./shared/lib/sectionRoute";
+import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle } from "./shared/i18n/glossary";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 
@@ -359,7 +360,7 @@ const UI = {
   bookDemoWhatsApp: "WhatsApp",
   bookDemoTelegram: "Telegram",
   bookDemoHint: "\u041f\u0438\u043b\u043e\u0442 14 \u0434\u043d\u0435\u0439 \u043f\u043e\u0434 \u043a\u043b\u044e\u0447 \u00b7 \u043f\u043e\u0441\u043b\u0435 \u043f\u0438\u043b\u043e\u0442\u0430 29 900 \u20b8/\u043c\u0435\u0441",
-  tryDemo: "Попробовать демо",
+  tryDemo: "Войти",
   unifiedInbox: "Все диалоги в одном окне",
   unifiedInboxHint: "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0438\u0437 WhatsApp \u0438 Telegram \u0432 \u043e\u0434\u043d\u043e\u043c \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0435.",
   smartCohorts: "Сегменты клиентов",
@@ -367,18 +368,15 @@ const UI = {
   fastReplies: "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b",
   fastRepliesHint: "\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0434\u0438\u0430\u043b\u043e\u0433 \u0438 \u043e\u0442\u0432\u0435\u0447\u0430\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c \u043f\u0440\u044f\u043c\u043e \u0438\u0437 CRM.",
   brandTitle: "Light CRM",
-  demoAccess: "\u0414\u0435\u043c\u043e-\u0434\u043e\u0441\u0442\u0443\u043f",
+  demoAccess: "Вход в кабинет",
   openWorkspace: "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e",
   loginText: "Введите логин и пароль. Можно указать логин или почту.",
   loginRequired: "Заполните логин и пароль",
   loginLabel: "Логин или почта",
-  loginPlaceholder: "operator",
+  loginPlaceholder: "Ваш логин или почта",
   passwordPlaceholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
   signIn: "\u0412\u043e\u0439\u0442\u0438",
   loginFailed: "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c",
-  demoOperatorHint: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440: \u043b\u043e\u0433\u0438\u043d operator, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
-  demoAdminHint: "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
-  demoSuperAdminHint: "\u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
   sessionRestoring: "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u2026 \u043e\u0431\u044b\u0447\u043d\u043e 30\u201360 \u0441\u0435\u043a",
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
@@ -387,7 +385,7 @@ const UI = {
   expandMenu: "\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e",
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
-  menuFunnelKpi: "Воронка и показатели",
+  menuFunnelKpi: "Показатели",
   collapseKpi: "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c",
   funnelKpiTab: "Показатели и сделки",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
@@ -536,7 +534,7 @@ const UI = {
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
   send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
   selectChatHint: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0432 \u0441\u043f\u0438\u0441\u043a\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432, \u0447\u0442\u043e\u0431\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443.",
-  pipelineAndKpi: "Воронка и показатели",
+  pipelineAndKpi: "Показатели",
   salesOverview: "\u041e\u0431\u0437\u043e\u0440 \u043f\u0440\u043e\u0434\u0430\u0436",
   min: "\u043c\u0438\u043d",
   firstResponse: "Время первого ответа",
@@ -546,11 +544,11 @@ const UI = {
   client: "\u041a\u043b\u0438\u0435\u043d\u0442",
   amount: "\u0421\u0443\u043c\u043c\u0430",
   stage: "\u042d\u0442\u0430\u043f",
-  stageNew: "\u043d\u043e\u0432\u0430\u044f",
+  stageNew: "Новая",
   stageQualified: "Квалифицирована",
-  stageProposal: "\u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435",
-  stageWon: "\u0432\u044b\u0438\u0433\u0440\u0430\u043d\u0430",
-  stageLost: "\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u0430",
+  stageProposal: "Предложение",
+  stageWon: "Выиграна",
+  stageLost: "Проиграна",
   customerCardTitle: "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0430",
   customerCardHint: "\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0438 \u043a\u0440\u0438\u0442\u0435\u0440\u0438\u0438 \u043a\u043b\u0438\u0435\u043d\u0442\u0430",
   funnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
@@ -582,7 +580,7 @@ const UI = {
   stageChangeBlockedFields: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043c\u0435\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f: \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   pipelineBoardHint:
-    "Каждая карточка — сделка. Счётчик у клиента совпадает с числом карточек на вкладках «Открытые» и «Закрытые».",
+    "Каждая карточка — сделка. Перетаскивайте карточки между этапами.",
   noCardsInStage: "Пока пусто.",
   closeCard: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
@@ -755,21 +753,10 @@ export function App(): JSX.Element {
   const [inboxChannelFilter, setInboxChannelFilter] = useState<InboxChannelFilter>("all");
   const [notificationSoundOn, setNotificationSoundOn] = useState<boolean>(() => isNotificationSoundEnabled());
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
-  const [currentSection, setCurrentSection] = useState<
-    | "dialogs"
-    | "pipeline"
-    | "tasks"
-    | "staff"
-    | "contacts"
-    | "profile"
-    | "analytics"
-    | "knowledge"
-    | "marketing"
-    | "ops"
-    | "integrations"
-    | "platform"
-    | "settings"
-  >("dialogs");
+  const [currentSection, setCurrentSection] = useState<AppSection>(() => {
+    const fromHash = parseSectionHash(window.location.hash);
+    return fromHash && canOpenSection(fromHash, initialSession.user?.role) ? fromHash : "dialogs";
+  });
   const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
   const openIntegrations = (target?: "telegram" | "instagram") => {
     setIntegrationsFocus(target ?? null);
@@ -922,6 +909,45 @@ export function App(): JSX.Element {
     startBackendKeepAlive();
     void warmupBackend();
   }, []);
+
+  // Раздел ↔ адрес «#/раздел»: обновление страницы и кнопка «Назад» возвращают на тот же экран.
+  useEffect(() => {
+    const onSection = parseSectionHash(window.location.hash) !== null;
+    if (!token) {
+      if (onSection) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+      return;
+    }
+    const next = sectionHash(currentSection);
+    if (window.location.hash === next) {
+      return;
+    }
+    if (onSection) {
+      window.history.pushState(null, "", next);
+    } else {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + next);
+    }
+  }, [currentSection, token]);
+
+  useEffect(() => {
+    function onPopState(): void {
+      const section = parseSectionHash(window.location.hash);
+      if (section && canOpenSection(section, sessionUser?.role)) {
+        setCurrentSection(section);
+        loadSectionData(section);
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  });
+
+  useEffect(() => {
+    if (token && !sessionRestoring) {
+      loadSectionData(currentSection);
+    }
+    // Только первый показ кабинета: дальше данные грузят сами пункты меню.
+  }, [token, sessionRestoring]);
 
   useEffect(() => {
     if (token) {
@@ -1812,6 +1838,18 @@ export function App(): JSX.Element {
     showToast(UI.shareToTeamDone, "success");
     if (currentSection === "tasks") {
       await refreshCrmTasks();
+    }
+  }
+
+  /** Данные, которые пункт меню подгружает при входе в раздел, — для входа по ссылке и «Назад». */
+  function loadSectionData(section: AppSection): void {
+    if (section === "tasks") {
+      void refreshCrmTasks();
+      void refreshFollowUpSettings();
+    } else if (section === "contacts") {
+      void refreshCrmContacts();
+    } else if (section === "knowledge") {
+      void ensureKnowledgeSettingsLoaded();
     }
   }
 
@@ -3530,11 +3568,6 @@ export function App(): JSX.Element {
               </a>
             )}
           </div>
-          {selfServeRegistrationEnabled ? (
-            <button type="button" className="textButton landingAccountLink" onClick={openDemoLogin}>
-              Уже есть аккаунт? Войти
-            </button>
-          ) : null}
           <p className="landingCtaHint">{UI.bookDemoHint}</p>
 
           <div className="landingHighlights">
@@ -3641,37 +3674,6 @@ export function App(): JSX.Element {
               </button>
             </div>
 
-            <div className="demoCredentials demoCredentialsModern">
-              <p className="demoQuickLead">Демо-вход без ввода пароля</p>
-              <div className="demoQuickRow">
-                <button
-                  type="button"
-                  className="secondaryButton demoQuickButton"
-                  onClick={() => void login({ login: "operator", password: "demo123" })}
-                >
-                  Войти как оператор
-                </button>
-                <button
-                  type="button"
-                  className="secondaryButton demoQuickButton"
-                  onClick={() => void login({ login: "admin", password: "demo123" })}
-                >
-                  Войти как админ
-                </button>
-              </div>
-              <details className="demoCredentialsDetails">
-                <summary>Другие демо-аккаунты</summary>
-                <p>
-                  <strong>Оператор:</strong> operator / demo123
-                </p>
-                <p>
-                  <strong>Админ:</strong> admin / demo123
-                </p>
-                <p>
-                  <strong>Супер-админ:</strong> superadmin / superadmin123
-                </p>
-              </details>
-            </div>
             <IosHomeScreenHint />
           </div>
         </aside>
@@ -3855,7 +3857,7 @@ export function App(): JSX.Element {
                         void onSelectConversation(item.conversation_id);
                       }}
                     >
-                      {item.contact_name} · {formatStageLabel(item.stage, UI)} · {item.amount}
+                      {item.contact_name} · {formatStageLabel(item.stage, UI)} · {formatMoney(item.amount)}
                     </button>
                   ))}
                 </div>
@@ -3874,7 +3876,7 @@ export function App(): JSX.Element {
                         void refreshCrmTasks();
                       }}
                     >
-                      {item.title}
+                      {formatTaskTitle(item.title)}
                       {item.contact_name ? ` · ${item.contact_name}` : ""}
                     </button>
                   ))}
@@ -4002,7 +4004,7 @@ export function App(): JSX.Element {
           </button>
           <button
             type="button"
-            className={`leftMenuButton ${currentSection === "dialogs" && funnelKpiPanelOpen ? "active" : ""}`}
+            className={`leftMenuButton ${currentSection === "dialogs" && funnelKpiPanelOpen ? "toggled" : ""}`}
             onClick={toggleFunnelKpiPanel}
             aria-pressed={funnelKpiPanelOpen}
             title={UI.menuFunnelKpi}
@@ -5065,7 +5067,7 @@ export function App(): JSX.Element {
             {crmTasks.length ? (
               crmTasks.map((task) => (
                 <div key={task.id} className="taskCard">
-                  <div className="taskCardTitle">{task.title}</div>
+                  <div className="taskCardTitle">{formatTaskTitle(task.title)}</div>
                   <div className="taskCardMeta">
                     {task.contact_name || "—"}
                     {task.due_at ? ` · ${new Date(task.due_at).toLocaleString("ru-RU")}` : ""}
@@ -5293,7 +5295,7 @@ export function App(): JSX.Element {
                     </div>
                     {contactDetails.deals.map((deal) => (
                       <div key={deal.id} className="taskCardMeta">
-                        {formatStageLabel(deal.stage, UI)} · {deal.amount}
+                        {formatStageLabel(deal.stage, UI)} · {formatMoney(deal.amount)}
                         {deal.next_step_at
                           ? ` · Следующий шаг ${new Date(deal.next_step_at).toLocaleString("ru-RU")}`
                           : ""}
@@ -5305,7 +5307,7 @@ export function App(): JSX.Element {
                     <div className="knowledgeArticlesList">
                       {contactDetails.timeline.map((item) => (
                         <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
-                          <div className="taskCardTitle">{item.title}</div>
+                          <div className="taskCardTitle">{formatTaskTitle(item.title)}</div>
                           <div className="taskCardMeta">
                             {new Date(item.created_at).toLocaleString("ru-RU")}
                             {item.detail ? ` · ${item.detail}` : ""}
@@ -5413,6 +5415,7 @@ export function App(): JSX.Element {
         ) : currentSection === "settings" ? (
           token ? (
             <SettingsPanel
+              token={token}
               canManageChannels={canManageChannels}
               onOpenIntegrations={() => openIntegrations()}
             />
@@ -5510,8 +5513,8 @@ export function App(): JSX.Element {
                 </button>
               </div>
             </div>
-            {pipelineBoard.hiddenCount > 0 ? (
-              <div className="sidebarHint" style={{ marginBottom: 8 }}>
+            {pipelineBoard.hiddenCount > 0 && pipelineBoard.visibleCount > 0 ? (
+              <div className="sidebarHint pipelineHiddenHint">
                 {pipelineStatusFilter === "open"
                   ? `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в закрытых диалогах.`
                   : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в открытых диалогах.`}
@@ -5582,7 +5585,7 @@ export function App(): JSX.Element {
                             <div className="pipelineBoardCardName">{deal.contact_name}</div>
                             <div className="pipelineBoardCardMeta">{deal.phone || ""}</div>
                             <div className="pipelineBoardCardMeta">
-                              {UI.dealAmount}: {deal.amount}
+                              {UI.dealAmount}: {formatMoney(deal.amount)}
                               {deal.next_step_at
                                 ? ` · ${new Date(deal.next_step_at).toLocaleDateString("ru-RU")}`
                                 : ""}
@@ -6392,7 +6395,7 @@ export function App(): JSX.Element {
           step={onboardingStep}
           stepsDone={onboardingState.steps}
           isAdmin={sessionUser?.role === "admin"}
-          demoData={usesDemoSampleData(sessionUser, conversations)}
+          demoData={usesDemoSampleData(conversations)}
           onStepChange={setOnboardingStep}
           onOpenChannel={openOnboardingChannel}
           onChannelRequestCopied={noteOnboardingChannelRequestCopied}

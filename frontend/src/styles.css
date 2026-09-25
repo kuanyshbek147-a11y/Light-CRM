@@ -441,6 +441,18 @@ button {
   color: #64748b;
 }
 
+.settingsPasswordForm {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.settingsPasswordOk {
+  margin: 0;
+  font-size: 13px;
+  color: #047857;
+}
+
 .settingsLinkAction {
   border-color: #c7d2fe;
   background: #f5f7ff;
@@ -1515,7 +1527,7 @@ body.pwa-standalone {
   min-height: 0;
   padding: 14px;
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
   transition: grid-template-columns 0.2s ease;
@@ -1533,6 +1545,7 @@ body.pwa-standalone {
 
 .leftMenu {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 8px;
   padding: 16px 12px;
@@ -1638,6 +1651,8 @@ body.pwa-standalone {
 .leftMenuButtonLabel {
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
   transition: opacity 0.15s ease, max-width 0.2s ease;
   max-width: 180px;
 }
@@ -1677,6 +1692,15 @@ body.pwa-standalone {
   border-color: #cfd6ff;
   color: #30328c;
   box-shadow: inset 0 0 0 1px rgba(91, 92, 233, 0.12);
+}
+
+/* Переключатель боковой панели, а не раздел: не спорит с подсветкой текущего раздела. */
+.leftMenuButton.toggled {
+  color: #30328c;
+}
+
+.leftMenuButton.toggled .leftMenuButtonIcon {
+  color: #4a49d8;
 }
 
 .leftMenuButton.active .leftMenuButtonIcon {
@@ -2391,6 +2415,13 @@ body.pwa-standalone {
   overflow: hidden;
 }
 
+/* «Задачи» и «Операции» — длинный список блоков: растягивать второй блок на всю высоту нельзя. */
+.knowledgePage:has(> :nth-child(3)) {
+  grid-template-rows: none;
+  align-content: start;
+  overflow-y: auto;
+}
+
 .marketingPage {
   min-height: 0;
   height: 100%;
@@ -2451,9 +2482,22 @@ body.pwa-standalone {
 }
 
 .pipelinePage {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.pipelinePage > .pipelineBoardGrid {
+  flex: 1;
+  min-height: 0;
+}
+
+.pipelinePage > .pipelineEmptyState {
+  margin: 14px;
+}
+
+.pipelineHiddenHint {
+  padding: 8px 14px 0;
 }
 
 .analyticsPage {
@@ -2527,9 +2571,23 @@ body.pwa-standalone {
   font-size: 13px;
 }
 
+/* Два класса — чтобы общие .analyticsManagers* (объявлены ниже) не перебивали 7 колонок. */
+.analyticsManagersHead.ownerManagersHead,
+.analyticsManagersRow.ownerManagersRow {
+  grid-template-columns: 28px minmax(0, 1.4fr) repeat(5, minmax(0, 0.8fr));
+}
+
+.analyticsManagersHead.ownerManagersHead {
+  padding: 2px 11px;
+}
+
+.ownerManagersTable {
+  overflow-x: auto;
+}
+
 .ownerManagersHead,
 .ownerManagersRow {
-  grid-template-columns: 36px 1.4fr repeat(5, 0.8fr);
+  min-width: 620px;
 }
 
 @media (max-width: 960px) {
@@ -2941,7 +2999,12 @@ body.pwa-standalone {
 .pipelineBoardCardActions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 2px;
+}
+
+.pipelineBoardCardActions .textButton {
+  font-size: 13px;
 }
 
 .knowledgePageGrid {
@@ -3691,12 +3754,14 @@ body.pwa-standalone {
 
 .rightRail .dealTable th:nth-child(1),
 .rightRail .dealTable td:nth-child(1) {
-  width: 34%;
+  width: 30%;
 }
 
 .rightRail .dealTable th:nth-child(2),
 .rightRail .dealTable td:nth-child(2) {
-  width: 26%;
+  width: 33%;
+  padding-right: 4px;
+  white-space: nowrap;
 }
 
 .rightRail .stageSelect {
@@ -3754,12 +3819,12 @@ body.pwa-standalone {
   font-size: 12px;
   color: #64748b;
   font-weight: 900;
-  padding: 10px 0;
+  padding: 10px 8px 10px 0;
   border-bottom: 1px solid #eef2f7;
 }
 
 .dealTable td {
-  padding: 12px 0;
+  padding: 12px 8px 12px 0;
   border-bottom: 1px solid #eef2f7;
   font-size: 13px;
 }
@@ -3833,6 +3898,7 @@ body.pwa-standalone {
   }
 
   .leftMenu {
+    grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: minmax(180px, 1fr);
     overflow: auto;

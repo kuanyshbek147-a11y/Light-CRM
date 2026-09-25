@@ -104,7 +104,7 @@ export function OwnerDashboard({
           <span>Менеджер</span>
           <span>Выручка</span>
           <span>Доля побед</span>
-          <span>Время первого ответа</span>
+          <span>Первый ответ, мин</span>
           <span>Просрочки</span>
           <span>Диалоги</span>
         </div>

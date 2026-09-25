@@ -1,3 +1,5 @@
+import { formatMoney } from "../../shared/i18n/glossary";
+
 type Deal = {
   id: string;
   conversation_id: string;
@@ -98,7 +100,7 @@ export function FunnelKpiPanel({
             {deals.map((deal) => (
               <tr key={deal.id}>
                 <td>{deal.contact_name}</td>
-                <td>{deal.amount}</td>
+                <td className="dealAmountCell">{formatMoney(deal.amount)}</td>
                 <td>
                   <select
                     className="stageSelect"
