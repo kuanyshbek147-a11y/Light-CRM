@@ -36,10 +36,11 @@ test("robots.txt открывает маркетинг и гайды и закр
   assert.equal(robots.includes("<!doctype html>"), false);
 });
 
-test("sitemap.xml содержит главную и публичный гайд", () => {
+test("sitemap.xml содержит главную и публичные гайды", () => {
   assert.match(sitemap, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   assert.match(sitemap, new RegExp(`<loc>${SITE}/</loc>`));
   assert.match(sitemap, new RegExp(`<loc>${SITE}/guides/crm-whatsapp-kazakhstan</loc>`));
+  assert.match(sitemap, new RegExp(`<loc>${SITE}/guides/whatsapp-chat-history-in-deal</loc>`));
   assert.equal(sitemap.includes("<!doctype html>"), false);
-  assert.equal((sitemap.match(/<loc>/g) || []).length, 2);
+  assert.equal((sitemap.match(/<loc>/g) || []).length, 3);
 });

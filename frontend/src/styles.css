@@ -558,6 +558,7 @@ button {
 .firstRunCard {
   width: min(560px, 100%);
   max-height: min(720px, calc(100vh - 40px));
+  max-height: min(720px, calc(100dvh - 40px));
   overflow: auto;
   padding: 22px 22px 18px;
   border-radius: 20px;
@@ -786,6 +787,13 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin-top: 16px;
+  /* Кнопки всегда видны, даже когда шаги не помещаются на экран телефона. */
+  position: sticky;
+  bottom: -18px;
+  margin-bottom: -18px;
+  padding: 12px 0 18px;
+  background: #fff;
+  border-top: 1px solid #eef0f8;
 }
 
 .firstRunProgress {
@@ -826,6 +834,12 @@ button {
 @media (max-width: 768px) {
   .firstRunCard {
     padding: 16px;
+  }
+
+  .firstRunFooter {
+    bottom: -16px;
+    margin-bottom: -16px;
+    padding-bottom: 16px;
   }
 
   .firstRunHeader {
@@ -1694,13 +1708,27 @@ body.pwa-standalone {
   box-shadow: inset 0 0 0 1px rgba(91, 92, 233, 0.12);
 }
 
-/* Переключатель боковой панели, а не раздел: не спорит с подсветкой текущего раздела. */
-.leftMenuButton.toggled {
-  color: #30328c;
+.leftMenuMoreButton {
+  color: #64748b;
 }
 
-.leftMenuButton.toggled .leftMenuButtonIcon {
-  color: #4a49d8;
+.leftMenuGroup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 2px;
+  border-left: 2px solid #eef0fb;
+  margin-left: 4px;
+}
+
+.leftMenuGroup .leftMenuButton {
+  font-size: 14px;
+}
+
+.appShell.leftMenuCollapsed .leftMenuGroup {
+  padding-left: 0;
+  margin-left: 0;
+  border-left: 0;
 }
 
 .leftMenuButton.active .leftMenuButtonIcon {
@@ -3517,6 +3545,8 @@ body.pwa-standalone {
 .drawerOverlay {
   position: fixed;
   inset: 0;
+  /* Выше шапки и поля ввода сообщения, иначе они перекрывают карточку клиента. */
+  z-index: 100;
   background: rgba(15, 23, 42, 0.28);
   display: flex;
   justify-content: flex-end;
@@ -4387,6 +4417,12 @@ body.pwa-standalone {
   .messages {
     max-height: 46vh;
   }
+}
+
+.integrationsJump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .integrationsPanel {

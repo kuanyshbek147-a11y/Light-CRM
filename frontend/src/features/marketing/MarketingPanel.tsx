@@ -51,6 +51,7 @@ import {
   type MarketingSocialSettings
 } from "./api";
 import { LandingPagesPanel } from "./LandingPagesPanel";
+import { formatBuiltinStageLabel, formatChannelLabel } from "../../shared/i18n/glossary";
 
 type Props = {
   authToken: string;
@@ -1850,7 +1851,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
         <div style={{ marginBottom: 24 }}>
           <div className="scriptPanelTitle">От постов к заявкам</div>
           <div className="sidebarHint" style={{ marginBottom: 10 }}>
-            За {inboundReport.periodDays} дн.: посты в Instagram, новые диалоги и заявки на демо.
+            За {inboundReport.periodDays} дн.: посты в Instagram, новые диалоги и заявки клиентов.
           </div>
           <div className="ownerKpiGrid" style={{ marginBottom: 14 }}>
             <div className="ownerKpiCard">
@@ -1863,20 +1864,20 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">{inboundReport.inbound.demoRequests}</div>
-              <div className="analyticsLabel">Заявки на демо</div>
+              <div className="analyticsLabel">Заявки</div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">
                 {inboundReport.inbound.instagramDialogs}/{inboundReport.inbound.whatsappDialogs}/
                 {inboundReport.inbound.telegramDialogs}
               </div>
-              <div className="analyticsLabel" title="Instagram, WhatsApp и Telegram">
-                Диалоги: IG / WA / TG
+              <div className="analyticsLabel" title="Новые диалоги по каналам">
+                Диалоги: Instagram / WhatsApp / Telegram
               </div>
             </div>
             <div className="ownerKpiCard">
               <div className="analyticsValue">{inboundReport.inbound.dealsWon}</div>
-              <div className="analyticsLabel" title="Сделки, которые дошли до оплаты после заявки на демо">
+              <div className="analyticsLabel" title="Сделки, которые дошли до оплаты после заявки">
                 Сделки закрыты
               </div>
             </div>
@@ -1884,19 +1885,19 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
               <div className="analyticsValue">
                 {new Intl.NumberFormat("ru-KZ").format(inboundReport.inbound.revenueWon)} ₸
               </div>
-              <div className="analyticsLabel">Выручка по демо</div>
+              <div className="analyticsLabel">Выручка по заявкам</div>
             </div>
           </div>
 
           {inboundReport.posts.withError ? (
             <div className="integrationsError" style={{ marginBottom: 12 }}>
-              Ошибки публикации IG: {inboundReport.posts.withError}
+              Ошибки публикации в Instagram: {inboundReport.posts.withError}
             </div>
           ) : null}
 
           <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
             <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1.6fr 0.7fr 1fr 1.2fr" }}>
-              <span>Пост IG</span>
+              <span>Пост в Instagram</span>
               <span>Статус</span>
               <span>План / публикация</span>
               <span>Ошибка</span>
@@ -1924,7 +1925,7 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
             )}
           </div>
 
-          <div className="scriptPanelTitle">Заявки ДЕМО</div>
+          <div className="scriptPanelTitle">Заявки из сообщений</div>
           <div className="analyticsManagersTable" style={{ marginBottom: 18 }}>
             <div className="analyticsManagersHead" style={{ gridTemplateColumns: "1fr 0.6fr 1.4fr 0.7fr" }}>
               <span>Контакт</span>
@@ -1939,18 +1940,18 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
                 style={{ gridTemplateColumns: "1fr 0.6fr 1.4fr 0.7fr" }}
               >
                 <span>{row.contact_name}</span>
-                <strong>{row.channel}</strong>
+                <strong>{formatChannelLabel(row.channel)}</strong>
                 <span>{row.preview || "—"}</span>
                 <span>
                   {row.deal_stage
-                    ? `${row.deal_stage}${row.deal_outcome && row.deal_outcome !== "open" ? ` (${row.deal_outcome})` : ""}`
+                    ? `${formatBuiltinStageLabel(row.deal_stage) ?? row.deal_stage}${row.deal_outcome && row.deal_outcome !== "open" ? ` (${formatBuiltinStageLabel(row.deal_outcome) ?? row.deal_outcome})` : ""}`
                     : "—"}
                 </span>
               </div>
             ))}
             {inboundReport.demos.length ? null : (
               <div className="analyticsManagersEmpty">
-                Пока нет входящих с текстом «демо / пилот / записаться»
+                Пока нет сообщений, где клиент просит записаться, демо или пилот
               </div>
             )}
           </div>

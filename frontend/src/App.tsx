@@ -42,7 +42,7 @@ import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
 import { canOpenSection, parseSectionHash, sectionHash, type AppSection } from "./shared/lib/sectionRoute";
-import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle } from "./shared/i18n/glossary";
+import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle, formatTimelineItem, ruPlural } from "./shared/i18n/glossary";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 
@@ -310,7 +310,16 @@ const API = API_BASE_URL;
 const INBOX_FILTER_PRESETS_KEY = "lightcrm.inboxFilterPresets";
 const LEFT_MENU_COLLAPSED_KEY = "lightcrm.leftMenuCollapsed";
 const FUNNEL_KPI_PANEL_KEY = "lightcrm.funnelKpiPanelOpen";
-const FUNNEL_KPI_OPEN_MIN_WIDTH_PX = 1361;
+const MORE_MENU_OPEN_KEY = "lightcrm.moreMenuOpen";
+const MORE_MENU_SECTIONS: ReadonlySet<AppSection> = new Set<AppSection>([
+  "analytics",
+  "knowledge",
+  "marketing",
+  "integrations",
+  "ops"
+]);
+// На ноутбуках 1366px панель по умолчанию свёрнута: список диалогов и чат важнее.
+const FUNNEL_KPI_OPEN_MIN_WIDTH_PX = 1500;
 
 function initialFunnelKpiPanelOpen(): boolean {
   if (typeof window === "undefined") {
@@ -386,6 +395,7 @@ const UI = {
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
   menuFunnelKpi: "Показатели",
+  menuMore: "Ещё",
   collapseKpi: "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c",
   funnelKpiTab: "Показатели и сделки",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
@@ -420,7 +430,7 @@ const UI = {
   followUpSettingsHint:
     "Система сама создаст напоминание: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
-  mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
+  mergeContact: "Объединить с дублем",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
   dealNextStep: "\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433",
   saveDeal: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0434\u0435\u043b\u043a\u0443",
@@ -446,7 +456,6 @@ const UI = {
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   searchClients: "\u041f\u043e\u0438\u0441\u043a \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
-  chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
   searchByNameOrPhone: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0438\u043c\u0435\u043d\u0438 \u0438\u043b\u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
   city: "\u0413\u043e\u0440\u043e\u0434",
   reason: "\u041f\u0440\u0438\u0447\u0438\u043d\u0430",
@@ -757,6 +766,15 @@ export function App(): JSX.Element {
     const fromHash = parseSectionHash(window.location.hash);
     return fromHash && canOpenSection(fromHash, initialSession.user?.role) ? fromHash : "dialogs";
   });
+  const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(MORE_MENU_OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  // Группа «Ещё» раскрыта сама, если открыт один из её разделов, — иначе не видно, где вы.
+  const moreMenuExpanded = moreMenuOpen || MORE_MENU_SECTIONS.has(currentSection);
   const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
   const openIntegrations = (target?: "telegram" | "instagram") => {
     setIntegrationsFocus(target ?? null);
@@ -909,6 +927,32 @@ export function App(): JSX.Element {
     startBackendKeepAlive();
     void warmupBackend();
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MORE_MENU_OPEN_KEY, moreMenuOpen ? "1" : "0");
+    } catch {
+      /* приватный режим — просто не запоминаем */
+    }
+  }, [moreMenuOpen]);
+
+  // Карточка клиента — поверх текущего экрана: закрываем её по Escape и при переходе в другой раздел.
+  useEffect(() => {
+    setCustomerCardOpen(false);
+  }, [currentSection]);
+
+  useEffect(() => {
+    if (!customerCardOpen) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setCustomerCardOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [customerCardOpen]);
 
   // Раздел ↔ адрес «#/раздел»: обновление страницы и кнопка «Назад» возвращают на тот же экран.
   useEffect(() => {
@@ -3612,6 +3656,24 @@ export function App(): JSX.Element {
           </a>
         </section>
 
+        <figure className="landingPreview">
+          <div className="landingPreviewFrame">
+            <span className="landingPreviewDots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <img
+              src="/landing-preview.jpg"
+              width={1440}
+              height={860}
+              loading="lazy"
+              alt="Экран Light CRM: список диалогов из WhatsApp, Telegram и Instagram и открытый чат с клиентом"
+            />
+          </div>
+          <figcaption>Так выглядит рабочее место менеджера: все чаты слева, переписка и сделка — в одном окне.</figcaption>
+        </figure>
+
         <aside id="workspace-login" className="loginCard loginCardModern">
           <div className="loginCardBrandRow">
             <img className="loginBrandMark" src="/logo-mark.png" alt="" width={48} height={48} />
@@ -3724,15 +3786,6 @@ export function App(): JSX.Element {
         : currentSection === "dialogs"
           ? "dialogs"
           : "profile";
-
-  function toggleFunnelKpiPanel(): void {
-    if (currentSection !== "dialogs") {
-      setCurrentSection("dialogs");
-      setFunnelKpiPanelOpen(true);
-      return;
-    }
-    setFunnelKpiPanelOpen((open) => !open);
-  }
 
   function openPipelineSection(subview: "kpi" | "board" = "kpi"): void {
     setPipelineSubview(subview);
@@ -3990,32 +4043,6 @@ export function App(): JSX.Element {
           </button>
           <button
             type="button"
-            className={`leftMenuButton firstRunMenuButton${
-              onboardingState.status === "pending" && onboardingMode !== "overlay" ? " attention" : ""
-            }`}
-            onClick={openOnboardingFromMenu}
-            title={FIRST_RUN_MENU_LABEL}
-            data-testid="first-run-menu"
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u2726"}
-            </span>
-            <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "dialogs" && funnelKpiPanelOpen ? "toggled" : ""}`}
-            onClick={toggleFunnelKpiPanel}
-            aria-pressed={funnelKpiPanelOpen}
-            title={UI.menuFunnelKpi}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25C8"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuFunnelKpi}</span>
-          </button>
-          <button
-            type="button"
             className={`leftMenuButton ${currentSection === "pipeline" ? "active" : ""}`}
             onClick={() => openPipelineSection("board")}
             title={UI.menuPipeline}
@@ -4042,6 +4069,20 @@ export function App(): JSX.Element {
           </button>
           <button
             type="button"
+            className={`leftMenuButton ${currentSection === "contacts" ? "active" : ""}`}
+            onClick={() => {
+              setCurrentSection("contacts");
+              void refreshCrmContacts();
+            }}
+            title={UI.menuContacts}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25CE"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuContacts}</span>
+          </button>
+          <button
+            type="button"
             className={`leftMenuButton ${currentSection === "staff" ? "active" : ""}`}
             onClick={() => {
               setCurrentSection("staff");
@@ -4057,81 +4098,113 @@ export function App(): JSX.Element {
               {staffUnreadCount > 0 ? ` (${staffUnreadCount})` : ""}
             </span>
           </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "contacts" ? "active" : ""}`}
-            onClick={() => {
-              setCurrentSection("contacts");
-              void refreshCrmContacts();
-            }}
-            title={UI.menuContacts}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25CE"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuContacts}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "analytics" ? "active" : ""}`}
-            onClick={() => setCurrentSection("analytics")}
-            title={UI.menuAnalytics}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25F4"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuAnalytics}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "knowledge" ? "active" : ""}`}
-            onClick={() => {
-              setCurrentSection("knowledge");
-              void ensureKnowledgeSettingsLoaded();
-            }}
-            title={UI.menuKnowledgeBase}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25A6"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuKnowledgeBase}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "marketing" ? "active" : ""}`}
-            onClick={() => setCurrentSection("marketing")}
-            title={UI.menuMarketing}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u2709"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuMarketing}</span>
-          </button>
-          {sessionUser?.role === "admin" ? (
+          {onboardingState.status === "pending" ? (
             <button
               type="button"
-              className={`leftMenuButton ${currentSection === "ops" ? "active" : ""}`}
-              onClick={() => setCurrentSection("ops")}
-              title={UI.menuOps}
+              className={`leftMenuButton firstRunMenuButton${
+                onboardingState.status === "pending" && onboardingMode !== "overlay" ? " attention" : ""
+              }`}
+              onClick={openOnboardingFromMenu}
+              title={FIRST_RUN_MENU_LABEL}
+              data-testid="first-run-menu"
             >
               <span className="leftMenuButtonIcon" aria-hidden="true">
-                {"\u26A1"}
+                {"\u2726"}
               </span>
-              <span className="leftMenuButtonLabel">{UI.menuOps}</span>
+              <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
             </button>
           ) : null}
-          {sessionUser?.role === "admin" ? (
-            <button
-              type="button"
-              className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
-              onClick={() => openIntegrations()}
-              title={UI.menuIntegrations}
-            >
-              <span className="leftMenuButtonIcon" aria-hidden="true">
-                {"\u2699"}
-              </span>
-              <span className="leftMenuButtonLabel">{UI.menuIntegrations}</span>
-            </button>
+          <button
+            type="button"
+            className={`leftMenuButton leftMenuMoreButton${moreMenuExpanded ? " expanded" : ""}`}
+            onClick={() => setMoreMenuOpen((open) => !open)}
+            aria-expanded={moreMenuExpanded}
+            title={UI.menuMore}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {moreMenuExpanded ? "\u25BE" : "\u25B8"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuMore}</span>
+          </button>
+          {moreMenuExpanded ? (
+            <div className="leftMenuGroup">
+              <button
+                type="button"
+                className={`leftMenuButton ${currentSection === "analytics" ? "active" : ""}`}
+                onClick={() => setCurrentSection("analytics")}
+                title={UI.menuAnalytics}
+              >
+                <span className="leftMenuButtonIcon" aria-hidden="true">
+                  {"\u25F4"}
+                </span>
+                <span className="leftMenuButtonLabel">{UI.menuAnalytics}</span>
+              </button>
+              <button
+                type="button"
+                className={`leftMenuButton ${currentSection === "knowledge" ? "active" : ""}`}
+                onClick={() => {
+                  setCurrentSection("knowledge");
+                  void ensureKnowledgeSettingsLoaded();
+                }}
+                title={UI.menuKnowledgeBase}
+              >
+                <span className="leftMenuButtonIcon" aria-hidden="true">
+                  {"\u25A6"}
+                </span>
+                <span className="leftMenuButtonLabel">{UI.menuKnowledgeBase}</span>
+              </button>
+              <button
+                type="button"
+                className={`leftMenuButton ${currentSection === "marketing" ? "active" : ""}`}
+                onClick={() => setCurrentSection("marketing")}
+                title={UI.menuMarketing}
+              >
+                <span className="leftMenuButtonIcon" aria-hidden="true">
+                  {"\u2709"}
+                </span>
+                <span className="leftMenuButtonLabel">{UI.menuMarketing}</span>
+              </button>
+              {sessionUser?.role === "admin" ? (
+                <button
+                  type="button"
+                  className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
+                  onClick={() => openIntegrations()}
+                  title={UI.menuIntegrations}
+                >
+                  <span className="leftMenuButtonIcon" aria-hidden="true">
+                    {"\u2699"}
+                  </span>
+                  <span className="leftMenuButtonLabel">{UI.menuIntegrations}</span>
+                </button>
+              ) : null}
+              {sessionUser?.role === "admin" ? (
+                <button
+                  type="button"
+                  className={`leftMenuButton ${currentSection === "ops" ? "active" : ""}`}
+                  onClick={() => setCurrentSection("ops")}
+                  title={UI.menuOps}
+                >
+                  <span className="leftMenuButtonIcon" aria-hidden="true">
+                    {"\u26A1"}
+                  </span>
+                  <span className="leftMenuButtonLabel">{UI.menuOps}</span>
+                </button>
+              ) : null}
+              {onboardingState.status === "pending" ? null : (
+                <button
+                  type="button"
+                  className="leftMenuButton firstRunMenuButton"
+                  onClick={openOnboardingFromMenu}
+                  title={FIRST_RUN_MENU_LABEL}
+                  data-testid="first-run-menu"
+                >
+                  <span className="leftMenuButtonIcon" aria-hidden="true">
+                    {"\u2726"}
+                  </span>
+                  <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
+                </button>
+              )}
+            </div>
           ) : null}
             </>
           )}
@@ -4156,7 +4229,6 @@ export function App(): JSX.Element {
             onChannelFilterChange={setInboxChannelFilter}
             ui={{
               inboxTitle: UI.inboxTitle,
-              chatsSuffix: UI.chatsSuffix,
               openSearchFilters: UI.openSearchFilters,
               searchByNameOrPhone: UI.searchByNameOrPhone,
               city: UI.city,
@@ -5227,7 +5299,7 @@ export function App(): JSX.Element {
             <div className="railHeader">
               <div>
                 <div className="sidebarTitle">{UI.sectionContacts}</div>
-                <div className="sidebarHint">{crmContacts.length}</div>
+                <div className="sidebarHint">{ruPlural(crmContacts.length, ["клиент", "клиента", "клиентов"])}</div>
               </div>
             </div>
             <div className="knowledgePageGrid">
@@ -5254,7 +5326,7 @@ export function App(): JSX.Element {
                     >
                       <span className="scriptCardTop">
                         <span className="scriptCardTitle">{contact.name}</span>
-                        <span className="scriptBadge">{contact.channels.join(", ") || "—"}</span>
+                        <span className="scriptBadge">{contact.channels.map(formatChannelLabel).join(", ") || "—"}</span>
                       </span>
                       <span className="scriptCardBody">
                         {contact.phone}
@@ -5305,25 +5377,32 @@ export function App(): JSX.Element {
                       {UI.contactTimeline}
                     </div>
                     <div className="knowledgeArticlesList">
-                      {contactDetails.timeline.map((item) => (
-                        <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
-                          <div className="taskCardTitle">{formatTaskTitle(item.title)}</div>
-                          <div className="taskCardMeta">
-                            {new Date(item.created_at).toLocaleString("ru-RU")}
-                            {item.detail ? ` · ${item.detail}` : ""}
+                      {contactDetails.timeline.map((item) => {
+                        const view = formatTimelineItem(item);
+                        return (
+                          <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
+                            <div className="taskCardTitle">{view.title}</div>
+                            <div className="taskCardMeta">
+                              {new Date(item.created_at).toLocaleString("ru-RU")}
+                              {view.detail ? ` · ${view.detail}` : ""}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
                       {UI.mergeContact}
                     </div>
+                    <p className="sidebarHint">
+                      Если клиент записан дважды (например, написал с другого номера), выберите вторую карточку —
+                      её диалоги и сделки перейдут сюда.
+                    </p>
                     <select
                       className="filterInput"
                       value={mergeSourceContactId}
                       onChange={(event) => setMergeSourceContactId(event.target.value)}
                     >
-                      <option value="">—</option>
+                      <option value="">Выберите вторую карточку…</option>
                       {crmContacts
                         .filter((contact) => contact.id !== selectedContactId)
                         .map((contact) => (
