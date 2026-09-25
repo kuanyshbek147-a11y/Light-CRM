@@ -277,9 +277,6 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                   {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
                 </button>
                 <span className="dialogCardMeta">
-                  <span className={`channelBadge ${conversation.channel}`} title={channelLabel(conversation.channel)}>
-                    {channelLabel(conversation.channel)}
-                  </span>
                   {conversation.landing_id || conversation.marketing_source === "landing" ? (
                     <span className="groupBadge" title="Заявка со страницы">
                       С сайта
@@ -291,11 +288,15 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
               <span className="dialogCardSnippet chatSnippet">
                 {formatSnippet(conversation, noMessages)}
               </span>
-              {conversation.assigned_manager_name ? (
-                <span className="dialogCardAssignee">
-                  {conversation.assigned_manager_name}
+              {/* Канал — во второй строке, чтобы имени клиента хватало места. */}
+              <span className="dialogCardFooter">
+                <span className={`channelBadge ${conversation.channel}`} title={channelLabel(conversation.channel)}>
+                  {channelLabel(conversation.channel)}
                 </span>
-              ) : null}
+                {conversation.assigned_manager_name ? (
+                  <span className="dialogCardAssignee">{conversation.assigned_manager_name}</span>
+                ) : null}
+              </span>
             </span>
           </div>
         </div>
