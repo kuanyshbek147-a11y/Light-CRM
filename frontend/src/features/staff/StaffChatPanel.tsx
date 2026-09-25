@@ -212,7 +212,7 @@ export function StaffChatPanel({
               disabled={busy || !peerPickId}
               onClick={() => void handleOpenDm()}
             >
-              Открыть ЛС
+              Написать лично
             </button>
           </div>
 

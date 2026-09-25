@@ -7,7 +7,7 @@ import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import { DialogsEmptyState } from "./DialogsEmptyState";
 import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
-import { formatChannelLabel } from "../../shared/i18n/glossary";
+import { formatChannelLabel, ruPlural } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
 function channelLabel(channel: Conversation["channel"]): string {
@@ -193,7 +193,6 @@ function ChannelFilters(props: {
 
 type InboxSidebarUi = {
   inboxTitle: string;
-  chatsSuffix: string;
   openSearchFilters: string;
   searchByNameOrPhone: string;
   city: string;
@@ -373,7 +372,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         <div className="mobilePageHeaderText">
           <div className="mobilePageTitle">{ui.inboxTitle}</div>
           <div className="mobilePageSubtitle">
-            {visibleConversations.length} {ui.chatsSuffix}
+            {ruPlural(visibleConversations.length, ["чат", "чата", "чатов"])}
           </div>
         </div>
         <div className="mobilePageActions">
@@ -404,7 +403,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
       <div className="sidebarHeader">
         <div>
           <div className="sidebarTitle">{ui.inboxTitle}</div>
-          <div className="sidebarHint">{visibleConversations.length} {ui.chatsSuffix}</div>
+          <div className="sidebarHint">{ruPlural(visibleConversations.length, ["чат", "чата", "чатов"])}</div>
         </div>
         <button
           type="button"

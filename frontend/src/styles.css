@@ -558,6 +558,7 @@ button {
 .firstRunCard {
   width: min(560px, 100%);
   max-height: min(720px, calc(100vh - 40px));
+  max-height: min(720px, calc(100dvh - 40px));
   overflow: auto;
   padding: 22px 22px 18px;
   border-radius: 20px;
@@ -786,6 +787,13 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin-top: 16px;
+  /* Кнопки всегда видны, даже когда шаги не помещаются на экран телефона. */
+  position: sticky;
+  bottom: -18px;
+  margin-bottom: -18px;
+  padding: 12px 0 18px;
+  background: #fff;
+  border-top: 1px solid #eef0f8;
 }
 
 .firstRunProgress {
@@ -826,6 +834,12 @@ button {
 @media (max-width: 768px) {
   .firstRunCard {
     padding: 16px;
+  }
+
+  .firstRunFooter {
+    bottom: -16px;
+    margin-bottom: -16px;
+    padding-bottom: 16px;
   }
 
   .firstRunHeader {
@@ -3517,6 +3531,8 @@ body.pwa-standalone {
 .drawerOverlay {
   position: fixed;
   inset: 0;
+  /* Выше шапки и поля ввода сообщения, иначе они перекрывают карточку клиента. */
+  z-index: 100;
   background: rgba(15, 23, 42, 0.28);
   display: flex;
   justify-content: flex-end;

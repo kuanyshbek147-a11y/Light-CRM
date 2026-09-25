@@ -813,6 +813,40 @@
   cursor: pointer;
 }
 
+.threadTextBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid #e8ebf7;
+  background: #fff;
+  color: #3730a3;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.threadTextBtn:hover {
+  background: #f5f6ff;
+  border-color: #cfd6ff;
+}
+
+/* На телефоне место под имя клиента важнее подписи — оставляем значок. */
+@media (max-width: 520px) {
+  .threadTextBtnLabel {
+    display: none;
+  }
+
+  .threadTextBtn {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 /* ── Quick action chips in chat ── */
 .quickActionChips {
   display: flex;
@@ -864,6 +898,9 @@
   font-size: 12px;
   font-weight: 700;
   color: #4338ca;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dealFlowSectionTitle {

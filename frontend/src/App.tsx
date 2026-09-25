@@ -42,7 +42,7 @@ import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
 import { canOpenSection, parseSectionHash, sectionHash, type AppSection } from "./shared/lib/sectionRoute";
-import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle } from "./shared/i18n/glossary";
+import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle, formatTimelineItem, ruPlural } from "./shared/i18n/glossary";
 import { BottomNav, type MobileNavSection } from "./shared/ui/BottomNav";
 import { NotificationBellButton } from "./shared/ui/NotificationBellButton";
 
@@ -420,7 +420,7 @@ const UI = {
   followUpSettingsHint:
     "Система сама создаст напоминание: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
-  mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
+  mergeContact: "Объединить с дублем",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
   dealNextStep: "\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433",
   saveDeal: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0434\u0435\u043b\u043a\u0443",
@@ -446,7 +446,6 @@ const UI = {
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   searchClients: "\u041f\u043e\u0438\u0441\u043a \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
-  chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
   searchByNameOrPhone: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0438\u043c\u0435\u043d\u0438 \u0438\u043b\u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
   city: "\u0413\u043e\u0440\u043e\u0434",
   reason: "\u041f\u0440\u0438\u0447\u0438\u043d\u0430",
@@ -909,6 +908,24 @@ export function App(): JSX.Element {
     startBackendKeepAlive();
     void warmupBackend();
   }, []);
+
+  // Карточка клиента — поверх текущего экрана: закрываем её по Escape и при переходе в другой раздел.
+  useEffect(() => {
+    setCustomerCardOpen(false);
+  }, [currentSection]);
+
+  useEffect(() => {
+    if (!customerCardOpen) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setCustomerCardOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [customerCardOpen]);
 
   // Раздел ↔ адрес «#/раздел»: обновление страницы и кнопка «Назад» возвращают на тот же экран.
   useEffect(() => {
@@ -4156,7 +4173,6 @@ export function App(): JSX.Element {
             onChannelFilterChange={setInboxChannelFilter}
             ui={{
               inboxTitle: UI.inboxTitle,
-              chatsSuffix: UI.chatsSuffix,
               openSearchFilters: UI.openSearchFilters,
               searchByNameOrPhone: UI.searchByNameOrPhone,
               city: UI.city,
@@ -5227,7 +5243,7 @@ export function App(): JSX.Element {
             <div className="railHeader">
               <div>
                 <div className="sidebarTitle">{UI.sectionContacts}</div>
-                <div className="sidebarHint">{crmContacts.length}</div>
+                <div className="sidebarHint">{ruPlural(crmContacts.length, ["клиент", "клиента", "клиентов"])}</div>
               </div>
             </div>
             <div className="knowledgePageGrid">
@@ -5254,7 +5270,7 @@ export function App(): JSX.Element {
                     >
                       <span className="scriptCardTop">
                         <span className="scriptCardTitle">{contact.name}</span>
-                        <span className="scriptBadge">{contact.channels.join(", ") || "—"}</span>
+                        <span className="scriptBadge">{contact.channels.map(formatChannelLabel).join(", ") || "—"}</span>
                       </span>
                       <span className="scriptCardBody">
                         {contact.phone}
@@ -5305,25 +5321,32 @@ export function App(): JSX.Element {
                       {UI.contactTimeline}
                     </div>
                     <div className="knowledgeArticlesList">
-                      {contactDetails.timeline.map((item) => (
-                        <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
-                          <div className="taskCardTitle">{formatTaskTitle(item.title)}</div>
-                          <div className="taskCardMeta">
-                            {new Date(item.created_at).toLocaleString("ru-RU")}
-                            {item.detail ? ` · ${item.detail}` : ""}
+                      {contactDetails.timeline.map((item) => {
+                        const view = formatTimelineItem(item);
+                        return (
+                          <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
+                            <div className="taskCardTitle">{view.title}</div>
+                            <div className="taskCardMeta">
+                              {new Date(item.created_at).toLocaleString("ru-RU")}
+                              {view.detail ? ` · ${view.detail}` : ""}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
                       {UI.mergeContact}
                     </div>
+                    <p className="sidebarHint">
+                      Если клиент записан дважды (например, написал с другого номера), выберите вторую карточку —
+                      её диалоги и сделки перейдут сюда.
+                    </p>
                     <select
                       className="filterInput"
                       value={mergeSourceContactId}
                       onChange={(event) => setMergeSourceContactId(event.target.value)}
                     >
-                      <option value="">—</option>
+                      <option value="">Выберите вторую карточку…</option>
                       {crmContacts
                         .filter((contact) => contact.id !== selectedContactId)
                         .map((contact) => (
