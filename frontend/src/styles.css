@@ -3241,9 +3241,15 @@ body.pwa-standalone {
 
 .scriptCardActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 6px 14px;
   padding: 0 12px 12px 12px;
+}
+
+.scriptCardActions .textButton {
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .secondaryButton {

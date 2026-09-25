@@ -844,7 +844,10 @@ export function App(): JSX.Element {
   const [contactRequiredFields, setContactRequiredFields] = useState<ContactRequiredFieldKey[]>([]);
   const [applyingRePreset, setApplyingRePreset] = useState(false);
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
-  const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
+  // На компьютере переключателя «Показатели / Доска» нет — по ссылке #/pipeline сразу открываем доску.
+  const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches ? "kpi" : "board"
+  );
   const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(initialFunnelKpiPanelOpen);
   const [leftMenuCollapsed, setLeftMenuCollapsed] = useState(() => {
     return localStorage.getItem(LEFT_MENU_COLLAPSED_KEY) === "1";
@@ -1894,6 +1897,8 @@ export function App(): JSX.Element {
       void refreshCrmContacts();
     } else if (section === "knowledge") {
       void ensureKnowledgeSettingsLoaded();
+    } else if (section === "pipeline" && token) {
+      void loadDeals(token, setDeals);
     }
   }
 
@@ -4628,7 +4633,7 @@ export function App(): JSX.Element {
                       <button
                         key={template.label}
                         type="button"
-                        className="leftMenuButton"
+                        className="quickChip"
                         onClick={() => applyKnowledgeTemplate(template)}
                       >
                         {template.label}
