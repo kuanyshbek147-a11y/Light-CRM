@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../../shared/config/api";
+import { TeamMembers } from "./TeamMembers";
 
 type SettingsPanelProps = {
   token: string;
@@ -135,11 +136,13 @@ export function SettingsPanel(props: SettingsPanelProps): JSX.Element {
           <span>Язык</span>
           <span>Русский</span>
         </div>
-        <div className="profileMenuBtn settingsLinkStatic" data-testid="settings-team">
-          <span>Команда</span>
-          <span>Скоро</span>
-        </div>
       </div>
+      {canManageChannels ? (
+        <>
+          <h2 className="settingsSectionTitle">Сотрудники</h2>
+          <TeamMembers token={token} />
+        </>
+      ) : null}
       <h2 className="settingsSectionTitle">Пароль</h2>
       <ChangePasswordForm token={token} />
     </section>

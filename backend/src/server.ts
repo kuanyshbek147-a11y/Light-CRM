@@ -31,11 +31,12 @@ import { setRealtimeServer } from "./realtime";
 import { createFollowUpRouter, startFollowUpScanner } from "./modules/follow-up";
 import { createAdsRouter, startAdsMetricsWorker } from "./modules/ads";
 import { createMarketingRouter, startCampaignWorker, startContentScheduler, startSequenceWorker } from "./modules/marketing";
-import { createOpsRouter, startOpsHealthWatcher, backupsAbsoluteDir } from "./modules/ops";
+import { createOpsRouter, startOpsHealthWatcher } from "./modules/ops";
 import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
 import { createStaffRouter } from "./modules/staff";
+import { createTeamRouter } from "./modules/team/routes";
 import { createTelephonyRouter } from "./modules/integrations/telephony";
 import { createPresetsRouter } from "./modules/presets";
 
@@ -77,6 +78,7 @@ app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conver
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
 app.use("/api/staff", authMiddleware, requireWorkspaceMiddleware, createStaffRouter());
+app.use("/api/team", authMiddleware, createTeamRouter());
 app.use("/api/presets", authMiddleware, requireWorkspaceMiddleware, createPresetsRouter());
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
@@ -91,7 +93,6 @@ startEmailPolling(io);
 
 const publicDir = path.join(process.cwd(), "public");
 const publicIndex = path.join(publicDir, "index.html");
-app.use("/backups", express.static(backupsAbsoluteDir(), { index: false, maxAge: "1h" }));
 const widgetSourceCandidates = [
   path.join(process.cwd(), "src", "modules", "integrations", "webchat", "widget.js"),
   path.join(__dirname, "modules", "integrations", "webchat", "widget.js"),

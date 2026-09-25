@@ -1,7 +1,5 @@
 import { Router } from "express";
-import path from "path";
 import { AuthRequest, requireWorkspaceAdminMiddleware } from "../../auth";
-import { createDatabaseBackup, listDatabaseBackups } from "./backup";
 import { checkOpsHealth, setOpsAlertChatId, startOpsHealthWatcher } from "./alerts";
 import { listUnassignedQueue } from "./queue";
 
@@ -19,18 +17,7 @@ export function createOpsRouter(): Router {
     res.json(await checkOpsHealth());
   });
 
-  router.get("/backups", requireWorkspaceAdminMiddleware, async (_req: AuthRequest, res) => {
-    res.json(await listDatabaseBackups());
-  });
-
-  router.post("/backups", requireWorkspaceAdminMiddleware, async (_req: AuthRequest, res) => {
-    const result = await createDatabaseBackup();
-    if ("error" in result) {
-      res.status(500).json(result);
-      return;
-    }
-    res.status(201).json(result);
-  });
+  // Копии базы содержат данные всех компаний — они только у супер-админа (/api/platform/backups).
 
   router.put("/alerts", requireWorkspaceAdminMiddleware, async (req: AuthRequest, res) => {
     const workspaceId = req.user?.workspaceId || "";
@@ -40,8 +27,4 @@ export function createOpsRouter(): Router {
   });
 
   return router;
-}
-
-export function backupsAbsoluteDir(): string {
-  return path.join(process.cwd(), "backups");
 }

@@ -22,17 +22,6 @@ export async function loadOpsQueue(token: string): Promise<QueueItem[]> {
   return (await response.json()) as QueueItem[];
 }
 
-export async function createOpsBackup(
-  token: string
-): Promise<{ fileName: string; relativePath: string; bytes: number } | null> {
-  const response = await fetch(`${API}/ops/backups`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!response.ok) return null;
-  return (await response.json()) as { fileName: string; relativePath: string; bytes: number };
-}
-
 export async function saveOpsAlertChat(
   token: string,
   telegramChatId: string

@@ -36,7 +36,7 @@ export async function createDatabaseBackup(): Promise<
     const stat = await fs.stat(filePath);
     return {
       fileName,
-      relativePath: `/backups/${fileName}`,
+      relativePath: `/api/platform/backups/${fileName}`,
       bytes: stat.size
     };
   } catch (pgDumpError) {
@@ -73,7 +73,7 @@ export async function createDatabaseBackup(): Promise<
       void pgDumpError;
       return {
         fileName: jsonName,
-        relativePath: `/backups/${jsonName}`,
+        relativePath: `/api/platform/backups/${jsonName}`,
         bytes: stat.size
       };
     } catch (error) {
@@ -81,6 +81,13 @@ export async function createDatabaseBackup(): Promise<
       return { error: message };
     }
   }
+}
+
+const BACKUP_NAME_RE = /^light-crm-[0-9TZ-]+\.(sql|jsonl)$/;
+
+/** Полный путь к файлу копии или null, если имя не похоже на копию (защита от ../). */
+export function resolveBackupFile(fileName: string): string | null {
+  return BACKUP_NAME_RE.test(fileName) ? path.join(backupsDir(), fileName) : null;
 }
 
 export async function listDatabaseBackups(): Promise<
@@ -95,7 +102,7 @@ export async function listDatabaseBackups(): Promise<
       const stat = await fs.stat(path.join(backupsDir(), fileName));
       rows.push({
         fileName,
-        relativePath: `/backups/${fileName}`,
+        relativePath: `/api/platform/backups/${fileName}`,
         bytes: stat.size,
         modifiedAt: stat.mtime.toISOString()
       });
