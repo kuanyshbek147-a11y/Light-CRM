@@ -126,7 +126,7 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
 
         {demoData ? (
           <p className="firstRunDemoNote" data-testid="first-run-demo-note">
-            Это учебные данные. Диалоги и клиенты на экране — примеры для знакомства с кабинетом, не живые продажи.
+            В кабинете есть учебные примеры (например, «ИП Ромашка») — они нужны для знакомства и не являются живыми продажами.
           </p>
         ) : null}
 

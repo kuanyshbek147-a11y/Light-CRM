@@ -1,5 +1,5 @@
 export const ADD_CLIENT_UNAVAILABLE_HINT =
-  "Ручное добавление клиента пока недоступно: отдельного API нет. Клиент появится из входящего сообщения в подключённом канале.";
+  "Клиенты появляются сами, когда пишут в подключённый WhatsApp, Instagram или Telegram.";
 
 export function canCreateDealFromPipeline(conversationCount: number): boolean {
   return conversationCount > 0;

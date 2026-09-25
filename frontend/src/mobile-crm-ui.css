@@ -1677,6 +1677,11 @@
     display: none;
   }
 
+  /* На компьютере заголовок доски уже есть в railHeader — второй не нужен. */
+  .pipelinePage:has(.railHeader) > .mobilePageHeader {
+    display: none;
+  }
+
   .threadHeaderModern {
     display: flex;
   }

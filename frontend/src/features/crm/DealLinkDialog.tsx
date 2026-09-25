@@ -1,3 +1,5 @@
+import { formatMoney } from "../../shared/i18n/glossary";
+
 export type DealLinkOption = {
   id: string;
   stageLabel: string;
@@ -149,7 +151,7 @@ export function DealLinkDialog(props: DealLinkDialogProps): JSX.Element {
                     <div>
                       <div className="dealLinkRowMeta">{deal.stageLabel}</div>
                       <div className="sidebarHint">
-                        {deal.amount}
+                        {formatMoney(deal.amount)}
                         {deal.nextStepLabel ? ` · Следующий шаг ${deal.nextStepLabel}` : ""}
                       </div>
                     </div>
