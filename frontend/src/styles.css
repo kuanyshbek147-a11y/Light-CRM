@@ -447,6 +447,67 @@ button {
   padding: 14px;
 }
 
+.teamMembers {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.teamMembersList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.teamMemberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e8ebf7;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.teamMemberRow.inactive {
+  opacity: 0.6;
+}
+
+.teamMemberInfo {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.teamMemberInfo span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.teamMemberActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.teamMemberActions .textButton {
+  font-size: 13px;
+}
+
+.teamMemberForm {
+  display: grid;
+  gap: 10px;
+}
+
+.teamMemberFormActions {
+  display: flex;
+  gap: 8px;
+}
+
 .settingsPasswordOk {
   margin: 0;
   font-size: 13px;
