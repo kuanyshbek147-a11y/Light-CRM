@@ -36,6 +36,7 @@ import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
 import { createStaffRouter } from "./modules/staff";
+import { createTeamRouter } from "./modules/team/routes";
 import { createTelephonyRouter } from "./modules/integrations/telephony";
 import { createPresetsRouter } from "./modules/presets";
 
@@ -77,6 +78,7 @@ app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conver
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
 app.use("/api/staff", authMiddleware, requireWorkspaceMiddleware, createStaffRouter());
+app.use("/api/team", authMiddleware, createTeamRouter());
 app.use("/api/presets", authMiddleware, requireWorkspaceMiddleware, createPresetsRouter());
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
