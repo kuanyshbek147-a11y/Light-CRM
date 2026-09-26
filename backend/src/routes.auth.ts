@@ -6,10 +6,13 @@ import { authMiddleware, type AuthRequest } from "./auth";
 import type { UserRole } from "./auth";
 import { isEmailTakenError, REGISTER_COPY, validateRegisterBody } from "./modules/auth/register";
 import { createWorkspaceWithAdmin } from "./modules/platform/provision";
+import { LoginThrottle } from "./modules/auth/loginThrottle";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 export const authRouter = Router();
+
+const loginThrottle = new LoginThrottle();
 
 function signSessionToken(user: { id: string; workspace_id: string | null; role: UserRole }): string {
   return jwt.sign(
@@ -116,6 +119,16 @@ authRouter.post("/login", async (req, res) => {
     return;
   }
 
+  const clientIp = req.ip || "unknown";
+  const waitSeconds = loginThrottle.retryAfterSeconds(clientIp, identifier);
+  if (waitSeconds > 0) {
+    res.setHeader("Retry-After", String(waitSeconds));
+    res.status(429).json({
+      error: `Слишком много неудачных попыток. Попробуйте через ${Math.ceil(waitSeconds / 60)} мин.`
+    });
+    return;
+  }
+
   const users = await query<{
     id: string;
     workspace_id: string | null;
@@ -152,15 +165,18 @@ authRouter.post("/login", async (req, res) => {
 
   const user = users[0];
   if (!user) {
+    loginThrottle.recordFailure(clientIp, identifier);
     res.status(401).json({ error: "Неверный логин или пароль" });
     return;
   }
 
   const isValid = await bcrypt.compare(password, user.password_hash);
   if (!isValid) {
+    loginThrottle.recordFailure(clientIp, identifier);
     res.status(401).json({ error: "Неверный логин или пароль" });
     return;
   }
+  loginThrottle.recordSuccess(clientIp, identifier);
 
   await query(`UPDATE users SET last_login_at = now() WHERE id = $1`, [user.id]);
 
