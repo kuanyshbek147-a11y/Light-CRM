@@ -207,36 +207,24 @@ async function run(): Promise<void> {
       )
     ).rows[0].id;
 
+  // demo123 — только для первого запуска. Сид выполняется при каждом старте сервера на Render,
+  // поэтому существующих пользователей он не трогает: иначе каждый деплой возвращал бы публичный пароль.
   const passwordHash = await bcrypt.hash("demo123", 10);
 
   await pool.query(
     `INSERT INTO users (workspace_id, full_name, email, role, password_hash, login)
      VALUES ($1, 'Администратор', 'admin@demo.local', 'admin', $2, 'admin')
-     ON CONFLICT (email) DO UPDATE
-     SET password_hash = EXCLUDED.password_hash,
-         full_name = EXCLUDED.full_name,
-         login = EXCLUDED.login`,
+     ON CONFLICT (email) DO NOTHING`,
     [workspaceId, passwordHash]
   );
 
   await pool.query(
     `INSERT INTO users (workspace_id, full_name, email, role, password_hash, login)
      VALUES ($1, 'Оператор линии', 'manager@demo.local', 'manager', $2, 'operator')
-     ON CONFLICT (email) DO UPDATE
-     SET password_hash = EXCLUDED.password_hash,
-         full_name = EXCLUDED.full_name,
-         login = EXCLUDED.login`,
+     ON CONFLICT (email) DO NOTHING`,
     [workspaceId, passwordHash]
   );
 
-  await pool.query(
-    `UPDATE users SET login = 'admin', password_hash = $1 WHERE email = 'admin@demo.local'`,
-    [passwordHash]
-  );
-  await pool.query(
-    `UPDATE users SET login = 'operator', password_hash = $1 WHERE email = 'manager@demo.local'`,
-    [passwordHash]
-  );
 
   const manager = await pool.query<{ id: string }>(
     "SELECT id FROM users WHERE email = 'manager@demo.local' LIMIT 1"
