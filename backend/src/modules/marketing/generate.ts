@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { uploadsDir } from "../media/upload";
+import { mirrorUpload } from "../media/storage";
 import type { ContentPostChannel } from "./posts";
 
 export type GeneratedPostDraft = {
@@ -361,6 +362,7 @@ export async function generateMarketingImage(input: {
     } else {
       return { error: "openai_empty_response" };
     }
+    await mirrorUpload(uploadsDir, fileName, "image/png");
 
     const relativeUrl = `/uploads/${fileName}`;
     return {

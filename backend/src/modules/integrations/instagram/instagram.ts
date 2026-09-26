@@ -8,6 +8,7 @@ import { query } from "../../../db";
 import { authMiddleware, canManageIntegrations, type AuthRequest } from "../../auth";
 import { maybeAutoReply } from "../../auto-reply";
 import { placeholderBodyForAttachment, uploadsDir } from "../../media/upload";
+import { mirrorUpload } from "../../media/storage";
 import {
   clearWorkspaceInstagramCredentials,
   findWorkspaceIdByInstagramIgUserId,
@@ -188,6 +189,7 @@ async function downloadInstagramMediaToUploads(
     await mkdir(uploadsDir, { recursive: true });
     const fileName = `instagram-${randomUUID()}.${ext}`;
     await writeFile(path.join(uploadsDir, fileName), buffer);
+    await mirrorUpload(uploadsDir, fileName);
     return {
       url: `/uploads/${fileName}`,
       attachmentType,

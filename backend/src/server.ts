@@ -37,6 +37,7 @@ import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
 import { createStaffRouter } from "./modules/staff";
 import { createTeamRouter } from "./modules/team/routes";
+import { uploadsFallback } from "./modules/media/storage";
 import { createTelephonyRouter } from "./modules/integrations/telephony";
 import { createPresetsRouter } from "./modules/presets";
 
@@ -52,6 +53,8 @@ app.use(
   })
 );
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Файла нет на диске (сервер перезапускался) — берём из внешнего хранилища, если оно настроено.
+app.use("/uploads", uploadsFallback(path.join(process.cwd(), "uploads")));
 
 const server = http.createServer(app);
 const io = new Server(server, {
