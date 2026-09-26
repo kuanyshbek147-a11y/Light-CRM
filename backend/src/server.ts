@@ -41,6 +41,8 @@ import { createTelephonyRouter } from "./modules/integrations/telephony";
 import { createPresetsRouter } from "./modules/presets";
 
 const app = express();
+// Render стоит за прокси: без этого req.ip — адрес прокси, и ограничение попыток входа било бы по всем сразу.
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(
   express.json({
