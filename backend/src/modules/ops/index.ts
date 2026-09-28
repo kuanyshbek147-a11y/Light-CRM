@@ -4,6 +4,7 @@ import { checkOpsHealth, setOpsAlertChatId, startOpsHealthWatcher } from "./aler
 import { listUnassignedQueue } from "./queue";
 
 export { startOpsHealthWatcher };
+export { startNightlyBackups } from "./nightly-backup";
 
 export function createOpsRouter(): Router {
   const router = Router();

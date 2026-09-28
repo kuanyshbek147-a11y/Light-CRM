@@ -1,0 +1,40 @@
+# Проверка каждого изменения: типы, тесты и сборка фронтенда и бэкенда.
+# Если что-то красное — pull request не стоит мержить: на сайт уедет сломанный код.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22+: фронтенд-тесты запускаются через --experimental-strip-types.
+          node-version: 22
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Бэкенд — проверка типов
+        run: npx tsc --noEmit -p backend
+
+      - name: Бэкенд — тесты
+        run: npm run -w backend test
+
+      - name: Фронтенд — тесты
+        run: npm run -w frontend test
+
+      - name: Сборка (типы фронтенда + vite)
+        run: npm run build

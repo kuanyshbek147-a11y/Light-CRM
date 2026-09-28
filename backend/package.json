@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p tsconfig.json",
+    "test": "node --test -r ts-node/register/transpile-only src/tests/*.test.ts",
     "start": "node dist/server.js",
     "seed": "ts-node src/seed.ts",
     "setup:whatsapp": "ts-node src/scripts/setup-whatsapp-webhook.ts",
