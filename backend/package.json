@@ -12,7 +12,8 @@
     "setup:whatsapp-meta": "ts-node src/scripts/setup-meta-webhook.ts",
     "bootstrap:whatsapp": "ts-node src/scripts/bootstrap-whatsapp-workspace.ts",
     "apply:meta-token": "ts-node src/scripts/apply-meta-token.ts",
-    "smoke:schema": "ts-node src/tests/smoke.ts"
+    "smoke:schema": "ts-node src/tests/smoke.ts",
+    "restore:backup": "ts-node --transpile-only src/scripts/restore-jsonl-backup.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
