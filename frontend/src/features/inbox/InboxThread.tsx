@@ -434,28 +434,16 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                   ☎
                 </button>
               ) : null}
-              {onShareToTeam ? (
-                <button
-                  type="button"
-                  className="threadIconBtn"
-                  title={shareToTeamLabel || "Передать в Команду"}
-                  aria-label={shareToTeamLabel || "Передать в Команду"}
-                  onClick={onShareToTeam}
-                >
-                  ⇄
-                </button>
-              ) : null}
+              {/* «Быстрые ответы» и «В Команду» — чипами под перепиской, здесь их не дублируем. */}
               <button
                 type="button"
-                className="threadIconBtn"
-                title={ui.replyScripts}
-                aria-label={ui.replyScripts}
-                onClick={onToggleScriptPanel}
+                className="threadTextBtn"
+                onClick={onOpenCustomerCard}
+                title={ui.customerCard}
+                aria-label={ui.customerCard}
               >
-                🔍
-              </button>
-              <button type="button" className="threadIconBtn" onClick={onOpenCustomerCard} title={ui.customerCard} aria-label={ui.customerCard}>
-                ⋮
+                <span aria-hidden="true">👤</span>
+                <span className="threadTextBtnLabel">Карточка клиента</span>
               </button>
             </div>
           </div>

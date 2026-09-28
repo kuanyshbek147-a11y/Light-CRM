@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { getWorkspaceMetaCredentials } from "./workspace-meta";
 import { allowLegacyChannelFallback } from "../../platform/tenant-routing";
+import { mirrorUpload } from "../../media/storage";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -626,6 +627,7 @@ export async function downloadMetaMediaToUploads(
   const uploadsDir = path.join(process.cwd(), "uploads");
   await mkdir(uploadsDir, { recursive: true });
   await writeFile(path.join(uploadsDir, fileName), buffer);
+  await mirrorUpload(uploadsDir, fileName);
 
   return {
     url: `/uploads/${fileName}`,

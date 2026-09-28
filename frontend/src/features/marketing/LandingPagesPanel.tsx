@@ -464,9 +464,10 @@ export function LandingPagesPanel({ authToken, onToast, onUseInAds }: Props) {
             ))}
           </div>
         </div>
+        {aiConfigured ? (
         <div className="scriptForm" style={{ marginBottom: 14 }}>
           <div className="sidebarHint" style={{ marginBottom: 6 }}>
-            AI-черновик{aiConfigured ? "" : " · AI не подключен"} — можно после шаблона уточнить оффер
+            Черновик от ИИ: опишите, что вы продаёте, — ИИ заполнит страницу, останется поправить.
           </div>
           <input
             className="filterInput"
@@ -476,7 +477,7 @@ export function LandingPagesPanel({ authToken, onToast, onUseInAds }: Props) {
           />
           <input
             className="filterInput"
-            placeholder="Оффер (необязательно): скидка 20%, запись за 5 минут…"
+            placeholder="Предложение для клиента (необязательно): скидка 20%, запись за 5 минут…"
             value={aiOffer}
             onChange={(e) => setAiOffer(e.target.value)}
           />
@@ -489,10 +490,11 @@ export function LandingPagesPanel({ authToken, onToast, onUseInAds }: Props) {
             {generating ? "Генерирую…" : "Сгенерировать черновик"}
           </button>
         </div>
+        ) : null}
         <div className="scriptForm">
           <input
             className="filterInput"
-            placeholder="Название (внутреннее)"
+            placeholder="Название (видите только вы)"
             value={form.title}
             onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
           />

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { AuthRequest, requireSuperAdminMiddleware } from "../../auth";
 import { query } from "../../db";
 import { createWorkspaceUser, createWorkspaceWithAdmin } from "./provision";
+import { createDatabaseBackup, listDatabaseBackups, resolveBackupFile } from "../ops/backup";
 
 type WorkspaceRow = {
   id: string;
@@ -230,4 +231,31 @@ platformRouter.patch("/users/:userId", async (req: AuthRequest, res) => {
   }
 
   res.json({ ok: true });
+});
+
+// Копия всей базы (все компании) — только супер-админу, скачивание тоже через авторизованный запрос.
+platformRouter.get("/backups", async (_req: AuthRequest, res) => {
+  res.json(await listDatabaseBackups());
+});
+
+platformRouter.post("/backups", async (_req: AuthRequest, res) => {
+  const result = await createDatabaseBackup();
+  if ("error" in result) {
+    res.status(500).json(result);
+    return;
+  }
+  res.status(201).json(result);
+});
+
+platformRouter.get("/backups/:fileName", (req: AuthRequest, res) => {
+  const filePath = resolveBackupFile(req.params.fileName);
+  if (!filePath) {
+    res.status(404).json({ error: "Копия не найдена" });
+    return;
+  }
+  res.download(filePath, req.params.fileName, (error) => {
+    if (error && !res.headersSent) {
+      res.status(404).json({ error: "Копия не найдена" });
+    }
+  });
 });

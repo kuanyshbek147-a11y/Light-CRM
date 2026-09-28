@@ -8,6 +8,7 @@ import {
   type PlatformWorkspace,
   type PlatformWorkspaceDetail
 } from "./api";
+import { PlatformBackups } from "./PlatformBackups";
 
 type Props = {
   authToken: string;
@@ -318,6 +319,7 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
           </div>
         ) : null}
       </div>
+      <PlatformBackups authToken={authToken} />
     </section>
   );
 }

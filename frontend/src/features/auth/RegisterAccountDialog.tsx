@@ -174,7 +174,7 @@ export function RegisterAccountDialog({
             </button>
           </form>
           <button type="button" className="textButton registerDemoLink" onClick={onOpenDemo} disabled={submitting}>
-            Войти в демо
+            Уже есть аккаунт? Войти
           </button>
         </div>
       </div>

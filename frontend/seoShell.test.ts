@@ -17,12 +17,11 @@ test("главная отдаёт русский title и description про Wha
   assert.match(indexHtml, /href="\/guides\/crm-whatsapp-kazakhstan"/);
 });
 
-test("статическая главная сохраняет демо-вход и запись на демо", () => {
-  assert.match(indexHtml, /Демо-доступ/);
+test("статическая главная сохраняет вход и запись на демо, но не публикует пароли", () => {
   assert.match(indexHtml, /Открыть рабочее пространство/);
   assert.match(indexHtml, />Войти</);
-  assert.match(indexHtml, /Войти как оператор/);
-  assert.match(indexHtml, /operator, пароль demo123/);
+  assert.doesNotMatch(indexHtml, /demo123/);
+  assert.doesNotMatch(indexHtml, /Войти как оператор/);
   assert.match(indexHtml, /https:\/\/wa\.me\/77003131055\?text=/);
   assert.match(indexHtml, />Записаться на демо</);
 });
@@ -37,10 +36,11 @@ test("robots.txt открывает маркетинг и гайды и закр
   assert.equal(robots.includes("<!doctype html>"), false);
 });
 
-test("sitemap.xml содержит главную и публичный гайд", () => {
+test("sitemap.xml содержит главную и публичные гайды", () => {
   assert.match(sitemap, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   assert.match(sitemap, new RegExp(`<loc>${SITE}/</loc>`));
   assert.match(sitemap, new RegExp(`<loc>${SITE}/guides/crm-whatsapp-kazakhstan</loc>`));
+  assert.match(sitemap, new RegExp(`<loc>${SITE}/guides/whatsapp-chat-history-in-deal</loc>`));
   assert.equal(sitemap.includes("<!doctype html>"), false);
-  assert.equal((sitemap.match(/<loc>/g) || []).length, 2);
+  assert.equal((sitemap.match(/<loc>/g) || []).length, 3);
 });

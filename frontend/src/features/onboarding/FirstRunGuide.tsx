@@ -126,7 +126,7 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
 
         {demoData ? (
           <p className="firstRunDemoNote" data-testid="first-run-demo-note">
-            Это учебные данные. Диалоги и клиенты на экране — примеры для знакомства с кабинетом, не живые продажи.
+            В кабинете есть учебные примеры (например, «ИП Ромашка») — они нужны для знакомства и не являются живыми продажами.
           </p>
         ) : null}
 
@@ -154,7 +154,8 @@ export function FirstRunGuide(props: Props): JSX.Element | null {
                     {item.id === "channel" && !isAdmin ? (
                       <>
                         <p className="firstRunStepHint" data-testid="first-run-training-note">
-                          Пока канал не подключён, чаты на экране — учебные данные. Живые сообщения появятся после того, как администратор подключит WhatsApp, Instagram или Telegram.
+                          {demoData ? "Пока канал не подключён, чаты на экране — учебные данные. " : ""}
+                          Живые сообщения появятся после того, как администратор подключит WhatsApp, Instagram или Telegram.
                         </p>
                         <p className="firstRunRequestPreview" data-testid="first-run-admin-request">
                           {ADMIN_CHANNEL_REQUEST_TEXT}

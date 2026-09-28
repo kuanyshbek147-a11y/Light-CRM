@@ -182,8 +182,7 @@
         border: 1px solid #e2e8f0;
         font-size: 15px;
       }
-      .seoShellLogin button,
-      .seoShellQuick {
+      .seoShellLogin button {
         height: 48px;
         border: 0;
         border-radius: 14px;
@@ -191,21 +190,6 @@
         color: #fff;
         font-weight: 800;
         cursor: pointer;
-      }
-      .seoShellQuickRow {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 14px;
-      }
-      .seoShellQuick.secondary {
-        background: #fff;
-        color: #312e81;
-        border: 1px solid #c7d2fe;
-      }
-      .seoShellCreds {
-        margin: 12px 0 0;
-        font-size: 14px;
       }
       @media (max-width: 900px) {
         .seoShell {
@@ -272,13 +256,13 @@
           >
         </section>
         <aside class="seoShellLogin">
-          <p class="seoShellBrand">Light CRM · Демо-доступ</p>
+          <p class="seoShellBrand">Light CRM · Вход в кабинет</p>
           <h2>Открыть рабочее пространство</h2>
-          <p>Введите логин и пароль оператора. Можно указать логин или email.</p>
+          <p>Введите логин и пароль. Можно указать логин или email.</p>
           <form>
             <label>
               Логин или email
-              <input type="text" name="login" autocomplete="username" placeholder="operator" />
+              <input type="text" name="login" autocomplete="username" />
             </label>
             <label>
               Пароль
@@ -286,12 +270,6 @@
             </label>
             <button type="button">Войти</button>
           </form>
-          <div class="seoShellQuickRow">
-            <button class="seoShellQuick" type="button">Войти как оператор</button>
-            <button class="seoShellQuick secondary" type="button">Как админ</button>
-          </div>
-          <p class="seoShellCreds">Оператор: логин operator, пароль demo123</p>
-          <p class="seoShellCreds">Админ: логин admin или admin@demo.local, пароль demo123</p>
         </aside>
       </main>
     </div>

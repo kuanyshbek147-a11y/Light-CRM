@@ -37,7 +37,6 @@ export function StaffChatPanel({
   const [taskOpen, setTaskOpen] = useState(false);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskOwnerId, setTaskOwnerId] = useState("");
-  const [taskConversationId, setTaskConversationId] = useState("");
   const [peerPickId, setPeerPickId] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -156,7 +155,7 @@ export function StaffChatPanel({
     const result = await createStaffThreadTask(authToken, selectedThreadId, {
       title: taskTitle.trim(),
       ownerUserId: taskOwnerId,
-      conversationId: taskConversationId.trim() || null
+      conversationId: null
     });
     setBusy(false);
     if (!result) {
@@ -209,11 +208,11 @@ export function StaffChatPanel({
             </select>
             <button
               type="button"
-              className="leftMenuButton"
+              className="secondaryButton"
               disabled={busy || !peerPickId}
               onClick={() => void handleOpenDm()}
             >
-              Открыть ЛС
+              Написать лично
             </button>
           </div>
 
@@ -258,6 +257,12 @@ export function StaffChatPanel({
               maxHeight: 360
             }}
           >
+            {selected && messages.length === 0 ? (
+              <div className="emptyScriptState">
+                Здесь пишут коллегам: попросить помощи с клиентом, передать диалог или договориться о задаче.
+                Чтобы передать клиента, нажмите «В Команду» в его чате.
+              </div>
+            ) : null}
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -278,7 +283,7 @@ export function StaffChatPanel({
                 {message.conversation_id ? (
                   <button
                     type="button"
-                    className="leftMenuButton"
+                    className="textButton"
                     style={{ marginTop: 6 }}
                     onClick={() => onOpenConversation?.(message.conversation_id as string)}
                   >
@@ -316,7 +321,7 @@ export function StaffChatPanel({
                 </button>
                 <button
                   type="button"
-                  className="leftMenuButton"
+                  className="secondaryButton"
                   onClick={() => {
                     setTaskOpen((v) => !v);
                     if (!taskOwnerId && peers[0]) setTaskOwnerId(peers[0].id);
@@ -354,12 +359,6 @@ export function StaffChatPanel({
                       </option>
                     ))}
                   </select>
-                  <input
-                    className="filterInput"
-                    placeholder="ID диалога клиента (необязательно)"
-                    value={taskConversationId}
-                    onChange={(e) => setTaskConversationId(e.target.value)}
-                  />
                   <button
                     type="button"
                     className="primaryButton"

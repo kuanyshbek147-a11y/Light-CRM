@@ -31,15 +31,19 @@ import { setRealtimeServer } from "./realtime";
 import { createFollowUpRouter, startFollowUpScanner } from "./modules/follow-up";
 import { createAdsRouter, startAdsMetricsWorker } from "./modules/ads";
 import { createMarketingRouter, startCampaignWorker, startContentScheduler, startSequenceWorker } from "./modules/marketing";
-import { createOpsRouter, startOpsHealthWatcher, backupsAbsoluteDir } from "./modules/ops";
+import { createOpsRouter, startNightlyBackups, startOpsHealthWatcher } from "./modules/ops";
 import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
 import { createStaffRouter } from "./modules/staff";
+import { createTeamRouter } from "./modules/team/routes";
+import { uploadsFallback } from "./modules/media/storage";
 import { createTelephonyRouter } from "./modules/integrations/telephony";
 import { createPresetsRouter } from "./modules/presets";
 
 const app = express();
+// Render стоит за прокси: без этого req.ip — адрес прокси, и ограничение попыток входа било бы по всем сразу.
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(
   express.json({
@@ -49,6 +53,8 @@ app.use(
   })
 );
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Файла нет на диске (сервер перезапускался) — берём из внешнего хранилища, если оно настроено.
+app.use("/uploads", uploadsFallback(path.join(process.cwd(), "uploads")));
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -77,6 +83,7 @@ app.use("/api/conversations", authMiddleware, requireWorkspaceMiddleware, conver
 app.use("/api/deals", authMiddleware, requireWorkspaceMiddleware, dealsRouter);
 app.use("/api/tasks", authMiddleware, requireWorkspaceMiddleware, tasksRouter);
 app.use("/api/staff", authMiddleware, requireWorkspaceMiddleware, createStaffRouter());
+app.use("/api/team", authMiddleware, createTeamRouter());
 app.use("/api/presets", authMiddleware, requireWorkspaceMiddleware, createPresetsRouter());
 app.use("/api/contacts", authMiddleware, requireWorkspaceMiddleware, contactsRouter);
 app.use("/api/search", authMiddleware, requireWorkspaceMiddleware, searchRouter);
@@ -91,7 +98,6 @@ startEmailPolling(io);
 
 const publicDir = path.join(process.cwd(), "public");
 const publicIndex = path.join(publicDir, "index.html");
-app.use("/backups", express.static(backupsAbsoluteDir(), { index: false, maxAge: "1h" }));
 const widgetSourceCandidates = [
   path.join(process.cwd(), "src", "modules", "integrations", "webchat", "widget.js"),
   path.join(__dirname, "modules", "integrations", "webchat", "widget.js"),
@@ -149,6 +155,7 @@ void ensureUserLoginSchema()
     startContentScheduler();
     startSequenceWorker();
     startOpsHealthWatcher();
+    startNightlyBackups();
     startAdsMetricsWorker();
   })
   .catch((error) => {

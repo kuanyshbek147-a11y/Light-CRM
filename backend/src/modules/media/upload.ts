@@ -1,6 +1,7 @@
 import fs from "fs";
 import multer from "multer";
 import path from "path";
+import { mirrorUpload } from "./storage";
 
 export const uploadsDir = path.join(process.cwd(), "uploads");
 
@@ -83,15 +84,33 @@ export function placeholderBodyForAttachment(attachmentType: "image" | "video" |
   return "[Медиа]";
 }
 
+const diskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniquePrefix = `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    cb(null, `${uniquePrefix}-${safeName}`);
+  }
+});
+
+// Пишем на диск как раньше, затем копируем во внешнее хранилище (если оно настроено).
+const mirroredStorage: multer.StorageEngine = {
+  _handleFile(req, file, cb) {
+    diskStorage._handleFile(req, file, (error, info) => {
+      if (error || !info?.filename) {
+        cb(error, info);
+        return;
+      }
+      void mirrorUpload(uploadsDir, info.filename, file.mimetype).finally(() => cb(null, info));
+    });
+  },
+  _removeFile(req, file, cb) {
+    diskStorage._removeFile(req, file, cb);
+  }
+};
+
 export const mediaUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadsDir),
-    filename: (_req, file, cb) => {
-      const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const uniquePrefix = `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-      cb(null, `${uniquePrefix}-${safeName}`);
-    }
-  }),
+  storage: mirroredStorage,
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const mime = file.mimetype.toLowerCase();

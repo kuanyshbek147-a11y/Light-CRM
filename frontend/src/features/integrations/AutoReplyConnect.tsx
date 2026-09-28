@@ -71,8 +71,8 @@ export function AutoReplyConnect({ authToken }: Props) {
           <h3 className="integrationsPanelTitle">Автоответчик</h3>
           <p className="integrationsHint">
             Автоматически отвечает на входящие в WhatsApp, Instagram, Telegram и чат на сайте.
-            Режим «Скрипты» подбирает ответ из базы быстрых ответов; «ИИ» — если задан{" "}
-            <code>OPENAI_API_KEY</code> на сервере.
+            Режим «Скрипты» подбирает ответ из быстрых ответов, режим «ИИ» пишет ответ сам (если ИИ
+            подключён для вашего кабинета).
           </p>
         </div>
         <span className={`integrationStatusPill ${settings?.enabled ? "ok" : ""}`}>

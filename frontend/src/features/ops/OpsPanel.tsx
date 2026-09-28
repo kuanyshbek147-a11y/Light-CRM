@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
 import { formatRuDateTime } from "../../shared/lib/dateTime";
 import {
-  createOpsBackup,
   loadOpsQueue,
   saveOpsAlertChat,
   type QueueItem
@@ -29,20 +28,6 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  async function runBackup(): Promise<void> {
-    setBusy(true);
-    try {
-      const result = await createOpsBackup(authToken);
-      if (!result) {
-        onToast?.("Бэкап не создан (нужны права admin)", "error");
-        return;
-      }
-      onToast?.(`Бэкап: ${result.fileName} (${Math.round(result.bytes / 1024)} KB)`, "success");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function saveAlert(): Promise<void> {
     setBusy(true);
     try {
@@ -58,16 +43,13 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
       <div className="railHeader">
         <div>
           <div className="sidebarTitle">Операции</div>
-          <div className="sidebarHint">Очередь без ответственного, бэкапы БД, алерты.</div>
+          <div className="sidebarHint">Уведомления в Telegram и диалоги без оператора.</div>
         </div>
       </div>
 
       <div className="knowledgeFormCard" style={{ marginBottom: 20 }}>
-        <div className="scriptPanelTitle">Копия базы и уведомления</div>
+        <div className="scriptPanelTitle">Уведомления в Telegram</div>
         <div className="scriptForm">
-          <button type="button" className="primaryButton" disabled={busy} onClick={() => void runBackup()}>
-            Сделать копию сейчас
-          </button>
           <input
             className="filterInput"
             placeholder="Номер чата Telegram для уведомлений"
@@ -79,8 +61,8 @@ export function OpsPanel({ authToken, onToast, onOpenConversation }: Props) {
           </button>
         </div>
         <div className="sidebarHint" style={{ marginTop: 8 }}>
-          Сюда же приходят уведомления о новых заявках со страницы (нужен бот Telegram компании).
-          Платный Postgres включают вручную в панели хостинга. Копии лежат в /backups на сервере.
+          В этот чат Telegram будут приходить уведомления о сбоях и новых заявках с сайта (нужен
+          Telegram-бот компании).
         </div>
       </div>
 

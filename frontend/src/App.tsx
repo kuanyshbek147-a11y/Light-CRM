@@ -41,7 +41,8 @@ import { InboxThread } from "./features/inbox/InboxThread";
 import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
-import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus } from "./shared/i18n/glossary";
+import { canOpenSection, parseSectionHash, sectionHash, type AppSection } from "./shared/lib/sectionRoute";
+import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle, formatTimelineItem, ruPlural } from "./shared/i18n/glossary";
 import {
   RU_DATETIME_ERROR,
   calendarDateKey,
@@ -319,7 +320,16 @@ const API = API_BASE_URL;
 const INBOX_FILTER_PRESETS_KEY = "lightcrm.inboxFilterPresets";
 const LEFT_MENU_COLLAPSED_KEY = "lightcrm.leftMenuCollapsed";
 const FUNNEL_KPI_PANEL_KEY = "lightcrm.funnelKpiPanelOpen";
-const FUNNEL_KPI_OPEN_MIN_WIDTH_PX = 1361;
+const MORE_MENU_OPEN_KEY = "lightcrm.moreMenuOpen";
+const MORE_MENU_SECTIONS: ReadonlySet<AppSection> = new Set<AppSection>([
+  "analytics",
+  "knowledge",
+  "marketing",
+  "integrations",
+  "ops"
+]);
+// На ноутбуках 1366px панель по умолчанию свёрнута: список диалогов и чат важнее.
+const FUNNEL_KPI_OPEN_MIN_WIDTH_PX = 1500;
 
 function initialFunnelKpiPanelOpen(): boolean {
   if (typeof window === "undefined") {
@@ -369,7 +379,7 @@ const UI = {
   bookDemoWhatsApp: "WhatsApp",
   bookDemoTelegram: "Telegram",
   bookDemoHint: "\u041f\u0438\u043b\u043e\u0442 14 \u0434\u043d\u0435\u0439 \u043f\u043e\u0434 \u043a\u043b\u044e\u0447 \u00b7 \u043f\u043e\u0441\u043b\u0435 \u043f\u0438\u043b\u043e\u0442\u0430 29 900 \u20b8/\u043c\u0435\u0441",
-  tryDemo: "Попробовать демо",
+  tryDemo: "Войти",
   unifiedInbox: "Все диалоги в одном окне",
   unifiedInboxHint: "\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f \u0438\u0437 WhatsApp \u0438 Telegram \u0432 \u043e\u0434\u043d\u043e\u043c \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0435.",
   smartCohorts: "Сегменты клиентов",
@@ -377,18 +387,15 @@ const UI = {
   fastReplies: "\u0411\u044b\u0441\u0442\u0440\u044b\u0435 \u043e\u0442\u0432\u0435\u0442\u044b",
   fastRepliesHint: "\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0439\u0442\u0435 \u0434\u0438\u0430\u043b\u043e\u0433 \u0438 \u043e\u0442\u0432\u0435\u0447\u0430\u0439\u0442\u0435 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c \u043f\u0440\u044f\u043c\u043e \u0438\u0437 CRM.",
   brandTitle: "Light CRM",
-  demoAccess: "\u0414\u0435\u043c\u043e-\u0434\u043e\u0441\u0442\u0443\u043f",
+  demoAccess: "Вход в кабинет",
   openWorkspace: "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u0440\u0430\u0431\u043e\u0447\u0435\u0435 \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u043e",
   loginText: "Введите логин и пароль. Можно указать логин или почту.",
   loginRequired: "Заполните логин и пароль",
   loginLabel: "Логин или почта",
-  loginPlaceholder: "operator",
+  loginPlaceholder: "Ваш логин или почта",
   passwordPlaceholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
   signIn: "\u0412\u043e\u0439\u0442\u0438",
   loginFailed: "\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043b\u043e\u0433\u0438\u043d \u0438\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c",
-  demoOperatorHint: "\u041e\u043f\u0435\u0440\u0430\u0442\u043e\u0440: \u043b\u043e\u0433\u0438\u043d operator, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
-  demoAdminHint: "\u0410\u0434\u043c\u0438\u043d: \u043b\u043e\u0433\u0438\u043d admin \u0438\u043b\u0438 admin@demo.local, \u043f\u0430\u0440\u043e\u043b\u044c demo123",
-  demoSuperAdminHint: "\u0421\u0443\u043f\u0435\u0440-\u0430\u0434\u043c\u0438\u043d: superadmin / superadmin123",
   sessionRestoring: "\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043c \u0441\u0435\u0440\u0432\u0435\u0440\u2026 \u043e\u0431\u044b\u0447\u043d\u043e 30\u201360 \u0441\u0435\u043a",
   signOut: "\u0412\u044b\u0445\u043e\u0434",
   password: "\u041f\u0430\u0440\u043e\u043b\u044c",
@@ -397,7 +404,8 @@ const UI = {
   expandMenu: "\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043c\u0435\u043d\u044e",
   menuDialogs: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   menuPipeline: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
-  menuFunnelKpi: "Воронка и показатели",
+  menuFunnelKpi: "Показатели",
+  menuMore: "Ещё",
   collapseKpi: "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c",
   funnelKpiTab: "Показатели и сделки",
   funnelBoardTab: "\u0414\u043e\u0441\u043a\u0430 \u0432\u043e\u0440\u043e\u043d\u043a\u0438",
@@ -432,7 +440,7 @@ const UI = {
   followUpSettingsHint:
     "Система сама создаст напоминание: после смены этапа или если в чате долго тишина.",
   contactTimeline: "\u0418\u0441\u0442\u043e\u0440\u0438\u044f",
-  mergeContact: "\u0421\u043a\u043b\u0435\u0438\u0442\u044c \u0441...",
+  mergeContact: "Объединить с дублем",
   dealAmount: "\u0421\u0443\u043c\u043c\u0430",
   dealNextStep: "\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0448\u0430\u0433",
   saveDeal: "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0434\u0435\u043b\u043a\u0443",
@@ -458,7 +466,6 @@ const UI = {
   inboxTitle: "\u0414\u0438\u0430\u043b\u043e\u0433\u0438",
   searchClients: "\u041f\u043e\u0438\u0441\u043a \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   openSearchFilters: "\u041f\u043e\u0438\u0441\u043a \u0438 \u0444\u0438\u043b\u044c\u0442\u0440\u044b",
-  chatsSuffix: "\u0447\u0430\u0442\u043e\u0432",
   searchByNameOrPhone: "\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u0438\u043c\u0435\u043d\u0438 \u0438\u043b\u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
   city: "\u0413\u043e\u0440\u043e\u0434",
   reason: "\u041f\u0440\u0438\u0447\u0438\u043d\u0430",
@@ -546,7 +553,7 @@ const UI = {
   messageSendFailed: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.",
   send: "\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c",
   selectChatHint: "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0432 \u0441\u043f\u0438\u0441\u043a\u0435 \u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432, \u0447\u0442\u043e\u0431\u044b \u043d\u0430\u0447\u0430\u0442\u044c \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u043a\u0443.",
-  pipelineAndKpi: "Воронка и показатели",
+  pipelineAndKpi: "Показатели",
   salesOverview: "\u041e\u0431\u0437\u043e\u0440 \u043f\u0440\u043e\u0434\u0430\u0436",
   min: "\u043c\u0438\u043d",
   firstResponse: "Время первого ответа",
@@ -556,11 +563,11 @@ const UI = {
   client: "\u041a\u043b\u0438\u0435\u043d\u0442",
   amount: "\u0421\u0443\u043c\u043c\u0430",
   stage: "\u042d\u0442\u0430\u043f",
-  stageNew: "\u043d\u043e\u0432\u0430\u044f",
+  stageNew: "Новая",
   stageQualified: "Квалифицирована",
-  stageProposal: "\u043f\u0440\u0435\u0434\u043b\u043e\u0436\u0435\u043d\u0438\u0435",
-  stageWon: "\u0432\u044b\u0438\u0433\u0440\u0430\u043d\u0430",
-  stageLost: "\u043f\u0440\u043e\u0438\u0433\u0440\u0430\u043d\u0430",
+  stageProposal: "Предложение",
+  stageWon: "Выиграна",
+  stageLost: "Проиграна",
   customerCardTitle: "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u0430",
   customerCardHint: "\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u043f\u0440\u043e\u0444\u0438\u043b\u044c \u0438 \u043a\u0440\u0438\u0442\u0435\u0440\u0438\u0438 \u043a\u043b\u0438\u0435\u043d\u0442\u0430",
   funnel: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430",
@@ -592,7 +599,7 @@ const UI = {
   stageChangeBlockedFields: "\u041d\u0435\u043b\u044c\u0437\u044f \u0441\u043c\u0435\u043d\u0438\u0442\u044c \u044d\u0442\u0430\u043f: \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f",
   pipelineBoardTitle: "\u0412\u043e\u0440\u043e\u043d\u043a\u0430 \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432",
   pipelineBoardHint:
-    "Каждая карточка — сделка. Счётчик у клиента совпадает с числом карточек на вкладках «Открытые» и «Закрытые».",
+    "Каждая карточка — сделка. Перетаскивайте карточки между этапами.",
   noCardsInStage: "Пока пусто.",
   closeCard: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
   reopenCard: "\u041f\u0435\u0440\u0435\u043e\u0442\u043a\u0440\u044b\u0442\u044c",
@@ -766,21 +773,19 @@ export function App(): JSX.Element {
   const [inboxChannelFilter, setInboxChannelFilter] = useState<InboxChannelFilter>("all");
   const [notificationSoundOn, setNotificationSoundOn] = useState<boolean>(() => isNotificationSoundEnabled());
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
-  const [currentSection, setCurrentSection] = useState<
-    | "dialogs"
-    | "pipeline"
-    | "tasks"
-    | "staff"
-    | "contacts"
-    | "profile"
-    | "analytics"
-    | "knowledge"
-    | "marketing"
-    | "ops"
-    | "integrations"
-    | "platform"
-    | "settings"
-  >("dialogs");
+  const [currentSection, setCurrentSection] = useState<AppSection>(() => {
+    const fromHash = parseSectionHash(window.location.hash);
+    return fromHash && canOpenSection(fromHash, initialSession.user?.role) ? fromHash : "dialogs";
+  });
+  const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(MORE_MENU_OPEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  // Группа «Ещё» раскрыта сама, если открыт один из её разделов, — иначе не видно, где вы.
+  const moreMenuExpanded = moreMenuOpen || MORE_MENU_SECTIONS.has(currentSection);
   const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
   const openIntegrations = (target?: "telegram" | "instagram") => {
     setIntegrationsFocus(target ?? null);
@@ -853,7 +858,10 @@ export function App(): JSX.Element {
   const [contactRequiredFields, setContactRequiredFields] = useState<ContactRequiredFieldKey[]>([]);
   const [applyingRePreset, setApplyingRePreset] = useState(false);
   const [pipelineStatusFilter, setPipelineStatusFilter] = useState<"open" | "closed">("open");
-  const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">("kpi");
+  // На компьютере переключателя «Показатели / Доска» нет — по ссылке #/pipeline сразу открываем доску.
+  const [pipelineSubview, setPipelineSubview] = useState<"kpi" | "board">(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches ? "kpi" : "board"
+  );
   const [funnelKpiPanelOpen, setFunnelKpiPanelOpen] = useState(initialFunnelKpiPanelOpen);
   const [leftMenuCollapsed, setLeftMenuCollapsed] = useState(() => {
     return localStorage.getItem(LEFT_MENU_COLLAPSED_KEY) === "1";
@@ -936,6 +944,71 @@ export function App(): JSX.Element {
     startBackendKeepAlive();
     void warmupBackend();
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MORE_MENU_OPEN_KEY, moreMenuOpen ? "1" : "0");
+    } catch {
+      /* приватный режим — просто не запоминаем */
+    }
+  }, [moreMenuOpen]);
+
+  // Карточка клиента — поверх текущего экрана: закрываем её по Escape и при переходе в другой раздел.
+  useEffect(() => {
+    setCustomerCardOpen(false);
+  }, [currentSection]);
+
+  useEffect(() => {
+    if (!customerCardOpen) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setCustomerCardOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [customerCardOpen]);
+
+  // Раздел ↔ адрес «#/раздел»: обновление страницы и кнопка «Назад» возвращают на тот же экран.
+  useEffect(() => {
+    const onSection = parseSectionHash(window.location.hash) !== null;
+    if (!token) {
+      if (onSection) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+      return;
+    }
+    const next = sectionHash(currentSection);
+    if (window.location.hash === next) {
+      return;
+    }
+    if (onSection) {
+      window.history.pushState(null, "", next);
+    } else {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search + next);
+    }
+  }, [currentSection, token]);
+
+  useEffect(() => {
+    function onPopState(): void {
+      const section = parseSectionHash(window.location.hash);
+      if (section && canOpenSection(section, sessionUser?.role)) {
+        setCurrentSection(section);
+        loadSectionData(section);
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  });
+
+  useEffect(() => {
+    if (token && !sessionRestoring) {
+      loadSectionData(currentSection);
+    }
+    // Только первый показ кабинета: дальше данные грузят сами пункты меню.
+  }, [token, sessionRestoring]);
 
   useEffect(() => {
     if (token) {
@@ -1836,6 +1909,20 @@ export function App(): JSX.Element {
     showToast(UI.shareToTeamDone, "success");
     if (currentSection === "tasks") {
       await refreshCrmTasks();
+    }
+  }
+
+  /** Данные, которые пункт меню подгружает при входе в раздел, — для входа по ссылке и «Назад». */
+  function loadSectionData(section: AppSection): void {
+    if (section === "tasks") {
+      void refreshCrmTasks();
+      void refreshFollowUpSettings();
+    } else if (section === "contacts") {
+      void refreshCrmContacts();
+    } else if (section === "knowledge") {
+      void ensureKnowledgeSettingsLoaded();
+    } else if (section === "pipeline" && token) {
+      void loadDeals(token, setDeals);
     }
   }
 
@@ -3544,11 +3631,6 @@ export function App(): JSX.Element {
               </a>
             )}
           </div>
-          {selfServeRegistrationEnabled ? (
-            <button type="button" className="textButton landingAccountLink" onClick={openDemoLogin}>
-              Уже есть аккаунт? Войти
-            </button>
-          ) : null}
           <p className="landingCtaHint">{UI.bookDemoHint}</p>
 
           <div className="landingHighlights">
@@ -3592,6 +3674,24 @@ export function App(): JSX.Element {
             CRM с WhatsApp для продаж и поддержки в Казахстане
           </a>
         </section>
+
+        <figure className="landingPreview">
+          <div className="landingPreviewFrame">
+            <span className="landingPreviewDots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <img
+              src="/landing-preview.jpg"
+              width={1440}
+              height={860}
+              loading="lazy"
+              alt="Экран Light CRM: список диалогов из WhatsApp, Telegram и Instagram и открытый чат с клиентом"
+            />
+          </div>
+          <figcaption>Так выглядит рабочее место менеджера: все чаты слева, переписка и сделка — в одном окне.</figcaption>
+        </figure>
 
         <aside id="workspace-login" className="loginCard loginCardModern">
           <div className="loginCardBrandRow">
@@ -3655,37 +3755,6 @@ export function App(): JSX.Element {
               </button>
             </div>
 
-            <div className="demoCredentials demoCredentialsModern">
-              <p className="demoQuickLead">Демо-вход без ввода пароля</p>
-              <div className="demoQuickRow">
-                <button
-                  type="button"
-                  className="secondaryButton demoQuickButton"
-                  onClick={() => void login({ login: "operator", password: "demo123" })}
-                >
-                  Войти как оператор
-                </button>
-                <button
-                  type="button"
-                  className="secondaryButton demoQuickButton"
-                  onClick={() => void login({ login: "admin", password: "demo123" })}
-                >
-                  Войти как админ
-                </button>
-              </div>
-              <details className="demoCredentialsDetails">
-                <summary>Другие демо-аккаунты</summary>
-                <p>
-                  <strong>Оператор:</strong> operator / demo123
-                </p>
-                <p>
-                  <strong>Админ:</strong> admin / demo123
-                </p>
-                <p>
-                  <strong>Супер-админ:</strong> superadmin / superadmin123
-                </p>
-              </details>
-            </div>
             <IosHomeScreenHint />
           </div>
         </aside>
@@ -3736,15 +3805,6 @@ export function App(): JSX.Element {
         : currentSection === "dialogs"
           ? "dialogs"
           : "profile";
-
-  function toggleFunnelKpiPanel(): void {
-    if (currentSection !== "dialogs") {
-      setCurrentSection("dialogs");
-      setFunnelKpiPanelOpen(true);
-      return;
-    }
-    setFunnelKpiPanelOpen((open) => !open);
-  }
 
   function openPipelineSection(subview: "kpi" | "board" = "kpi"): void {
     setPipelineSubview(subview);
@@ -3869,7 +3929,7 @@ export function App(): JSX.Element {
                         void onSelectConversation(item.conversation_id);
                       }}
                     >
-                      {item.contact_name} · {formatStageLabel(item.stage, UI)} · {item.amount}
+                      {item.contact_name} · {formatStageLabel(item.stage, UI)} · {formatMoney(item.amount)}
                     </button>
                   ))}
                 </div>
@@ -3888,7 +3948,7 @@ export function App(): JSX.Element {
                         void refreshCrmTasks();
                       }}
                     >
-                      {item.title}
+                      {formatTaskTitle(item.title)}
                       {item.contact_name ? ` · ${item.contact_name}` : ""}
                     </button>
                   ))}
@@ -4002,32 +4062,6 @@ export function App(): JSX.Element {
           </button>
           <button
             type="button"
-            className={`leftMenuButton firstRunMenuButton${
-              onboardingState.status === "pending" && onboardingMode !== "overlay" ? " attention" : ""
-            }`}
-            onClick={openOnboardingFromMenu}
-            title={FIRST_RUN_MENU_LABEL}
-            data-testid="first-run-menu"
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u2726"}
-            </span>
-            <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "dialogs" && funnelKpiPanelOpen ? "active" : ""}`}
-            onClick={toggleFunnelKpiPanel}
-            aria-pressed={funnelKpiPanelOpen}
-            title={UI.menuFunnelKpi}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25C8"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuFunnelKpi}</span>
-          </button>
-          <button
-            type="button"
             className={`leftMenuButton ${currentSection === "pipeline" ? "active" : ""}`}
             onClick={() => openPipelineSection("board")}
             title={UI.menuPipeline}
@@ -4054,6 +4088,20 @@ export function App(): JSX.Element {
           </button>
           <button
             type="button"
+            className={`leftMenuButton ${currentSection === "contacts" ? "active" : ""}`}
+            onClick={() => {
+              setCurrentSection("contacts");
+              void refreshCrmContacts();
+            }}
+            title={UI.menuContacts}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {"\u25CE"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuContacts}</span>
+          </button>
+          <button
+            type="button"
             className={`leftMenuButton ${currentSection === "staff" ? "active" : ""}`}
             onClick={() => {
               setCurrentSection("staff");
@@ -4069,81 +4117,113 @@ export function App(): JSX.Element {
               {staffUnreadCount > 0 ? ` (${staffUnreadCount})` : ""}
             </span>
           </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "contacts" ? "active" : ""}`}
-            onClick={() => {
-              setCurrentSection("contacts");
-              void refreshCrmContacts();
-            }}
-            title={UI.menuContacts}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25CE"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuContacts}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "analytics" ? "active" : ""}`}
-            onClick={() => setCurrentSection("analytics")}
-            title={UI.menuAnalytics}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25F4"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuAnalytics}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "knowledge" ? "active" : ""}`}
-            onClick={() => {
-              setCurrentSection("knowledge");
-              void ensureKnowledgeSettingsLoaded();
-            }}
-            title={UI.menuKnowledgeBase}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u25A6"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuKnowledgeBase}</span>
-          </button>
-          <button
-            type="button"
-            className={`leftMenuButton ${currentSection === "marketing" ? "active" : ""}`}
-            onClick={() => setCurrentSection("marketing")}
-            title={UI.menuMarketing}
-          >
-            <span className="leftMenuButtonIcon" aria-hidden="true">
-              {"\u2709"}
-            </span>
-            <span className="leftMenuButtonLabel">{UI.menuMarketing}</span>
-          </button>
-          {sessionUser?.role === "admin" ? (
+          {onboardingState.status === "pending" ? (
             <button
               type="button"
-              className={`leftMenuButton ${currentSection === "ops" ? "active" : ""}`}
-              onClick={() => setCurrentSection("ops")}
-              title={UI.menuOps}
+              className={`leftMenuButton firstRunMenuButton${
+                onboardingState.status === "pending" && onboardingMode !== "overlay" ? " attention" : ""
+              }`}
+              onClick={openOnboardingFromMenu}
+              title={FIRST_RUN_MENU_LABEL}
+              data-testid="first-run-menu"
             >
               <span className="leftMenuButtonIcon" aria-hidden="true">
-                {"\u26A1"}
+                {"\u2726"}
               </span>
-              <span className="leftMenuButtonLabel">{UI.menuOps}</span>
+              <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
             </button>
           ) : null}
-          {sessionUser?.role === "admin" ? (
-            <button
-              type="button"
-              className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
-              onClick={() => openIntegrations()}
-              title={UI.menuIntegrations}
-            >
-              <span className="leftMenuButtonIcon" aria-hidden="true">
-                {"\u2699"}
-              </span>
-              <span className="leftMenuButtonLabel">{UI.menuIntegrations}</span>
-            </button>
+          <button
+            type="button"
+            className={`leftMenuButton leftMenuMoreButton${moreMenuExpanded ? " expanded" : ""}`}
+            onClick={() => setMoreMenuOpen((open) => !open)}
+            aria-expanded={moreMenuExpanded}
+            title={UI.menuMore}
+          >
+            <span className="leftMenuButtonIcon" aria-hidden="true">
+              {moreMenuExpanded ? "\u25BE" : "\u25B8"}
+            </span>
+            <span className="leftMenuButtonLabel">{UI.menuMore}</span>
+          </button>
+          {moreMenuExpanded ? (
+            <div className="leftMenuGroup">
+              <button
+                type="button"
+                className={`leftMenuButton ${currentSection === "analytics" ? "active" : ""}`}
+                onClick={() => setCurrentSection("analytics")}
+                title={UI.menuAnalytics}
+              >
+                <span className="leftMenuButtonIcon" aria-hidden="true">
+                  {"\u25F4"}
+                </span>
+                <span className="leftMenuButtonLabel">{UI.menuAnalytics}</span>
+              </button>
+              <button
+                type="button"
+                className={`leftMenuButton ${currentSection === "knowledge" ? "active" : ""}`}
+                onClick={() => {
+                  setCurrentSection("knowledge");
+                  void ensureKnowledgeSettingsLoaded();
+                }}
+                title={UI.menuKnowledgeBase}
+              >
+                <span className="leftMenuButtonIcon" aria-hidden="true">
+                  {"\u25A6"}
+                </span>
+                <span className="leftMenuButtonLabel">{UI.menuKnowledgeBase}</span>
+              </button>
+              <button
+                type="button"
+                className={`leftMenuButton ${currentSection === "marketing" ? "active" : ""}`}
+                onClick={() => setCurrentSection("marketing")}
+                title={UI.menuMarketing}
+              >
+                <span className="leftMenuButtonIcon" aria-hidden="true">
+                  {"\u2709"}
+                </span>
+                <span className="leftMenuButtonLabel">{UI.menuMarketing}</span>
+              </button>
+              {sessionUser?.role === "admin" ? (
+                <button
+                  type="button"
+                  className={`leftMenuButton ${currentSection === "integrations" ? "active" : ""}`}
+                  onClick={() => openIntegrations()}
+                  title={UI.menuIntegrations}
+                >
+                  <span className="leftMenuButtonIcon" aria-hidden="true">
+                    {"\u2699"}
+                  </span>
+                  <span className="leftMenuButtonLabel">{UI.menuIntegrations}</span>
+                </button>
+              ) : null}
+              {sessionUser?.role === "admin" ? (
+                <button
+                  type="button"
+                  className={`leftMenuButton ${currentSection === "ops" ? "active" : ""}`}
+                  onClick={() => setCurrentSection("ops")}
+                  title={UI.menuOps}
+                >
+                  <span className="leftMenuButtonIcon" aria-hidden="true">
+                    {"\u26A1"}
+                  </span>
+                  <span className="leftMenuButtonLabel">{UI.menuOps}</span>
+                </button>
+              ) : null}
+              {onboardingState.status === "pending" ? null : (
+                <button
+                  type="button"
+                  className="leftMenuButton firstRunMenuButton"
+                  onClick={openOnboardingFromMenu}
+                  title={FIRST_RUN_MENU_LABEL}
+                  data-testid="first-run-menu"
+                >
+                  <span className="leftMenuButtonIcon" aria-hidden="true">
+                    {"\u2726"}
+                  </span>
+                  <span className="leftMenuButtonLabel">{FIRST_RUN_MENU_LABEL}</span>
+                </button>
+              )}
+            </div>
           ) : null}
             </>
           )}
@@ -4168,7 +4248,6 @@ export function App(): JSX.Element {
             onChannelFilterChange={setInboxChannelFilter}
             ui={{
               inboxTitle: UI.inboxTitle,
-              chatsSuffix: UI.chatsSuffix,
               openSearchFilters: UI.openSearchFilters,
               searchByNameOrPhone: UI.searchByNameOrPhone,
               city: UI.city,
@@ -4568,7 +4647,7 @@ export function App(): JSX.Element {
                       <button
                         key={template.label}
                         type="button"
-                        className="leftMenuButton"
+                        className="quickChip"
                         onClick={() => applyKnowledgeTemplate(template)}
                       >
                         {template.label}
@@ -5067,16 +5146,16 @@ export function App(): JSX.Element {
               <button
                 type="button"
                 className="primaryButton"
-                data-testid="tasks-create"
+                data-testid={crmTasks.length === 0 ? "tasks-create" : undefined}
                 onClick={() => void submitNewCrmTask()}
               >
-                Создать задачу
+                {crmTasks.length === 0 ? "Создать задачу" : UI.save}
               </button>
             </div>
             {crmTasks.length ? (
               crmTasks.map((task) => (
                 <div key={task.id} className="taskCard">
-                  <div className="taskCardTitle">{task.title}</div>
+                  <div className="taskCardTitle">{formatTaskTitle(task.title)}</div>
                   <div className="taskCardMeta">
                     {task.contact_name || "—"}
                     {task.due_at ? ` · ${formatRuDateTime(task.due_at)}` : ""}
@@ -5236,7 +5315,7 @@ export function App(): JSX.Element {
             <div className="railHeader">
               <div>
                 <div className="sidebarTitle">{UI.sectionContacts}</div>
-                <div className="sidebarHint">{crmContacts.length}</div>
+                <div className="sidebarHint">{ruPlural(crmContacts.length, ["клиент", "клиента", "клиентов"])}</div>
               </div>
             </div>
             <div className="knowledgePageGrid">
@@ -5263,7 +5342,7 @@ export function App(): JSX.Element {
                     >
                       <span className="scriptCardTop">
                         <span className="scriptCardTitle">{contact.name}</span>
-                        <span className="scriptBadge">{contact.channels.join(", ") || "—"}</span>
+                        <span className="scriptBadge">{contact.channels.map(formatChannelLabel).join(", ") || "—"}</span>
                       </span>
                       <span className="scriptCardBody">
                         {contact.phone}
@@ -5304,7 +5383,7 @@ export function App(): JSX.Element {
                     </div>
                     {contactDetails.deals.map((deal) => (
                       <div key={deal.id} className="taskCardMeta">
-                        {formatStageLabel(deal.stage, UI)} · {deal.amount}
+                        {formatStageLabel(deal.stage, UI)} · {formatMoney(deal.amount)}
                         {deal.next_step_at ? ` · Следующий шаг ${formatRuDateTime(deal.next_step_at)}` : ""}
                       </div>
                     ))}
@@ -5312,25 +5391,32 @@ export function App(): JSX.Element {
                       {UI.contactTimeline}
                     </div>
                     <div className="knowledgeArticlesList">
-                      {contactDetails.timeline.map((item) => (
-                        <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
-                          <div className="taskCardTitle">{item.title}</div>
-                          <div className="taskCardMeta">
-                            {formatRuDateTime(item.created_at)}
-                            {item.detail ? ` · ${item.detail}` : ""}
+                      {contactDetails.timeline.map((item) => {
+                        const view = formatTimelineItem(item);
+                        return (
+                          <div key={`${item.kind}-${item.id}`} className="taskCard" style={{ marginBottom: 8 }}>
+                            <div className="taskCardTitle">{view.title}</div>
+                            <div className="taskCardMeta">
+                              {formatRuDateTime(item.created_at)}
+                              {view.detail ? ` · ${view.detail}` : ""}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="scriptPanelTitle" style={{ marginTop: 16 }}>
                       {UI.mergeContact}
                     </div>
+                    <p className="sidebarHint">
+                      Если клиент записан дважды (например, написал с другого номера), выберите вторую карточку —
+                      её диалоги и сделки перейдут сюда.
+                    </p>
                     <select
                       className="filterInput"
                       value={mergeSourceContactId}
                       onChange={(event) => setMergeSourceContactId(event.target.value)}
                     >
-                      <option value="">—</option>
+                      <option value="">Выберите вторую карточку…</option>
                       {crmContacts
                         .filter((contact) => contact.id !== selectedContactId)
                         .map((contact) => (
@@ -5428,6 +5514,7 @@ export function App(): JSX.Element {
         ) : currentSection === "settings" ? (
           token ? (
             <SettingsPanel
+              token={token}
               canManageChannels={canManageChannels}
               onOpenIntegrations={() => openIntegrations()}
             />
@@ -5525,8 +5612,8 @@ export function App(): JSX.Element {
                 </button>
               </div>
             </div>
-            {pipelineBoard.hiddenCount > 0 ? (
-              <div className="sidebarHint" style={{ marginBottom: 8 }}>
+            {pipelineBoard.hiddenCount > 0 && pipelineBoard.visibleCount > 0 ? (
+              <div className="sidebarHint pipelineHiddenHint">
                 {pipelineStatusFilter === "open"
                   ? `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в закрытых диалогах.`
                   : `Ещё ${ruDealCount(pipelineBoard.hiddenCount)} в открытых диалогах.`}
@@ -5597,7 +5684,7 @@ export function App(): JSX.Element {
                             <div className="pipelineBoardCardName">{deal.contact_name}</div>
                             <div className="pipelineBoardCardMeta">{deal.phone || ""}</div>
                             <div className="pipelineBoardCardMeta">
-                              {UI.dealAmount}: {deal.amount}
+                              {UI.dealAmount}: {formatMoney(deal.amount)}
                               {deal.next_step_at ? ` · ${formatRuDateTime(deal.next_step_at, { style: "short" })}` : ""}
                             </div>
                             <div className="pipelineBoardCardSnippet">
@@ -6407,7 +6494,7 @@ export function App(): JSX.Element {
           step={onboardingStep}
           stepsDone={onboardingState.steps}
           isAdmin={sessionUser?.role === "admin"}
-          demoData={usesDemoSampleData(sessionUser, conversations)}
+          demoData={usesDemoSampleData(conversations)}
           onStepChange={setOnboardingStep}
           onOpenChannel={openOnboardingChannel}
           onChannelRequestCopied={noteOnboardingChannelRequestCopied}

@@ -7,7 +7,7 @@ import { useTapWithoutScroll } from "./lib/useTapWithoutScroll";
 import { operatorDialogCardStyle } from "./lib/operatorColor";
 import { DialogsEmptyState } from "./DialogsEmptyState";
 import { inboxFiltersActive, resolveInboxEmptyKind } from "./inboxEmpty";
-import { formatChannelLabel } from "../../shared/i18n/glossary";
+import { formatChannelLabel, ruPlural } from "../../shared/i18n/glossary";
 import type { Conversation, InboxFilters, SavedInboxFilterPreset } from "./model/types";
 
 function channelLabel(channel: Conversation["channel"]): string {
@@ -193,7 +193,6 @@ function ChannelFilters(props: {
 
 type InboxSidebarUi = {
   inboxTitle: string;
-  chatsSuffix: string;
   openSearchFilters: string;
   searchByNameOrPhone: string;
   city: string;
@@ -278,9 +277,6 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
                   {conversation.is_group ? <span className="groupBadge">Группа</span> : null}
                 </button>
                 <span className="dialogCardMeta">
-                  <span className={`channelBadge ${conversation.channel}`} title={channelLabel(conversation.channel)}>
-                    {channelLabel(conversation.channel)}
-                  </span>
                   {conversation.landing_id || conversation.marketing_source === "landing" ? (
                     <span className="groupBadge" title="Заявка со страницы">
                       С сайта
@@ -292,11 +288,15 @@ function ConversationListItem(props: ConversationListItemProps): JSX.Element {
               <span className="dialogCardSnippet chatSnippet">
                 {formatSnippet(conversation, noMessages)}
               </span>
-              {conversation.assigned_manager_name ? (
-                <span className="dialogCardAssignee">
-                  {conversation.assigned_manager_name}
+              {/* Канал — во второй строке, чтобы имени клиента хватало места. */}
+              <span className="dialogCardFooter">
+                <span className={`channelBadge ${conversation.channel}`} title={channelLabel(conversation.channel)}>
+                  {channelLabel(conversation.channel)}
                 </span>
-              ) : null}
+                {conversation.assigned_manager_name ? (
+                  <span className="dialogCardAssignee">{conversation.assigned_manager_name}</span>
+                ) : null}
+              </span>
             </span>
           </div>
         </div>
@@ -373,7 +373,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
         <div className="mobilePageHeaderText">
           <div className="mobilePageTitle">{ui.inboxTitle}</div>
           <div className="mobilePageSubtitle">
-            {visibleConversations.length} {ui.chatsSuffix}
+            {ruPlural(visibleConversations.length, ["чат", "чата", "чатов"])}
           </div>
         </div>
         <div className="mobilePageActions">
@@ -404,7 +404,7 @@ export function InboxSidebar(props: InboxSidebarProps): JSX.Element {
       <div className="sidebarHeader">
         <div>
           <div className="sidebarTitle">{ui.inboxTitle}</div>
-          <div className="sidebarHint">{visibleConversations.length} {ui.chatsSuffix}</div>
+          <div className="sidebarHint">{ruPlural(visibleConversations.length, ["чат", "чата", "чатов"])}</div>
         </div>
         <button
           type="button"

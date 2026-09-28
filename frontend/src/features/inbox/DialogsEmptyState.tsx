@@ -18,6 +18,13 @@ export function DialogsEmptyState(props: DialogsEmptyStateProps): JSX.Element {
         </button>
       ) : null}
       <div className="emptyTitle">Пока нет диалогов</div>
+      <p className="emptyHint">
+        {filterActive
+          ? "По выбранному фильтру ничего не нашлось."
+          : isAdmin
+            ? "Подключите WhatsApp, Instagram или Telegram — сообщения клиентов будут появляться здесь сами."
+            : "Когда администратор подключит мессенджеры, сообщения клиентов появятся здесь."}
+      </p>
       {filterActive || isAdmin ? (
         <div className="pipelineEmptyActions dialogsEmptyActions">
           {filterActive ? (
@@ -32,7 +39,7 @@ export function DialogsEmptyState(props: DialogsEmptyStateProps): JSX.Element {
               data-testid="dialogs-open-integrations"
               onClick={onOpenIntegrations}
             >
-              К интеграциям
+              Подключить мессенджер
             </button>
           ) : null}
         </div>

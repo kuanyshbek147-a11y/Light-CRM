@@ -112,11 +112,9 @@ export function saveOnboarding(userKey: string, state: OnboardingState): void {
 const DEMO_NAME = "ип ромашка";
 
 export function usesDemoSampleData(
-  user: { email?: string } | null | undefined,
   conversations: Array<{ contact_name?: string | null; phone?: string | null }>
 ): boolean {
-  const email = (user?.email || "").trim().toLowerCase();
-  if (email.endsWith("@demo.local")) return true;
+  // Смотрим только на сами учебные записи: демо-почта админа ещё не значит, что все чаты учебные.
   return conversations.some((item) => {
     const phone = (item.phone || "").replace(/[^\d]/g, "");
     if (phone.endsWith("77000000001")) return true;
