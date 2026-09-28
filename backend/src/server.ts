@@ -31,7 +31,7 @@ import { setRealtimeServer } from "./realtime";
 import { createFollowUpRouter, startFollowUpScanner } from "./modules/follow-up";
 import { createAdsRouter, startAdsMetricsWorker } from "./modules/ads";
 import { createMarketingRouter, startCampaignWorker, startContentScheduler, startSequenceWorker } from "./modules/marketing";
-import { createOpsRouter, startNightlyBackups, startOpsHealthWatcher } from "./modules/ops";
+import { createOpsRouter, startNightlyBackups, startOpsHealthWatcher, startOwnerDigests } from "./modules/ops";
 import { tasksRouter } from "./modules/tasks";
 import { contactsRouter } from "./modules/contacts";
 import { searchRouter } from "./modules/search";
@@ -156,6 +156,7 @@ void ensureUserLoginSchema()
     startSequenceWorker();
     startOpsHealthWatcher();
     startNightlyBackups();
+    startOwnerDigests();
     startAdsMetricsWorker();
   })
   .catch((error) => {

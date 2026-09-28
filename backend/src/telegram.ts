@@ -22,6 +22,7 @@ import {
   setTelegramWebhook
 } from "./modules/integrations/telegram/api";
 import { resolveLegacyDefaultWorkspaceId } from "./modules/platform/tenant-routing";
+import { handleOwnerDigestStart } from "./modules/ops/owner-digest";
 
 type TelegramUser = {
   id: number;
@@ -284,9 +285,13 @@ async function processTelegramUpdate(
     return;
   }
 
+  const chatId = String(message.chat.id);
+  if (await handleOwnerDigestStart(workspaceId, chatId, message.text)) {
+    return;
+  }
+
   const managerId = await resolveAutoAssignedManager(workspaceId);
   const contactName = formatTelegramContactName(message.from);
-  const chatId = String(message.chat.id);
 
   const contactRows = await query<{ id: string }>(
     `SELECT id
