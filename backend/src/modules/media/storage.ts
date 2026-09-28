@@ -2,7 +2,13 @@ import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import type { Request, Response, NextFunction } from "express";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client
+} from "@aws-sdk/client-s3";
 
 /**
  * Внешнее хранилище вложений (S3-совместимое: Cloudflare R2, AWS S3, Backblaze B2…).
@@ -165,4 +171,43 @@ export function uploadsFallback(uploadsDir: string) {
       next();
     }
   };
+}
+
+/** Произвольный объект в хранилище (например, ночная копия базы). Ключ — без префикса uploads. */
+export async function putStorageObject(key: string, body: Buffer, contentType: string): Promise<boolean> {
+  const config = storage();
+  if (!config) {
+    return false;
+  }
+  await config.client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: body, ContentType: contentType }));
+  return true;
+}
+
+export async function listStorageObjects(prefix: string): Promise<Array<{ key: string; size: number; lastModified: Date }>> {
+  const config = storage();
+  if (!config) {
+    return [];
+  }
+  const items: Array<{ key: string; size: number; lastModified: Date }> = [];
+  let token: string | undefined;
+  do {
+    const page = await config.client.send(
+      new ListObjectsV2Command({ Bucket: config.bucket, Prefix: prefix, ContinuationToken: token })
+    );
+    for (const item of page.Contents ?? []) {
+      if (item.Key) {
+        items.push({ key: item.Key, size: item.Size ?? 0, lastModified: item.LastModified ?? new Date(0) });
+      }
+    }
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return items;
+}
+
+export async function deleteStorageObject(key: string): Promise<void> {
+  const config = storage();
+  if (!config) {
+    return;
+  }
+  await config.client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
 }
