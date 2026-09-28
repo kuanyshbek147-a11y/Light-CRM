@@ -23,6 +23,7 @@ import { InboxSidebar } from "./features/inbox/InboxSidebar";
 import { DialogsEmptyState } from "./features/inbox/DialogsEmptyState";
 import { inboxFiltersActive } from "./features/inbox/inboxEmpty";
 import { channelFilterIsEmpty, type InboxChannelFilter } from "./features/inbox/lib/channelFilter";
+import { fillQuickReply } from "./features/inbox/lib/quickReplies";
 import { FIRST_RUN_MENU_LABEL, FirstRunGuide } from "./features/onboarding/FirstRunGuide";
 import {
   closeOnboarding,
@@ -523,6 +524,8 @@ const UI = {
   newKnowledgeArticle: "\u041d\u043e\u0432\u0430\u044f \u0441\u0442\u0430\u0442\u044c\u044f",
   articleNotShareable: "\u0421\u0442\u0430\u0442\u044c\u044f \u043d\u0435 \u043e\u043f\u0443\u0431\u043b\u0438\u043a\u043e\u0432\u0430\u043d\u0430 \u0438\u043b\u0438 \u0441\u0441\u044b\u043b\u043a\u0430 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u0430",
   typeMessage: "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435...",
+  typeMessageWithSlash: "Сообщение или «/» для шаблона",
+  slashHint: "↑↓ выбрать · Enter вставить · Esc закрыть",
   emojis: "\u0421\u043c\u0430\u0439\u043b\u0438\u043a\u0438",
   attachFile: "\u041f\u0440\u0438\u043a\u0440\u0435\u043f\u0438\u0442\u044c \u0444\u0430\u0439\u043b",
   recordAudio: "\u0417\u0430\u043f\u0438\u0441\u0430\u0442\u044c \u0433\u043e\u043b\u043e\u0441\u043e\u0432\u043e\u0435",
@@ -4339,7 +4342,7 @@ export function App(): JSX.Element {
               insertArticleText: UI.insertArticleText,
               general: UI.general,
               emojis: UI.emojis,
-              typeMessage: UI.typeMessage,
+              typeMessage: scripts.length ? UI.typeMessageWithSlash : UI.typeMessage,
               attachFile: UI.attachFile,
               recordAudio: UI.recordAudio,
               voiceRecordingAppOnly: UI.voiceRecordingAppOnly,
@@ -4352,7 +4355,8 @@ export function App(): JSX.Element {
               quickScriptHint: UI.quickScriptHint,
               replyScripts: UI.replyScripts,
               searchScripts: UI.searchScripts,
-              noMessages: UI.noMessages
+              noMessages: UI.noMessages,
+              slashHint: UI.slashHint
             }}
             selectedConversationData={selectedConversationData}
             messages={messages}
@@ -4364,6 +4368,7 @@ export function App(): JSX.Element {
             scriptSearch={scriptSearch}
             knowledgeSearch={knowledgeSearch}
             filteredScripts={filteredScripts}
+            quickReplyScripts={scripts}
             filteredKnowledgeArticles={chatKnowledgeArticles}
             selectedScriptId={selectedScriptId}
             messageBody={messageBody}
@@ -4440,9 +4445,19 @@ export function App(): JSX.Element {
             }
             onScriptSearchChange={(value) => setScriptSearch(value)}
             onKnowledgeSearchChange={(value) => setKnowledgeSearch(value)}
-            onSelectScript={(scriptId, body) => {
-              setSelectedScriptId(scriptId);
-              setMessageBody(body);
+            onSelectScript={(script) => {
+              setSelectedScriptId(script.id);
+              setMessageBody(
+                fillQuickReply(script.body, {
+                  managerName: sessionUser?.fullName,
+                  contactName: selectedConversationData?.contact_name,
+                  phone: selectedConversationData?.phone,
+                  city: selectedConversationData?.city,
+                  clientType: selectedConversationData?.client_type,
+                  category: selectedConversationData?.category
+                })
+              );
+              setScriptPanelOpen(false);
             }}
             onSelectKnowledgeArticle={(body) => setMessageBody(body)}
             onSendKnowledgeArticleLink={(article) => void sendKnowledgeArticleLink(article)}
