@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DragEvent, RefObject } from "react";
 import { formatChannelLabel } from "../../shared/i18n/glossary";
+import { matchQuickReplies, slashQuery } from "./lib/quickReplies";
 import type { Conversation, KnowledgeArticle, Message, MessageScript } from "./model/types";
 import { MessageAudio } from "./ui/MessageAudio";
 
@@ -31,6 +32,7 @@ type InboxThreadUi = {
   replyScripts: string;
   searchScripts: string;
   noMessages: string;
+  slashHint: string;
 };
 
 type InboxThreadProps = {
@@ -45,6 +47,7 @@ type InboxThreadProps = {
   scriptSearch: string;
   knowledgeSearch: string;
   filteredScripts: MessageScript[];
+  quickReplyScripts: MessageScript[];
   filteredKnowledgeArticles: KnowledgeArticle[];
   selectedScriptId: string;
   messageBody: string;
@@ -78,7 +81,7 @@ type InboxThreadProps = {
   onToggleKnowledgeQuick: () => void;
   onScriptSearchChange: (value: string) => void;
   onKnowledgeSearchChange: (value: string) => void;
-  onSelectScript: (scriptId: string, body: string) => void;
+  onSelectScript: (script: MessageScript) => void;
   onSelectKnowledgeArticle: (body: string) => void;
   onSendKnowledgeArticleLink: (article: KnowledgeArticle) => void;
   onInsertKnowledgeArticleText: (article: KnowledgeArticle) => void;
@@ -109,6 +112,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
     scriptSearch,
     knowledgeSearch,
     filteredScripts,
+    quickReplyScripts,
     filteredKnowledgeArticles,
     selectedScriptId,
     messageBody,
@@ -180,6 +184,23 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
   }
 
   const hasComposerText = messageBody.trim().length > 0;
+  const [slashIndex, setSlashIndex] = useState(0);
+  // Esc прячет список до тех пор, пока текст снова не начнётся с «/».
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const currentSlashQuery = slashQuery(messageBody);
+  const slashOpen = currentSlashQuery !== null && !slashDismissed && quickReplyScripts.length > 0;
+  const slashMatches = slashOpen ? matchQuickReplies(quickReplyScripts, currentSlashQuery) : [];
+
+  useEffect(() => {
+    setSlashIndex(0);
+    if (currentSlashQuery === null) {
+      setSlashDismissed(false);
+    }
+  }, [currentSlashQuery]);
+
+  function pickSlashReply(script: MessageScript): void {
+    onSelectScript(script);
+  }
 
   function handleMicTap(event: React.SyntheticEvent): void {
     event.preventDefault();
@@ -296,12 +317,33 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
           onChange={(event) => onMessageBodyChange(event.target.value)}
           placeholder={ui.typeMessage}
           onKeyDown={(event) => {
+            if (slashOpen && slashMatches.length) {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                setSlashIndex((prev) => (prev + step + slashMatches.length) % slashMatches.length);
+                return;
+              }
+              if ((event.key === "Enter" && !event.ctrlKey && !event.shiftKey) || event.key === "Tab") {
+                event.preventDefault();
+                pickSlashReply(slashMatches[Math.min(slashIndex, slashMatches.length - 1)]);
+                return;
+              }
+            }
+            if (slashOpen && event.key === "Escape") {
+              event.preventDefault();
+              setSlashDismissed(true);
+              return;
+            }
             if (event.key === "Enter" && !event.ctrlKey && !event.shiftKey) {
               event.preventDefault();
               onSendMessage();
             }
           }}
           rows={1}
+          aria-autocomplete="list"
+          aria-expanded={slashOpen}
+          aria-controls={slashOpen ? "slash-quick-replies" : undefined}
         />
         <input
           ref={fileInputRef}
@@ -335,6 +377,27 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
         >
           {attachIcon}
         </button>
+        {slashOpen ? (
+          <div className="slashReplies" id="slash-quick-replies" role="listbox">
+            <div className="slashRepliesHint">{ui.slashHint}</div>
+            {slashMatches.map((script, index) => (
+              <button
+                key={script.id}
+                type="button"
+                role="option"
+                aria-selected={index === slashIndex}
+                className={`slashReply${index === slashIndex ? " active" : ""}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setSlashIndex(index)}
+                onClick={() => pickSlashReply(script)}
+              >
+                <span className="slashReplyTitle">{script.title}</span>
+                <span className="slashReplyBody">{script.body}</span>
+              </button>
+            ))}
+            {slashMatches.length ? null : <div className="slashRepliesEmpty">{ui.noMatchingScripts}</div>}
+          </div>
+        ) : null}
         {emojiPickerOpen ? (
           <div className="emojiPicker">
             {emojiOptions.map((emoji) => (
@@ -570,7 +633,7 @@ export function InboxThread(props: InboxThreadProps): JSX.Element {
                         <button
                           type="button"
                           className={`scriptCardMain ${selectedScriptId === script.id ? "active" : ""}`}
-                          onClick={() => onSelectScript(script.id, preview)}
+                          onClick={() => onSelectScript(script)}
                         >
                           <span className="scriptCardTop">
                             <span className="scriptCardTitle">{script.title}</span>
