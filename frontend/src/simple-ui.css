@@ -1,0 +1,270 @@
+/* Простой вид «как WhatsApp»: только список чатов и переписка, зелёная шапка, бежевый фон чата.
+   Всё под .appShell.uiSimple — полный интерфейс CRM эти правила не трогают. */
+
+.uiModeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #c8f3d7;
+  background: #ecfff3;
+  color: #0b6b45;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.uiModeToggle:hover {
+  background: #dcfce7;
+}
+
+.uiModeToggle.isSimple {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.uiModeToggle.isSimple:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.uiModeToggleIcon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.appShell.uiSimple {
+  --wa-green: #008069;
+  --wa-green-dark: #075e54;
+  --wa-chat-bg: #efeae2;
+  --wa-out: #d9fdd3;
+  background: #fff;
+}
+
+.appShell.uiSimple .topbar {
+  background: var(--wa-green);
+  border-bottom: 0;
+  color: #fff;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.appShell.uiSimple .brandTitle,
+.appShell.uiSimple .brandSubtitle {
+  color: #fff;
+}
+
+.appShell.uiSimple .brandSubtitle {
+  opacity: 0.85;
+}
+
+.appShell.uiSimple .brandMark {
+  background: #fff;
+  border-radius: 50%;
+}
+
+.appShell.uiSimple .topbarSearch,
+.appShell.uiSimple .leftMenu,
+.appShell.uiSimple .fabButton,
+.appShell.uiSimple .bottomNav,
+.appShell.uiSimple .quickActionChips,
+.appShell.uiSimple .threadDealStatus,
+.appShell.uiSimple .dialogCardFooter .dialogCardAssignee {
+  display: none;
+}
+
+.appShell.uiSimple .topbarRight {
+  width: auto;
+  margin-left: auto;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.appShell.uiSimple .topbarIconGroup {
+  display: flex;
+}
+
+.appShell.uiSimple .topbarIconGroup button {
+  color: #fff;
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.appShell.uiSimple .userChip {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.appShell.uiSimple .userChipLogout {
+  color: #fff;
+}
+
+.appShell.uiSimple .workspaceLayout,
+.appShell.uiSimple.leftMenuCollapsed .workspaceLayout {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+  gap: 0;
+}
+
+.appShell.uiSimple .appGrid,
+.appShell.uiSimple .appGrid.appGridNoRightRail {
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 0;
+}
+
+/* Список чатов: плоские строки с разделителем, как в WhatsApp. */
+.appShell.uiSimple .sidebar.card {
+  border-radius: 0;
+  border: 0;
+  border-right: 1px solid #e9edef;
+  box-shadow: none;
+  background: #fff;
+}
+
+.appShell.uiSimple .chatItem.dialogCard {
+  border: 0;
+  border-bottom: 1px solid #f0f2f5;
+  border-radius: 0;
+  box-shadow: none;
+  background: #fff;
+  padding: 10px 14px;
+}
+
+.appShell.uiSimple .chatItem.dialogCard:hover {
+  background: #f5f6f6;
+}
+
+.appShell.uiSimple .chatItem.dialogCard.active {
+  background: #f0f2f5;
+  box-shadow: none;
+}
+
+.appShell.uiSimple .dialogCardAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #dfe5e7;
+  color: #54656f;
+  font-size: 18px;
+}
+
+.appShell.uiSimple .dialogCardTime {
+  color: #667781;
+}
+
+/* Переписка: бежевый фон и зелёные исходящие пузыри. */
+.appShell.uiSimple .thread.card {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.appShell.uiSimple .threadHeaderModern {
+  background: #f0f2f5;
+  border-bottom: 1px solid #e9edef;
+}
+
+.appShell.uiSimple .messages {
+  background: var(--wa-chat-bg);
+}
+
+.appShell.uiSimple .bubble.incoming {
+  background: #fff;
+  border: 0;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+}
+
+.appShell.uiSimple .bubble.outgoing {
+  background: var(--wa-out);
+  border: 0;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  color: #111b21;
+}
+
+.appShell.uiSimple .bubble.outgoing .bubbleBody {
+  color: #111b21;
+}
+
+.appShell.uiSimple .bubble.outgoing .bubbleTime {
+  color: #667781;
+}
+
+.appShell.uiSimple .bubble.outgoing .bubbleReadMark {
+  color: #53bdeb;
+}
+
+.appShell.uiSimple .composer {
+  background: #f0f2f5;
+}
+
+.appShell.uiSimple .sendFab,
+.appShell.uiSimple .micFab {
+  background: var(--wa-green);
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .appShell.uiSimple.hasBottomNav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .appShell.uiSimple.hasBottomNav .workspaceLayout {
+    padding: 0;
+  }
+
+  .appShell.uiSimple.hasBottomNav .sidebar.card {
+    padding: 8px 0 0;
+  }
+
+  .appShell.uiSimple.hasBottomNav .mobilePageHeader,
+  .appShell.uiSimple.hasBottomNav .channelFiltersBar {
+    padding: 0 12px;
+  }
+
+  .appShell.uiSimple.hasBottomNav .chatList {
+    gap: 0;
+    padding: 0;
+  }
+
+  .appShell.uiSimple.hasBottomNav .chatItem.dialogCard {
+    border: 0;
+    border-bottom: 1px solid #f0f2f5;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 10px 14px;
+  }
+
+  .appShell.uiSimple .appGrid,
+  .appShell.uiSimple .appGrid.appGridNoRightRail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .appShell.uiSimple .topbar {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .appShell.uiSimple .userChip {
+    display: none;
+  }
+
+  .appShell.uiSimple .topbarIconGroup {
+    display: none;
+  }
+
+  .appShell.uiSimple .sidebar.card {
+    border-right: 0;
+  }
+
+  .appShell.uiSimple .uiModeToggle {
+    height: 34px;
+    padding: 0 10px;
+  }
+}

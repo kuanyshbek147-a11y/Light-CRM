@@ -43,6 +43,7 @@ import { IosHomeScreenHint } from "./features/pwa/IosHomeScreenHint";
 import { RegisterAccountDialog } from "./features/auth/RegisterAccountDialog";
 import { isSelfServeRegistrationEnabled } from "./features/auth/registerValidation";
 import { canOpenSection, parseSectionHash, sectionHash, type AppSection } from "./shared/lib/sectionRoute";
+import { browserStorage, readUiMode, sectionForUiMode, writeUiMode, type UiMode } from "./shared/lib/uiMode";
 import { formatBuiltinStageLabel, formatChannelLabel, formatDialogStatus, formatMoney, formatTaskTitle, formatTimelineItem, ruPlural } from "./shared/i18n/glossary";
 import {
   RU_DATETIME_ERROR,
@@ -778,8 +779,10 @@ export function App(): JSX.Element {
   const [knowledgeQuickOpen, setKnowledgeQuickOpen] = useState<boolean>(false);
   const [currentSection, setCurrentSection] = useState<AppSection>(() => {
     const fromHash = parseSectionHash(window.location.hash);
-    return fromHash && canOpenSection(fromHash, initialSession.user?.role) ? fromHash : "dialogs";
+    const section = fromHash && canOpenSection(fromHash, initialSession.user?.role) ? fromHash : "dialogs";
+    return sectionForUiMode(readUiMode(browserStorage()), section);
   });
+  const [uiMode, setUiMode] = useState<UiMode>(() => readUiMode(browserStorage()));
   const [moreMenuOpen, setMoreMenuOpen] = useState<boolean>(() => {
     try {
       return localStorage.getItem(MORE_MENU_OPEN_KEY) === "1";
@@ -792,6 +795,8 @@ export function App(): JSX.Element {
   const [integrationsFocus, setIntegrationsFocus] = useState<"telegram" | "instagram" | null>(null);
   const openIntegrations = (target?: "telegram" | "instagram") => {
     setIntegrationsFocus(target ?? null);
+    // Подключение каналов живёт в полной CRM — из простого вида переключаемся туда.
+    setUiMode("full");
     setCurrentSection("integrations");
   };
   const [staffUnreadCount, setStaffUnreadCount] = useState(0);
@@ -955,6 +960,14 @@ export function App(): JSX.Element {
       /* приватный режим — просто не запоминаем */
     }
   }, [moreMenuOpen]);
+
+  // Простой вид («как WhatsApp») показывает только чаты: запоминаем выбор и не пускаем в другие разделы.
+  useEffect(() => {
+    writeUiMode(browserStorage(), uiMode);
+    if (uiMode === "simple") {
+      setCurrentSection((section) => sectionForUiMode("simple", section));
+    }
+  }, [uiMode, currentSection]);
 
   // Карточка клиента — поверх текущего экрана: закрываем её по Escape и при переходе в другой раздел.
   useEffect(() => {
@@ -3775,8 +3788,37 @@ export function App(): JSX.Element {
     );
   }
 
+  const canUseSimpleUi = !isSuperAdminUser(sessionUser);
+  const simpleUi = uiMode === "simple" && canUseSimpleUi;
   const mobileChatOpen = isMobileLayout && mobileThreadOpen && currentSection === "dialogs";
-  const showBottomNav = isMobileLayout && !mobileChatOpen && !isSuperAdminUser(sessionUser);
+  const showBottomNav = isMobileLayout && !mobileChatOpen && !isSuperAdminUser(sessionUser) && !simpleUi;
+  // Простой вид на телефоне берёт ту же мобильную вёрстку списка, только без нижнего меню.
+  const mobileListLayout = showBottomNav || (isMobileLayout && simpleUi && !mobileChatOpen);
+
+  function switchUiMode(next: UiMode): void {
+    setMobileThreadOpen(false);
+    setUiMode(next);
+    if (next === "simple") {
+      setCurrentSection("dialogs");
+    }
+    showToast(next === "simple" ? "Простой вид: только чаты, как в WhatsApp" : "Полная CRM: все разделы снова в меню", "success");
+  }
+
+  const uiModeToggle = canUseSimpleUi ? (
+    <button
+      type="button"
+      className={`uiModeToggle${simpleUi ? " isSimple" : ""}`}
+      data-testid="ui-mode-toggle"
+      title={simpleUi ? "Вернуть полный интерфейс CRM" : "Простой вид: только чаты, как в WhatsApp"}
+      aria-pressed={simpleUi}
+      onClick={() => switchUiMode(simpleUi ? "full" : "simple")}
+    >
+      <span className="uiModeToggleIcon" aria-hidden="true">
+        {simpleUi ? "\u25A6" : "\uD83D\uDCAC"}
+      </span>
+      <span className="uiModeToggleLabel">{simpleUi ? "Полная CRM" : "Как WhatsApp"}</span>
+    </button>
+  ) : null;
   const leftMenuCollapsedEffective = leftMenuCollapsed && canCollapseLeftMenu;
 
   const mobileSectionSubtitle =
@@ -3847,16 +3889,18 @@ export function App(): JSX.Element {
       }
     >
     <div
-      className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}${showBottomNav ? " hasBottomNav" : ""}${
+      className={`appShell${mobileChatOpen ? " mobileChatOpen" : ""}${mobileListLayout ? " hasBottomNav" : ""}${
         leftMenuCollapsedEffective ? " leftMenuCollapsed" : ""
-      }`}
+      }${simpleUi ? " uiSimple" : ""}`}
     >
       <header className="topbar">
         <div className="brand">
           <img className="brandMark" src="/logo-mark.png" alt="" width={32} height={32} />
           <div className="brandText">
             <div className="brandTitle">{UI.brandTitle}</div>
-            <div className="brandSubtitle">{isMobileLayout ? mobileSectionSubtitle : UI.landingBadge}</div>
+            <div className="brandSubtitle">
+              {simpleUi ? "Чаты" : isMobileLayout ? mobileSectionSubtitle : UI.landingBadge}
+            </div>
           </div>
         </div>
 
@@ -3968,6 +4012,7 @@ export function App(): JSX.Element {
         </div>
 
         <div className="topbarRight">
+          {uiModeToggle}
           <div className="topbarIconGroup" aria-label="Уведомления и настройки">
             <NotificationBellButton
               enabled={notificationSoundOn}
@@ -3978,6 +4023,7 @@ export function App(): JSX.Element {
                 unlockNotificationSound();
               }}
             />
+            {simpleUi ? null : (
             <button
               type="button"
               className={`topbarIconButton${currentSection === "settings" ? " active" : ""}`}
@@ -3992,6 +4038,7 @@ export function App(): JSX.Element {
             >
               {"\u2699"}
             </button>
+            )}
           </div>
           <div className="userChip">
             <span className="userAvatar" aria-hidden="true">
@@ -4240,8 +4287,8 @@ export function App(): JSX.Element {
             "appGrid",
             !conversationsLoading && conversations.length === 0 ? "dialogsAtZero" : "",
             isMobileLayout && mobileThreadOpen ? "mobileThreadOpen" : "",
-            !funnelKpiPanelOpen ? "appGridNoRightRail" : "",
-            !funnelKpiPanelOpen && !isMobileLayout ? "appGridKpiCollapsed" : ""
+            !funnelKpiPanelOpen || simpleUi ? "appGridNoRightRail" : "",
+            !funnelKpiPanelOpen && !isMobileLayout && !simpleUi ? "appGridKpiCollapsed" : ""
           ]
             .filter(Boolean)
             .join(" ")}
@@ -4498,7 +4545,7 @@ export function App(): JSX.Element {
           />
           )}
 
-          {funnelKpiPanelOpen ? (
+          {simpleUi ? null : funnelKpiPanelOpen ? (
           <aside className="rightRail card">
             <FunnelKpiPanel
               metrics={metrics}
@@ -5466,6 +5513,15 @@ export function App(): JSX.Element {
                 <div className="mobilePageTitle">{sessionUser?.fullName || "Operator"}</div>
                 <div className="mobilePageSubtitle">{sessionUser?.login || sessionUser?.email}</div>
               </div>
+              <button
+                type="button"
+                className="profileMenuBtn"
+                data-testid="profile-simple-ui"
+                onClick={() => switchUiMode("simple")}
+              >
+                <span>Простой вид — только чаты, как в WhatsApp</span>
+                <span>›</span>
+              </button>
               <button
                 type="button"
                 className="profileMenuBtn"
