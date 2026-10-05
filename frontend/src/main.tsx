@@ -8,6 +8,7 @@ import { ensureRussianDocumentLang } from "./shared/i18n/locale";
 import { startBackendKeepAlive } from "./shared/lib/backendWarmup";
 import "./styles.css";
 import "./mobile-crm-ui.css";
+import "./simple-ui.css";
 
 ensureRussianDocumentLang();
 startBackendKeepAlive();
