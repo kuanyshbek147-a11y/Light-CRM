@@ -36,3 +36,42 @@ export async function saveOpsAlertChat(
   });
   return response.ok;
 }
+
+export type OwnerDigestSettings = {
+  enabled: boolean;
+  hour: number;
+  chatConnected: boolean;
+  connectUrl: string | null;
+};
+
+export async function loadOwnerDigest(token: string): Promise<OwnerDigestSettings | null> {
+  const response = await fetch(`${API}/ops/digest`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) return null;
+  return (await response.json()) as OwnerDigestSettings;
+}
+
+export async function saveOwnerDigest(
+  token: string,
+  input: { enabled?: boolean; hour?: number }
+): Promise<OwnerDigestSettings | null> {
+  const response = await fetch(`${API}/ops/digest`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) return null;
+  return (await response.json()) as OwnerDigestSettings;
+}
+
+export async function sendTestOwnerDigest(token: string): Promise<boolean> {
+  const response = await fetch(`${API}/ops/digest/test`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return response.ok;
+}
