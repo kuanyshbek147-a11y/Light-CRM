@@ -6,6 +6,7 @@ import {
   type TelegramStatus
 } from "./api";
 import { describeTelegramConnectError, telegramTokenMessage, telegramTokenProblem } from "./connectionState";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type Props = {
   authToken: string;
@@ -191,12 +192,11 @@ export function TelegramConnect({ authToken }: Props) {
 
       {showTokenForm ? (
         <div className="instagramConnectForm">
-          <input
+          <PasswordInput
             className="filterInput"
             placeholder="Токен бота от @BotFather"
             value={botToken}
             onChange={(event) => setBotToken(event.target.value)}
-            type="password"
             autoComplete="off"
             aria-describedby={botToken.trim() ? undefined : "telegram-token-hint"}
           />

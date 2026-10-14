@@ -5138,3 +5138,47 @@ body.pwa-standalone {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Поле пароля с кнопкой «показать/скрыть» */
+.passwordInputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.passwordInputWrap > .passwordInputField {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding-right: 44px;
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.passwordToggle:hover {
+  color: #334155;
+  background: rgba(100, 116, 139, 0.1);
+}
+
+.passwordToggle:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 1px;
+}

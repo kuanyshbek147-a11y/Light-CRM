@@ -9,6 +9,7 @@ import {
   type PlatformWorkspaceDetail
 } from "./api";
 import { PlatformBackups } from "./PlatformBackups";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type Props = {
   authToken: string;
@@ -177,9 +178,8 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
               value={createForm.adminLogin}
               onChange={(event) => setCreateForm((prev) => ({ ...prev, adminLogin: event.target.value }))}
             />
-            <input
+            <PasswordInput
               className="filterInput"
-              type="password"
               placeholder="Пароль admin (мин. 6)"
               value={createForm.adminPassword}
               onChange={(event) => setCreateForm((prev) => ({ ...prev, adminPassword: event.target.value }))}
@@ -287,9 +287,8 @@ export function PlatformPanel({ authToken }: Props): JSX.Element {
                 value={userForm.login}
                 onChange={(event) => setUserForm((prev) => ({ ...prev, login: event.target.value }))}
               />
-              <input
+              <PasswordInput
                 className="filterInput"
-                type="password"
                 placeholder="Пароль"
                 value={userForm.password}
                 onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}

@@ -9,6 +9,7 @@ import {
   type TelephonyExtension,
   type TelephonySettings
 } from "./api";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type Props = {
   authToken: string;
@@ -238,9 +239,8 @@ export function TelephonyConnect({ authToken }: Props) {
         </label>
         <label className="integrationsField">
           <span>SIP password</span>
-          <input
+          <PasswordInput
             className="filterInput"
-            type="password"
             value={sipPassword}
             onChange={(event) => setSipPassword(event.target.value)}
             placeholder="пароль extension"

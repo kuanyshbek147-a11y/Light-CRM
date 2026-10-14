@@ -54,6 +54,7 @@ import {
 } from "./api";
 import { LandingPagesPanel } from "./LandingPagesPanel";
 import { formatBuiltinStageLabel, formatChannelLabel } from "../../shared/i18n/glossary";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type Props = {
   authToken: string;
@@ -1292,9 +1293,8 @@ export function MarketingPanel({ authToken, onToast, onOpenIntegrations }: Props
             <div className="scriptForm">
               <label className="marketingFieldLabel">
                 <span>Ключ доступа</span>
-                <input
+                <PasswordInput
                   className="filterInput"
-                  type="password"
                   placeholder={
                     adsSettings?.hasToken
                       ? "Оставьте пустым, чтобы не менять"

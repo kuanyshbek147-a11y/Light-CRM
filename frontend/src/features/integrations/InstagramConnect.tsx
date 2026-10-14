@@ -15,6 +15,7 @@ import {
   plainInstagramOAuthError,
   resolveLinkBadge
 } from "./connectionState";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type Props = {
   authToken: string;
@@ -486,12 +487,11 @@ export function InstagramConnect({ authToken }: Props) {
             value={igUserId}
             onChange={(event) => setIgUserId(event.target.value)}
           />
-          <input
+          <PasswordInput
             className="filterInput"
             placeholder="Instagram Access Token"
             value={pageAccessToken}
             onChange={(event) => setPageAccessToken(event.target.value)}
-            type="password"
             autoComplete="off"
           />
           <input
