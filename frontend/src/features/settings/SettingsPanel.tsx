@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../../shared/config/api";
 import { TeamMembers } from "./TeamMembers";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type SettingsPanelProps = {
   token: string;
@@ -55,9 +56,8 @@ function ChangePasswordForm({ token }: { token: string }): JSX.Element {
     <form className="profileCard settingsPasswordForm" data-testid="settings-password" onSubmit={(e) => void submit(e)}>
       <label className="loginField">
         <span className="loginFieldLabel">Текущий пароль</span>
-        <input
+        <PasswordInput
           className="loginInput"
-          type="password"
           autoComplete="current-password"
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
@@ -65,9 +65,8 @@ function ChangePasswordForm({ token }: { token: string }): JSX.Element {
       </label>
       <label className="loginField">
         <span className="loginFieldLabel">Новый пароль</span>
-        <input
+        <PasswordInput
           className="loginInput"
-          type="password"
           autoComplete="new-password"
           placeholder={`Минимум ${MIN_PASSWORD_LENGTH} символов`}
           value={newPassword}
@@ -76,9 +75,8 @@ function ChangePasswordForm({ token }: { token: string }): JSX.Element {
       </label>
       <label className="loginField">
         <span className="loginFieldLabel">Повторите новый пароль</span>
-        <input
+        <PasswordInput
           className="loginInput"
-          type="password"
           autoComplete="new-password"
           value={repeatPassword}
           onChange={(e) => setRepeatPassword(e.target.value)}

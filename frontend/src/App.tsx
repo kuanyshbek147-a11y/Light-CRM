@@ -169,6 +169,7 @@ import {
   type FollowUpSettings,
   type GlobalSearchResult
 } from "./features/crm/api";
+import { PasswordInput } from "./shared/ui/PasswordInput";
 
 type Deal = {
   id: string;
@@ -3728,10 +3729,9 @@ export function App(): JSX.Element {
               </label>
               <label className="loginField">
                 <span className="loginFieldLabel">{UI.password}</span>
-                <input
+                <PasswordInput
                   ref={passwordInputRef}
                   className={`loginInput loginInputModern${loginFieldsInvalid.password ? " loginInputInvalid" : ""}`}
-                  type="password"
                   autoComplete="current-password"
                   value={passwordInput}
                   placeholder={UI.passwordPlaceholder}

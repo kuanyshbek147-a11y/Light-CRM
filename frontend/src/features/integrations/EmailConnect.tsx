@@ -7,6 +7,7 @@ import {
   type EmailProviderPreset,
   type EmailStatus
 } from "./api";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type Props = {
   authToken: string;
@@ -270,7 +271,7 @@ export function EmailConnect({ authToken }: Props) {
             type="email"
             autoComplete="off"
           />
-          <input
+          <PasswordInput
             className="filterInput"
             placeholder={
               provider === "gmail"
@@ -279,7 +280,6 @@ export function EmailConnect({ authToken }: Props) {
             }
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            type="password"
             autoComplete="new-password"
           />
           <input

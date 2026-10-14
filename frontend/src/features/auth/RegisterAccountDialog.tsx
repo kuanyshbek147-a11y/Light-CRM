@@ -7,6 +7,7 @@ import {
   type RegisterFieldErrors,
   type RegisterSessionUser
 } from "./registerValidation";
+import { PasswordInput } from "../../shared/ui/PasswordInput";
 
 type RegisterAccountDialogProps = {
   onClose: () => void;
@@ -132,9 +133,8 @@ export function RegisterAccountDialog({
             </label>
             <label className={`loginField${fieldErrors.password ? " loginFieldInvalid" : ""}`}>
               <span className="loginFieldLabel">Пароль *</span>
-              <input
+              <PasswordInput
                 className="loginInput loginInputModern"
-                type="password"
                 name="password"
                 autoComplete="new-password"
                 value={password}
